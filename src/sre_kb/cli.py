@@ -106,6 +106,10 @@ def run(
     typer.echo(f"  output: {result.root}")
     if result.report_path:
         typer.echo(f"  report: {result.report_path}")
+    if result.projections:
+        typer.echo(f"  projections: {result.projections}")
+    if result.pr:
+        typer.echo(f"  pr tree: {result.pr}")
 
 
 @app.command()
@@ -122,20 +126,41 @@ def scan(
 
 
 @app.command()
-def render(run_id: str = typer.Option(..., "--run")) -> None:
-    """Render the Copilot projection + Backstage catalog from the validated KB."""
-    _stub("render", "P1")
+def render(
+    run_id: str = typer.Option(..., "--run"),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Render the Copilot projection (guardrails + diagrams) + Backstage catalog."""
+    from sre_kb.render import load_kb, render_projections
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    proj = render_projections(layout, load_kb(layout.root))
+    typer.echo(f"projections: {proj}")
 
 
 @app.command()
 def publish(
     run_id: str = typer.Option(..., "--run"),
-    sre_repo: str = typer.Option(..., "--sre-repo"),
+    sre_repo: str = typer.Option("(unset)", "--sre-repo"),
     forge: str = typer.Option("github", "--forge"),
     dry_run: bool = typer.Option(True, "--dry-run/--no-dry-run"),
+    work_root: str = typer.Option(".work", "--work-root"),
 ) -> None:
-    """Stage the per-service tree and (optionally) open the PR. Defaults to --dry-run."""
-    _stub("publish", "P1")
+    """Stage the per-service PR tree and (optionally) open the PR. Defaults to --dry-run."""
+    import json
+
+    from sre_kb.publish import assemble_pr
+    from sre_kb.render import load_kb
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    docs = load_kb(layout.root)
+    report_path = layout.reports / "validation_report.json"
+    report = json.loads(report_path.read_text()) if report_path.exists() else None
+    tree, ref = assemble_pr(layout, docs, report, sre_repo=sre_repo, forge=forge, dry_run=dry_run)
+    typer.echo(f"PR tree: {tree}")
+    typer.echo(ref)
 
 
 @app.command()

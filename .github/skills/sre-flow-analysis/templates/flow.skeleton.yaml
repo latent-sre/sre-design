@@ -1,0 +1,31 @@
+# Starter Flow artifact — fill in from cited code only; then run `sre-kb validate`.
+apiVersion: sre.kb/v1alpha1
+kind: Flow
+metadata:
+  name: <flow-name>          # ^[a-z0-9][a-z0-9-]*$
+  service: <service>
+spec:
+  trigger:
+    type: http
+    method: <GET|POST|...>
+    path: </api/...>
+    entrypoint: <pkg.Class#method>
+  steps:
+    - id: s1
+      name: <verb-noun>
+      kind: <http-egress|db-write|message-egress|internal>
+      failureModes:
+        - mode: <timeout|circuit-open|db-unavailable|broker-unavailable>
+          surfacedAs: <http-5xx|logged-and-swallowed|propagated>
+  sinks: []
+evidence:
+  - repo: <repo>
+    commit: <sha>
+    path: <src/...>
+    lines: { start: 1, end: 1 }
+    excerptHash: "sha256:<recomputed-by-engine>"
+    detector: copilot
+confidence: 0.6
+status: needs-review
+provenanceMode: llm-asserted
+generatedBy: { tool: sre-kb, driver: copilot }

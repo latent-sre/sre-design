@@ -25,7 +25,7 @@ from sre_kb.validation.report import write_report
 from sre_kb.validation.structural import validate_doc
 from sre_kb.workspace import RunLayout
 
-STAGES = ("scan", "scaffold", "validate")
+STAGES = ("scan", "scaffold", "validate", "render", "publish")
 
 
 @dataclass
@@ -36,6 +36,8 @@ class RunResult:
     docs: int
     by_status: dict
     report_path: Path | None = None
+    projections: Path | None = None
+    pr: Path | None = None
 
 
 def _dump_yaml(path: Path, doc: dict) -> None:
@@ -114,4 +116,17 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     }
     report_path = layout.reports / "validation_report.json"
     write_report(report_path, report)
-    return RunResult(run_id, layout.root, len(fs.facts), len(docs), by_status, report_path)
+
+    projections = pr_tree = None
+    if to_stage in ("render", "publish"):
+        from sre_kb.render import render_projections
+
+        projections = render_projections(layout, docs)
+    if to_stage == "publish":
+        from sre_kb.publish import assemble_pr
+
+        pr_tree, _ = assemble_pr(layout, docs, report, dry_run=True)
+
+    return RunResult(
+        run_id, layout.root, len(fs.facts), len(docs), by_status, report_path, projections, pr_tree
+    )

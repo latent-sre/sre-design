@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/Runbook.schema.json",
+  "title": "Runbook",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "Runbook" },
+    "spec": {
+      "type": "object",
+      "required": ["trigger", "remediation"],
+      "properties": {
+        "banner": { "type": "string" },
+        "trigger": {
+          "type": "object",
+          "required": ["alertRef"],
+          "properties": { "alertRef": { "type": "string" } }
+        },
+        "symptoms": { "type": "array", "items": { "type": "string" } },
+        "diagnosis": { "type": "array" },
+        "remediation": { "type": "array", "items": { "type": "string" } },
+        "escalation": { "type": "string" },
+        "relatedFlow": { "type": "string" }
+      }
+    }
+  }
+}

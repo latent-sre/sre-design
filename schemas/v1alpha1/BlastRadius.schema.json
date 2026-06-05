@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/BlastRadius.schema.json",
+  "title": "BlastRadius",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "BlastRadius" },
+    "spec": {
+      "type": "object",
+      "required": ["node", "impactedFlows"],
+      "properties": {
+        "node": {
+          "type": "object",
+          "required": ["type", "name"],
+          "properties": {
+            "type": { "type": "string" },
+            "name": { "type": "string" }
+          }
+        },
+        "impactedFlows": { "type": "array", "items": { "type": "string" } },
+        "containment": { "type": "array" },
+        "coTenancy": { "type": "array" },
+        "stateful": {
+          "type": "object",
+          "properties": { "dataLossRisk": { "type": "boolean" } }
+        },
+        "dependencyCriticality": { "type": "string" },
+        "severityHint": { "type": "string", "enum": ["low", "medium", "high", "critical"] }
+      }
+    }
+  }
+}

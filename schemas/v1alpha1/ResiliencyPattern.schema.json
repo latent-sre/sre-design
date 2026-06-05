@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/ResiliencyPattern.schema.json",
+  "title": "ResiliencyPattern",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "ResiliencyPattern" },
+    "spec": {
+      "type": "object",
+      "required": ["type", "library"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["circuit-breaker", "retry", "bulkhead", "timeout", "rate-limit"]
+        },
+        "library": { "type": "string" },
+        "targetSymbol": { "type": ["string", "null"] },
+        "fallbackMethod": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

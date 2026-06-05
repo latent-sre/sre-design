@@ -88,16 +88,37 @@ def _stub(name: str, phase: str) -> None:
 def run(
     target: str = typer.Option(..., "--target", help="Local path or git URL of the target repo."),
     profile: str = typer.Option("java-spring-pcf", "--profile"),
-    to_stage: str = typer.Option(None, "--to-stage"),
+    to_stage: str = typer.Option("validate", "--to-stage", help="scan | scaffold | validate"),
+    work_root: str = typer.Option(".work", "--work-root"),
+    run_id: str = typer.Option(None, "--run", help="Run id (default: timestamp)."),
 ) -> None:
-    """Run the pipeline: clone -> scan -> validate -> render -> publish."""
-    _stub("run", "P0/P1")
+    """Run the deterministic pipeline: clone(local) -> scan -> validate.
+
+    LLM enrichment (Copilot in VS Code) happens between scan and validate; the engine
+    itself never calls a model.
+    """
+    from sre_kb.pipeline import run as run_pipeline
+
+    result = run_pipeline(target, work_root=work_root, run_id=run_id, to_stage=to_stage)
+    typer.echo(f"run {result.run_id}: {result.facts} facts, {result.docs} artifact(s)")
+    for status, n in sorted(result.by_status.items()):
+        typer.echo(f"  {status}: {n}")
+    typer.echo(f"  output: {result.root}")
+    if result.report_path:
+        typer.echo(f"  report: {result.report_path}")
 
 
 @app.command()
-def scan(run_id: str = typer.Option(..., "--run")) -> None:
+def scan(
+    target: str = typer.Option(..., "--target", help="Local path of the target repo."),
+    work_root: str = typer.Option(".work", "--work-root"),
+    run_id: str = typer.Option(None, "--run"),
+) -> None:
     """Deterministic facts + scaffold (no LLM)."""
-    _stub("scan", "P1")
+    from sre_kb.pipeline import run as run_pipeline
+
+    result = run_pipeline(target, work_root=work_root, run_id=run_id, to_stage="scaffold")
+    typer.echo(f"run {result.run_id}: {result.facts} facts, {result.docs} scaffolded -> {result.root}")
 
 
 @app.command()

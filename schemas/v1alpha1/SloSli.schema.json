@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/SloSli.schema.json",
+  "title": "SloSli",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "SloSli" },
+    "spec": {
+      "type": "object",
+      "required": ["objectives", "source"],
+      "properties": {
+        "objectives": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["sli"],
+            "properties": {
+              "sli": { "type": "string" },
+              "target": { "type": ["string", "number", "null"] },
+              "window": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "source": { "type": "string" },
+        "forFlow": { "type": "string" }
+      }
+    }
+  }
+}

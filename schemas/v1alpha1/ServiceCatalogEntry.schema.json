@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/ServiceCatalogEntry.schema.json",
+  "title": "ServiceCatalogEntry",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "ServiceCatalogEntry" },
+    "spec": {
+      "type": "object",
+      "required": ["type", "lifecycle"],
+      "properties": {
+        "type": { "type": "string" },
+        "lifecycle": { "type": "string" },
+        "system": { "type": "string" },
+        "providesApis": { "type": "array" },
+        "dependsOn": { "type": "array" }
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/Flow.schema.json",
+  "title": "Flow",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "Flow" },
+    "spec": {
+      "type": "object",
+      "required": ["trigger", "steps"],
+      "properties": {
+        "trigger": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string" },
+            "method": { "type": ["string", "null"] },
+            "path": { "type": ["string", "null"] },
+            "entrypoint": { "type": ["string", "null"] }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "kind"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "kind": { "type": "string" },
+              "failureModes": { "type": "array" }
+            }
+          }
+        },
+        "sinks": { "type": "array" },
+        "sloRef": { "type": "string" }
+      }
+    }
+  }
+}

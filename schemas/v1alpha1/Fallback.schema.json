@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/Fallback.schema.json",
+  "title": "Fallback",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "Fallback" },
+    "spec": {
+      "type": "object",
+      "required": ["behavior"],
+      "properties": {
+        "trigger": { "type": "string" },
+        "fallbackSymbol": { "type": ["string", "null"] },
+        "behavior": { "type": "string" },
+        "forTarget": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+---
+applications:
+  - name: order-service
+    instances: 3
+    memory: 1G
+    disk_quota: 1G
+    buildpacks:
+      - java_buildpack_offline
+    stack: cflinuxfs4
+    routes:
+      - route: order-service.apps.internal
+    services:
+      - orders-postgres
+      - order-kafka
+    health-check-type: http
+    health-check-http-endpoint: /actuator/health
+    env:
+      SPRING_PROFILES_ACTIVE: cloud

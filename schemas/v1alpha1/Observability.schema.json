@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/Observability.schema.json",
+  "title": "Observability",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "Observability" },
+    "spec": {
+      "type": "object",
+      "required": ["logging"],
+      "properties": {
+        "logging": {
+          "type": "object",
+          "required": ["framework", "format"],
+          "properties": {
+            "framework": { "type": "string" },
+            "format": { "type": "string" },
+            "pattern": { "type": ["string", "null"] },
+            "correlationFields": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "metrics": { "type": "array" },
+        "tracing": { "type": ["object", "string", "null"] },
+        "healthIndicators": { "type": "array" }
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: order-service
+
+clients:
+  inventory:
+    base-url: http://inventory-service.apps.internal
+    # NOTE: 3s read timeout on a flow whose p99 SLO is 800ms — budget violation.
+    timeout: 3s
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      inventory:
+        slidingWindowSize: 20
+        failureRateThreshold: 50
+  timelimiter:
+    instances:
+      inventory:
+        timeoutDuration: 2s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    distribution:
+      slo:
+        http.server.requests: 200ms,500ms,800ms

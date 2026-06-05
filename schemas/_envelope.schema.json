@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/_envelope.schema.json",
+  "title": "SRE KB artifact envelope",
+  "description": "Shared envelope every SRE KB artifact embeds. Per-kind schemas $ref this and add their own `spec`. This is what makes the KB *validated*: provenance, confidence, and status are first-class.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "sre.kb/v1alpha1"
+    },
+    "kind": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]+$"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "service": { "type": "string" },
+        "owner": { "type": "string" },
+        "domain": { "type": "string" },
+        "labels": { "type": "object", "additionalProperties": { "type": "string" } },
+        "annotations": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "description": "Kind-specific body; constrained by the per-kind schema."
+    },
+    "evidence": {
+      "type": "array",
+      "description": "Provenance. At least one verified item is required for status=verified (enforced by the gating validator, not structurally).",
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+    "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "status": {
+      "type": "string",
+      "enum": ["verified", "needs-review", "rejected"]
+    },
+    "provenanceMode": {
+      "type": "string",
+      "enum": ["deterministic", "llm-asserted"]
+    },
+    "crossRefs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/crossRef" }
+    },
+    "generatedBy": { "$ref": "#/$defs/generatedBy" }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "required": ["repo", "commit", "path", "lines", "excerptHash", "detector"],
+      "additionalProperties": false,
+      "properties": {
+        "repo": { "type": "string", "minLength": 1 },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+        "path": { "type": "string", "minLength": 1 },
+        "lines": {
+          "type": "object",
+          "required": ["start", "end"],
+          "additionalProperties": false,
+          "properties": {
+            "start": { "type": "integer", "minimum": 1 },
+            "end": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "excerptHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "detector": { "type": "string", "minLength": 1 }
+      }
+    },
+    "crossRef": {
+      "type": "object",
+      "required": ["kind", "name", "relation"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]+$" },
+        "name": { "type": "string", "minLength": 1 },
+        "relation": {
+          "type": "string",
+          "enum": ["implements", "depends-on", "emits", "alerts-on", "mitigates", "covers"]
+        }
+      }
+    },
+    "generatedBy": {
+      "type": "object",
+      "required": ["tool", "driver"],
+      "additionalProperties": false,
+      "properties": {
+        "tool": { "type": "string" },
+        "toolVersion": { "type": "string" },
+        "driver": { "type": "string", "enum": ["engine", "copilot"] },
+        "provider": { "type": "string" },
+        "promptVersion": { "type": "string" },
+        "generatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

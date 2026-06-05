@@ -1,0 +1,48 @@
+apiVersion: sre.kb/v1alpha1
+kind: Flow
+metadata:
+  name: place-order
+  service: order-service
+  owner: team-fulfillment
+  domain: ordering
+spec:
+  trigger:
+    type: http
+    method: POST
+    path: /api/v1/orders
+    entrypointSymbol: com.acme.order.web.OrderController#createOrder
+  steps:
+    - id: s1
+      name: reserve-inventory
+      symbol: com.acme.order.client.InventoryClient#reserve
+      kind: http-egress
+      failureModes:
+        - mode: timeout
+          surfacedAs: http-503
+    - id: s2
+      name: publish-order-created
+      symbol: com.acme.order.events.OrderEventPublisher#publish
+      kind: message-egress
+      failureModes:
+        - mode: broker-unavailable
+          surfacedAs: logged-and-swallowed
+          dataLossRisk: true
+  sinks:
+    - { type: http, target: inventory-service }
+    - { type: kafka, target: order.created }
+evidence:
+  - repo: git@forge.acme:platform/order-service.git
+    commit: 5f3e9c1a7b
+    path: src/main/java/com/acme/order/web/OrderController.java
+    lines: { start: 44, end: 71 }
+    excerptHash: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    detector: java_spring.flow_builder
+confidence: 0.82
+status: verified
+provenanceMode: deterministic
+crossRefs:
+  - { kind: Alert, name: order-created-publish-failures, relation: alerts-on }
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

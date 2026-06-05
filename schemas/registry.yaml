@@ -1,0 +1,80 @@
+# Kind registry — the extensibility backbone.
+# Maps each apiVersion/kind to its schema, the collector(s) that produce its facts,
+# the prompt domain that drives Copilot synthesis, the validator, and its phase.
+# Adding a kind = a schema file + a prompt + (optional) collector + one row here.
+apiVersion: sre.kb/v1alpha1
+
+envelope:
+  schema: schemas/_envelope.schema.json
+
+kinds:
+  # --- P1 vertical slice: Flow -> Alert -> Runbook (+ supporting) ---
+  Flow:
+    schema: schemas/v1alpha1/Flow.schema.json
+    collectors: [java_spring.flow_builder]
+    prompt: flow
+    phase: P1
+  ResiliencyPattern:
+    schema: schemas/v1alpha1/ResiliencyPattern.schema.json
+    collectors: [java_spring.resiliency]
+    prompt: resiliency
+    phase: P1
+  Observability:
+    schema: schemas/v1alpha1/Observability.schema.json
+    collectors: [java_spring.observability]
+    prompt: observability
+    phase: P1        # logging sub-section in P1; metrics/traces/health in P2
+  Fallback:
+    schema: schemas/v1alpha1/Fallback.schema.json
+    collectors: [java_spring.resiliency]
+    prompt: fallback
+    phase: P1
+  Alert:
+    schema: schemas/v1alpha1/Alert.schema.json
+    collectors: []   # derived from Flow + Observability + ResiliencyPattern
+    prompt: alert
+    phase: P1
+  Runbook:
+    schema: schemas/v1alpha1/Runbook.schema.json
+    collectors: []   # derived from Flow + Alert + BlastRadius
+    prompt: runbook
+    phase: P1
+  BlastRadius:
+    schema: schemas/v1alpha1/BlastRadius.schema.json
+    collectors: [flow.callgraph]   # minimal single-service in P1
+    prompt: blast-radius
+    phase: P1
+  SloSli:
+    schema: schemas/v1alpha1/SloSli.schema.json
+    collectors: [java_spring.config_props]
+    prompt: slo
+    phase: P1        # minimal detect-or-needs-review
+  ReadinessScore:
+    schema: schemas/v1alpha1/ReadinessScore.schema.json
+    collectors: []   # roll-up over the other artifacts
+    prompt: null
+    phase: P1        # coverage roll-up in P1; full PRR in P2
+  ServiceCatalogEntry:
+    schema: schemas/v1alpha1/ServiceCatalogEntry.schema.json
+    collectors: []
+    prompt: null
+    phase: P1
+
+  # --- P2 breadth ---
+  TechStack:        { schema: schemas/v1alpha1/TechStack.schema.json,        phase: P2 }
+  Architecture:     { schema: schemas/v1alpha1/Architecture.schema.json,     phase: P2 }
+  Deployment:       { schema: schemas/v1alpha1/Deployment.schema.json,       phase: P2 }
+  Dependency:       { schema: schemas/v1alpha1/Dependency.schema.json,       phase: P2 }
+  Interface:        { schema: schemas/v1alpha1/Interface.schema.json,        phase: P2 }
+  ScheduledJob:     { schema: schemas/v1alpha1/ScheduledJob.schema.json,     phase: P2 }
+  DeliveryPipeline: { schema: schemas/v1alpha1/DeliveryPipeline.schema.json, phase: P2 }
+  Topology:         { schema: schemas/v1alpha1/Topology.schema.json,         phase: P2 }
+  FeatureFlag:      { schema: schemas/v1alpha1/FeatureFlag.schema.json,      phase: P2 }
+  DataStore:        { schema: schemas/v1alpha1/DataStore.schema.json,        phase: P2 }
+  ConfigManagement: { schema: schemas/v1alpha1/ConfigManagement.schema.json, phase: P2 }
+
+  # --- P3/P4 (incl. deferred security workstream) ---
+  SecurityPosture:  { schema: schemas/v1alpha1/SecurityPosture.schema.json,  phase: P3 }
+  DrBackup:         { schema: schemas/v1alpha1/DrBackup.schema.json,         phase: P3 }
+  NetworkTopology:  { schema: schemas/v1alpha1/NetworkTopology.schema.json,  phase: P3 }
+  RateLimiting:     { schema: schemas/v1alpha1/RateLimiting.schema.json,     phase: P3 }

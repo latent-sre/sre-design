@@ -1,0 +1,7 @@
+# Deliberately invalid: status not in enum, metadata.name violates pattern,
+# and required `spec` is missing. The validator must reject all of these.
+apiVersion: sre.kb/v1alpha1
+kind: Flow
+metadata:
+  name: Place Order
+status: approved

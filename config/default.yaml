@@ -1,0 +1,24 @@
+# Base configuration for the sre-kb engine. Overlaid by --profile and env vars
+# (prefix SRE_KB_, nested via __). Secrets come ONLY from env, never this file.
+
+paths:
+  work_root: .work
+  schemas: schemas
+  registry: schemas/registry.yaml
+  prompts: prompts
+  output_templates: output_templates
+
+# Validation gating thresholds (see validation pipeline).
+gating:
+  verified_min_confidence: 0.7
+  # status=verified additionally requires at least one provenance-verified evidence item.
+  require_verified_provenance: true
+
+# Which collectors are enabled. A profile (config/profiles/*.yaml) can narrow this.
+collectors:
+  enabled: [common, java_spring]
+
+# Publish defaults (forge selected at publish time; token comes from env).
+publish:
+  forge: github
+  dry_run_default: true

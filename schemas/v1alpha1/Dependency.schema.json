@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/Dependency.schema.json",
+  "title": "Dependency",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "Dependency" },
+    "spec": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["datastore", "broker", "service-binding", "http", "library"] },
+        "source": { "type": "string" },
+        "baseUrl": { "type": ["string", "null"] },
+        "criticality": { "type": "string" }
+      }
+    }
+  }
+}

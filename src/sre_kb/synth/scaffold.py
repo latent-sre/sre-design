@@ -2,37 +2,12 @@
 
 from __future__ import annotations
 
-from sre_kb import __version__
 from sre_kb.collectors.base import ScanContext
-from sre_kb.models.envelope import Artifact, CrossRef, Evidence, GeneratedBy, Metadata
 from sre_kb.models.facts import FactSet
 from sre_kb.scoring.readiness import readiness_spec
+from sre_kb.synth.emit import emit as _doc
+from sre_kb.synth.inventory import inventory_docs
 from sre_kb.util import member_of, slug
-
-
-def _doc(
-    kind: str,
-    name: str,
-    spec: dict,
-    evidence: list[Evidence],
-    status: str,
-    confidence: float | None,
-    service: str,
-    cross_refs: list[dict] | None = None,
-    provenance: str = "deterministic",
-) -> dict:
-    art = Artifact(
-        kind=kind,
-        metadata=Metadata(name=slug(name), service=service),
-        spec=spec,
-        evidence=evidence,
-        confidence=confidence,
-        status=status,
-        provenanceMode=provenance,
-        crossRefs=[CrossRef(**c) for c in (cross_refs or [])],
-        generatedBy=GeneratedBy(tool="sre-kb", driver="engine", toolVersion=__version__),
-    )
-    return art.to_doc()
 
 
 def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
@@ -314,6 +289,9 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                 service,
             )
         )
+
+    # --- P2 inventory kinds (TechStack, Deployment, Dependency, Interface, DataStore, ConfigManagement) ---
+    docs.extend(inventory_docs(fs, ctx, service))
 
     # --- ReadinessScore (coverage roll-up) ---
     docs.append(

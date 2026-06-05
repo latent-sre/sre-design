@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/Interface.schema.json",
+  "title": "Interface",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "Interface" },
+    "spec": {
+      "type": "object",
+      "required": ["style"],
+      "properties": {
+        "style": { "type": "string" },
+        "endpoints": { "type": "array" },
+        "channels": { "type": "array" }
+      }
+    }
+  }
+}

@@ -36,6 +36,8 @@ def collect(ctx: ScanContext) -> list[Fact]:
                         "buildpacks": app.get("buildpacks") or [],
                         "routes": routes,
                         "services": services,
+                        "env": app.get("env") or {},
+                        "command": app.get("command"),
                         "healthCheck": {
                             "type": app.get("health-check-type"),
                             "endpoint": app.get("health-check-http-endpoint"),

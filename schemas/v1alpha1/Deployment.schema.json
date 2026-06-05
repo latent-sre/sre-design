@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/Deployment.schema.json",
+  "title": "Deployment",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "Deployment" },
+    "spec": {
+      "type": "object",
+      "required": ["hosting"],
+      "properties": {
+        "hosting": { "type": "string", "enum": ["PCF", "VM", "cloud"] },
+        "instances": { "type": ["integer", "null"] },
+        "memory": { "type": ["string", "null"] },
+        "disk": { "type": ["string", "null"] },
+        "routes": { "type": "array" },
+        "services": { "type": "array" },
+        "stack": { "type": ["string", "null"] },
+        "buildpacks": { "type": "array" },
+        "healthCheck": { "type": "object" },
+        "profiles": { "type": ["string", "array", "null"] }
+      }
+    }
+  }
+}

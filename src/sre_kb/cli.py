@@ -25,9 +25,6 @@ app = typer.Typer(
 schema_app = typer.Typer(help="Introspect the kind registry and schemas.", no_args_is_help=True)
 app.add_typer(schema_app, name="schema")
 
-_NOT_YET = "Not implemented yet — lands with the {phase} build (see docs/DESIGN.md)."
-
-
 def _load_registry() -> dict:
     with registry_path().open("r", encoding="utf-8") as fh:
         return yaml.safe_load(fh) or {}
@@ -77,11 +74,6 @@ def validate_kb(directory: Path = typer.Argument(..., help="Directory of KB YAML
             typer.echo(f"         - {err}")
     typer.echo(f"\n{len(results)} artifact(s), {len(failures)} failed.")
     raise typer.Exit(code=1 if failures else 0)
-
-
-def _stub(name: str, phase: str) -> None:
-    typer.echo(f"`sre-kb {name}`: {_NOT_YET.format(phase=phase)}")
-    raise typer.Exit(code=0)
 
 
 @app.command()
@@ -165,11 +157,30 @@ def publish(
 
 @app.command()
 def diff(
-    from_commit: str = typer.Option(..., "--from"),
-    to_commit: str = typer.Option(..., "--to"),
+    from_target: str = typer.Option(..., "--from", help="Base target repo path (older)."),
+    to_target: str = typer.Option(..., "--to", help="Head target repo path (newer)."),
+    work_root: str = typer.Option(".work", "--work-root"),
 ) -> None:
-    """Drift detection: diff the KB across two scanned commits."""
-    _stub("diff", "P2")
+    """Drift detection: scan two versions of a repo and diff the resulting KB."""
+    from sre_kb.drift import changelog_md, diff_kb
+    from sre_kb.pipeline import run as run_pipeline
+    from sre_kb.render import load_kb
+
+    base = run_pipeline(from_target, work_root=work_root, run_id="diff-base", to_stage="validate")
+    head = run_pipeline(to_target, work_root=work_root, run_id="diff-head", to_stage="validate")
+    d = diff_kb(load_kb(base.root), load_kb(head.root))
+    drift_dir = head.root / "drift"
+    drift_dir.mkdir(exist_ok=True)
+    changelog = drift_dir / "CHANGELOG.md"
+    changelog.write_text(changelog_md(d, from_target, to_target), encoding="utf-8")
+    typer.echo(
+        f"drift: +{len(d.added)} -{len(d.removed)} ~{len(d.changed)} "
+        f"data-loss+{len(d.new_data_loss)}"
+    )
+    if d.new_data_loss:
+        for k in d.new_data_loss:
+            typer.echo(f"  ⚠️ new data-loss risk: {k[0]}/{k[1]}")
+    typer.echo(f"  changelog: {changelog}")
 
 
 def main() -> None:

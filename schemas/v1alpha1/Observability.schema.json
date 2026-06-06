@@ -8,6 +8,7 @@
     "kind": { "const": "Observability" },
     "spec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["logging"],
       "properties": {
         "logging": {
@@ -22,7 +23,8 @@
         },
         "metrics": { "type": "array" },
         "tracing": { "type": ["object", "string", "null"] },
-        "healthIndicators": { "type": "array" }
+        "healthIndicators": { "type": "array" },
+        "actuatorEndpoints": { "type": "array", "items": { "type": "string" } }
       }
     }
   }

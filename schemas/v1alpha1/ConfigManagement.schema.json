@@ -8,6 +8,7 @@
     "kind": { "const": "ConfigManagement" },
     "spec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["sources"],
       "properties": {
         "sources": { "type": "array", "items": { "type": "string" } },

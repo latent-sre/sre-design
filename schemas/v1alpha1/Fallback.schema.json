@@ -8,6 +8,7 @@
     "kind": { "const": "Fallback" },
     "spec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["behavior"],
       "properties": {
         "trigger": { "type": "string" },

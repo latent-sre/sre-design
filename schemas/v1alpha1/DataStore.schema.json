@@ -8,6 +8,7 @@
     "kind": { "const": "DataStore" },
     "spec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["engine", "name"],
       "properties": {
         "engine": { "type": "string" },

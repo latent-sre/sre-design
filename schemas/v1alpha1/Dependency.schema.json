@@ -8,6 +8,7 @@
     "kind": { "const": "Dependency" },
     "spec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["name", "type"],
       "properties": {
         "name": { "type": "string" },

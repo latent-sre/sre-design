@@ -8,6 +8,7 @@
     "kind": { "const": "Deployment" },
     "spec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["hosting"],
       "properties": {
         "hosting": { "type": "string", "enum": ["PCF", "VM", "cloud"] },

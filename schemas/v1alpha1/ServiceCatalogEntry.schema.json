@@ -8,6 +8,7 @@
     "kind": { "const": "ServiceCatalogEntry" },
     "spec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["type", "lifecycle"],
       "properties": {
         "type": { "type": "string" },

@@ -233,7 +233,7 @@ trap `validation/challenge.py:9-13` warns about). Instead:
 |---|---|---|
 | **0. Fact contract & trust tiers** ✅ | Add `source_tier: ast\|llm` to `Fact`/`Evidence`; a `CollectorProtocol` both tiers satisfy. No behavior change. | Foundation. |
 | **1. Adopt `resiliency-skills`' hardening wholesale** 🟡 | Architectural scan/publish split (no-credential scan role; scoped publish credential), sandboxed/`json.dumps` renderers, `redact` + second gate, fan-out cap, `needs-human-review` const. | This *is* `sre-design`'s own deferred roadmap. Closes the textual-fence and publish-path weaknesses **before** any LLM breadth is added. |
-| **2. Make the trust spine status-aware** 🟡 | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). | Or Tier-B facts will silently inflate "verified" graphs. |
+| **2. Make the trust spine status-aware** ✅ | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). | Or Tier-B facts will silently inflate "verified" graphs. |
 | **3. Wire `LLMChallenger` to a live oracle** | Real adjudication for judgment-call claims. | Prerequisite for Tier-B, not polish — deterministic grounding is circular for LLM claims. |
 | **4. LLM collectors: gap-finders + pointer-generators** | `collectors/llm/`. The LLM reads the engine's facts + the cited code and proposes **(a) gaps the engine missed on code we already cover** (the recall payoff — §7.9) and **(b) pointers for stacks no AST grammar reaches** (breadth). The engine re-derives or *refutes* each (§6.3, §7.9); nothing it proposes can auto-`verify`. | Recall on covered estates **and** breadth, both safely fenced. |
 | **5. Render-adapter breadth** | Generalize `render/` to neutral-intent → adapter; add Wavefront/AppDynamics. | Independent; can run in parallel. |
@@ -413,7 +413,7 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ## 8. Implementation status (2026-06-06)
 
-Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **127 tests
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **128 tests
 passing, ruff-clean.**
 
 ### Phase 0 — Fact contract & trust tiers ✅
@@ -454,7 +454,7 @@ Deferred (tracked, not dropped):
 - **Full scan/publish credential split** — separate no-credential scan role + scoped publish role +
   CI wiring is deployment/infra per §7.7; the code-side pieces (allowlist, token-out-of-argv) are done.
 
-### Phase 2 — Status-aware trust spine 🟡
+### Phase 2 — Status-aware trust spine ✅
 
 - **Status-aware crossref** (`validation/crossref.py`) — a verified artifact that depends-on/implements
   a non-verified (or missing) referent is downgraded to needs-review, iterated to a fixpoint so the
@@ -462,8 +462,9 @@ Deferred (tracked, not dropped):
   like alerts-on/covers don't). The orchestrator gating loop is now compute → downgrade → persist.
 - **Provenance path confinement** (`validation/provenance.py`) — evidence paths must resolve inside the
   repo root (`is_relative_to`); `../` and absolute-path escapes are rejected.
-- Deferred: **readiness status-awareness** — needs the readiness roll-up moved to *after* gating (it
-  runs at scaffold time today, on pre-gating statuses).
+- **Status-aware readiness** (`scoring/readiness.py`) — artifact-presence checks credit only verified
+  coverage; a needs-review draft is a gap ("present but not yet verified"), never counted toward the
+  grade. Recomputed in the orchestrator *after* gating so a downgrade is reflected.
 
 ### §7 enhancements landed alongside
 

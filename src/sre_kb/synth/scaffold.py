@@ -149,6 +149,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                 "verified",
                 confidence(Signal.DIRECT),  # explicit objective from the SLO catalog
                 service,
+                unverified_against_live=True,  # the SLO target/threshold can't be checked offline
             )
         )
     elif slo:
@@ -351,6 +352,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                     {"kind": "Flow", "name": flow_name, "relation": "alerts-on"},
                     {"kind": "SloSli", "name": slo_ref, "relation": "alerts-on"},
                 ],
+                unverified_against_live=True,  # burn-rate fires on live Prometheus metrics
             )
         )
 

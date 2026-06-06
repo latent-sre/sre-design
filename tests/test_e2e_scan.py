@@ -53,11 +53,23 @@ def test_flow_steps_ordered(result):
 
 def test_alert_and_runbook_from_swallowed_failure(result):
     docs = _load(result.root)
-    alert = next(d for (k, _), d in docs.items() if k == "Alert")
+    alert = docs[("Alert", "order-created-publish-failures")]
     assert alert["status"] == "needs-review"
     assert "splunk" in alert["spec"]["expr"]
     assert "order.created" in alert["spec"]["expr"]["splunk"]
     assert any(k == "Runbook" for (k, _) in docs)
+
+
+def test_burn_rate_alert_from_slo_catalog(result):
+    docs = _load(result.root)
+    burn = docs[("Alert", "create-order-latency-burn-rate")]
+    assert burn["status"] == "verified"
+    assert burn["spec"]["alertType"] == "burn-rate"
+    assert "prometheus_fast" in burn["spec"]["expr"]
+    slo = docs[("SloSli", "create-order-latency")]
+    assert slo["status"] == "verified"
+    assert slo["spec"]["objectives"][0]["target"] == 99.5
+    assert slo["spec"]["objectives"][0]["errorBudgetPct"] == 0.5
 
 
 def test_blast_radius_flags_data_loss(result):

@@ -1,0 +1,8 @@
+# SLO catalog (ingested by sre-kb). Targets/windows live here when not in code.
+slos:
+  - flow: create-order
+    sli: latency
+    objectivePercentile: p99
+    thresholdMs: 800
+    target: 99.5
+    window: 30d

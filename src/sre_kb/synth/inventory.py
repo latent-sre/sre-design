@@ -42,6 +42,46 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
         docs.append(emit("TechStack", service, spec, [framework.evidence] if framework else [app.evidence],
                          "verified", 0.85, service))
 
+    # --- Architecture (components / layers / patterns) ---
+    comps: list[dict] = []
+    layers: set[str] = set()
+    patterns: list[str] = []
+    seen: set[str] = set()
+
+    def _add_comp(name: str, ctype: str, symbol: str) -> None:
+        if symbol in seen:
+            return
+        seen.add(symbol)
+        comps.append({"name": name, "type": ctype, "symbol": symbol})
+        layers.add(ctype)
+
+    for e in fs.of("rest.endpoint"):
+        cls = e.attrs["handler"].split("#")[0]
+        _add_comp(cls.split(".")[-1], "web", cls)
+    cb = fs.first("resiliency.circuitbreaker")
+    if cb:
+        cls = (cb.attrs.get("targetSymbol") or "client").split("#")[0]
+        _add_comp(cls.split(".")[-1], "client", cls)
+        patterns.append("circuit-breaker")
+    if fs.first("resiliency.fallback"):
+        patterns.append("fallback")
+    repo_fact = fs.first("db.repository")
+    if repo_fact:
+        _add_comp(repo_fact.attrs["name"], "persistence", repo_fact.attrs["name"])
+        patterns.append("repository")
+    pub = fs.first("message.egress")
+    if pub:
+        cls = pub.attrs.get("class", "events")
+        _add_comp(cls.split(".")[-1], "messaging", cls)
+        patterns.append("async-messaging")
+    if comps:
+        endpoints = fs.of("rest.endpoint")
+        arch_ev = [endpoints[0].evidence] if endpoints else ([cb.evidence] if cb else [])
+        docs.append(emit("Architecture", service, {
+            "components": comps, "layers": sorted(layers),
+            "patterns": patterns, "styleTags": ["layered"],
+        }, arch_ev, "verified", 0.7, service))
+
     # --- Deployment (infra + capacity) ---
     if app:
         a = app.attrs

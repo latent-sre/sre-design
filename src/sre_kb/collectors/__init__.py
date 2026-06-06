@@ -8,7 +8,7 @@ enrich the fact set.
 from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
-from sre_kb.collectors.common import manifest_pcf
+from sre_kb.collectors.common import manifest_pcf, slo_catalog
 from sre_kb.collectors.java_spring import (
     annotations,
     build,
@@ -23,6 +23,7 @@ from sre_kb.models.facts import FactSet
 # File-collectors: ctx -> list[Fact]
 _FILE_COLLECTORS = [
     manifest_pcf.collect,
+    slo_catalog.collect,
     build.collect,
     annotations.collect,
     config_props.collect,

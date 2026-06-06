@@ -30,6 +30,11 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
     slo_name = slug(slo.attrs["meter"]) if slo else None
     cb_name = slug(cb.attrs["name"]) if cb else None
     alert_name = f"{slug(pub.attrs['channel'])}-publish-failures" if (pub and swallowed) else None
+    objective = next(
+        (o for o in fs.of("slo.objective") if o.attrs.get("flow") == flow_name),
+        fs.first("slo.objective"),
+    )
+    slo_ref = None
 
     # --- ResiliencyPattern ---
     if cb:
@@ -69,8 +74,24 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
             )
         )
 
-    # --- Observability (logging sub-section) ---
+    # --- Observability (logging + metrics + tracing + health) ---
     if obs:
+        actuator = fs.first("config.actuator")
+        slos = fs.of("config.slo")
+        has_prom = any(
+            d.attrs.get("name") == "micrometer-registry-prometheus" for d in fs.of("tech.dependency")
+        )
+        health = []
+        if actuator or app:
+            health.append("actuator/health")
+        hc_endpoint = (app.attrs.get("healthCheck") or {}).get("endpoint") if app else None
+        if hc_endpoint:
+            health.append(hc_endpoint)
+        obs_ev = [obs.evidence]
+        if actuator:
+            obs_ev.append(actuator.evidence)
+        if slos:
+            obs_ev.append(slos[0].evidence)
         docs.append(
             _doc(
                 "Observability",
@@ -81,17 +102,60 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                         "format": obs.attrs.get("format"),
                         "pattern": obs.attrs.get("pattern"),
                         "correlationFields": obs.attrs.get("correlationFields", []),
-                    }
+                    },
+                    "actuatorEndpoints": (
+                        [e.strip() for e in str(actuator.attrs["exposure"]).split(",")] if actuator else []
+                    ),
+                    "metrics": [
+                        {
+                            "name": s.attrs["meter"],
+                            "type": "timer",
+                            "slo": s.attrs.get("buckets"),
+                            "registry": "prometheus" if has_prom else None,
+                        }
+                        for s in slos
+                    ],
+                    "tracing": None,
+                    "healthIndicators": health,
                 },
-                [obs.evidence],
+                obs_ev,
                 "verified",
                 0.9,
                 service,
             )
         )
 
-    # --- SloSli (detect-or-needs-review) ---
-    if slo:
+    # --- SloSli (full from catalog, else detect-or-needs-review) ---
+    if objective:
+        target = objective.attrs.get("target")
+        budget_pct = round(100 - float(target), 4) if target is not None else None
+        slo_ref = slug(f"{flow_name}-latency")
+        docs.append(
+            _doc(
+                "SloSli",
+                slo_ref,
+                {
+                    "objectives": [
+                        {
+                            "sli": objective.attrs.get("sli", "latency"),
+                            "target": target,
+                            "window": objective.attrs.get("window"),
+                            "percentile": objective.attrs.get("percentile"),
+                            "thresholdMs": objective.attrs.get("thresholdMs"),
+                            "errorBudgetPct": budget_pct,
+                        }
+                    ],
+                    "source": "catalog",
+                    "forFlow": objective.attrs.get("flow", flow_name),
+                },
+                [objective.evidence],
+                "verified",
+                0.85,
+                service,
+            )
+        )
+    elif slo:
+        slo_ref = slo_name
         docs.append(
             _doc(
                 "SloSli",
@@ -136,8 +200,8 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
             "steps": steps,
             "sinks": flow.attrs["sinks"],
         }
-        if slo_name:
-            spec["sloRef"] = slo_name
+        if slo_ref:
+            spec["sloRef"] = slo_ref
         docs.append(_doc("Flow", flow_name, spec, flow_ev, "verified", 0.85, service, cross))
 
     # --- BlastRadius (minimal, per sink node) ---
@@ -232,6 +296,49 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                 0.6,
                 service,
                 cross_refs=[{"kind": "Flow", "name": flow_name, "relation": "alerts-on"}],
+            )
+        )
+
+    # --- Alert (SLO error-budget burn-rate, when a full objective exists) ---
+    if objective and slo_ref and flow:
+        target = objective.attrs.get("target")
+        budget_frac = round((100 - float(target)) / 100, 6) if target is not None else 0.01
+        metric = "http_server_requests_seconds_count"
+        docs.append(
+            _doc(
+                "Alert",
+                f"{flow_name}-latency-burn-rate",
+                {
+                    "alertType": "burn-rate",
+                    "sloRef": slo_ref,
+                    "signalSource": "metric",
+                    "severity": "high",
+                    "forFlow": flow_name,
+                    "logFormatRef": None,
+                    "expr": {
+                        "prometheus_fast": (
+                            f'sum(rate({metric}{{outcome!="SUCCESS"}}[1h])) / sum(rate({metric}[1h])) '
+                            f"> {round(14.4 * budget_frac, 6)}"
+                        ),
+                        "prometheus_slow": (
+                            f'sum(rate({metric}{{outcome!="SUCCESS"}}[6h])) / sum(rate({metric}[6h])) '
+                            f"> {round(6 * budget_frac, 6)}"
+                        ),
+                        "windows": "multi-window (1h fast @14.4x, 6h slow @6x)",
+                    },
+                    "rationale": (
+                        f"Multi-window error-budget burn-rate against SLO target {target}% "
+                        f"(budget {round(budget_frac * 100, 3)}%) on the {flow_name} flow."
+                    ),
+                },
+                [objective.evidence] + ([slo.evidence] if slo else []),
+                "verified",
+                0.8,
+                service,
+                cross_refs=[
+                    {"kind": "Flow", "name": flow_name, "relation": "alerts-on"},
+                    {"kind": "SloSli", "name": slo_ref, "relation": "alerts-on"},
+                ],
             )
         )
 

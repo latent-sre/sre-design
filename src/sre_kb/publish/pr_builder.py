@@ -58,6 +58,12 @@ def assemble_pr(
     shutil.copy2(proj / "catalog-info.yaml", base / "catalog-info.yaml")
     (base / "REVIEW.md").write_text(_review_md(docs, report), encoding="utf-8")
 
+    from sre_kb.reporting import collect_findings, render_md
+
+    (base / "FINDINGS.md").write_text(
+        render_md(service, layout.run_id, collect_findings(docs), docs), encoding="utf-8"
+    )
+
     tree = layout.root / "pr"
     # Publish-time secret-scan gate (defense-in-depth) — hard-fails even on --dry-run.
     from sre_kb.security import enforce_secret_gate

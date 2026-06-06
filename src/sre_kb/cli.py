@@ -172,6 +172,34 @@ def publish(
     typer.echo(ref)
 
 
+@app.command()
+def findings(
+    run_id: str = typer.Option(..., "--run"),
+    fmt: str = typer.Option("text", "--format", help="text | json | md"),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Print a ranked SRE risk digest (data-loss, uncontained critical deps) for a run."""
+    import json
+
+    from sre_kb.render import load_kb
+    from sre_kb.render.project import service_name
+    from sre_kb.reporting import collect_findings, render_md, render_text
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    docs = load_kb(layout.root)
+    found = collect_findings(docs)
+    service = service_name(docs)
+    if fmt == "json":
+        typer.echo(json.dumps({"service": service, "runId": run_id, "findings": found}, indent=2))
+    elif fmt == "md":
+        typer.echo(render_md(service, run_id, found, docs))
+    else:
+        typer.echo(render_text(service, run_id, found, docs))
+    if any(f["severity"] == "high" for f in found):
+        raise typer.Exit(code=1)  # non-zero so CI can gate on high-severity findings
+
+
 @app.command("challenge-worklist")
 def challenge_worklist(
     run_id: str = typer.Option(..., "--run"),

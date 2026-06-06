@@ -75,3 +75,28 @@ class WidgetController {
     assert eps and eps[0].attrs["handler"] == "com.acme.demo.WidgetController#create"
     assert "OrderHelper" not in eps[0].attrs["handler"]
 
+
+def _send_call(src: str):
+    return next(c for c in parse("java", src).types[0].methods[0].calls if c.method == "send")
+
+
+def test_swallow_needs_a_real_log_call_not_a_log_substring():
+    # `catalog` contains "log" but `catalog.update(e)` in a catch is NOT a logged-and-swallowed
+    # failure (the old substring test misfired here and seeded a spurious data-loss claim).
+    false_pos = "class C { void go() { try { q.send(x); } catch (Exception e) { catalog.update(e); } } }"
+    assert _send_call(false_pos).swallow is None
+
+    real = 'class C { void go() { try { q.send(x); } catch (Exception e) { log.error("boom", e); } } }'
+    sw = _send_call(real).swallow
+    assert sw is not None and sw.message == "boom"
+
+
+def test_swallow_detected_in_a_later_catch_clause():
+    # A logged-and-swallowed failure in a non-first catch is still data loss (was missed:
+    # only the first catch_clause was inspected).
+    src = ("class C { void go() { try { q.send(x); } "
+           "catch (IllegalStateException e) { throw e; } "
+           'catch (Exception e) { logger.warn("dropped", e); } } }')
+    sw = _send_call(src).swallow
+    assert sw is not None and sw.message == "dropped"
+

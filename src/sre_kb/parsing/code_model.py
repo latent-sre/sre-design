@@ -19,6 +19,21 @@ _STR_KINDS = {"string_literal", "verbatim_string_literal", "raw_string_literal",
 _THROW = {"throw_statement", "throw_expression"}
 _INVOKE = {"method_invocation", "invocation_expression"}
 
+# Logging-call detection for swallow analysis. A substring test ("log" in recv+meth) used to
+# misfire on receivers like `catalog`/`backlog`/`dialog`; match log-level method names or a
+# logger-shaped receiver instead.
+_LOG_METHODS = {
+    "error", "warn", "warning", "info", "debug", "trace", "fatal", "critical",
+    "log", "logerror", "logwarning", "logwarn", "loginformation", "logdebug",
+    "logtrace", "logcritical",
+}
+_LOG_RECEIVERS = {"log", "logger", "logging", "_log", "_logger", "slf4j"}
+
+
+def _is_log_call(recv: str, meth: str) -> bool:
+    r, m = recv.lower(), meth.lower()
+    return m in _LOG_METHODS or r in _LOG_RECEIVERS or r.endswith("logger")
+
 
 @dataclass(frozen=True)
 class Swallow:
@@ -125,19 +140,20 @@ def _enclosing_swallow(inv: Node, src: bytes) -> Swallow | None:
         if node.type == "try_statement":
             body = node.child_by_field_name("body") or next((c for c in node.children if c.type == "block"), None)
             if body and body.start_byte <= inv.start_byte < body.end_byte:
-                catch = next((c for c in node.children if c.type == "catch_clause"), None)
-                if catch is None:
-                    return None
-                cbody = catch.child_by_field_name("body") or next(
-                    (c for c in catch.children if c.type == "block"), catch
-                )
-                if next(_descend(cbody, _THROW), None) is not None:
-                    return None
-                for c in _descend(cbody, _INVOKE):
-                    recv, meth = _call_rm(c, src)
-                    if "log" in (recv + meth).lower():
-                        a = _str_args(c.child_by_field_name("arguments"), src)
-                        return Swallow(meth, a[0] if a else "", catch.start_point[0] + 1, catch.end_point[0] + 1)
+                # Check every catch clause (not just the first): a logged-and-swallowed
+                # failure in a later catch is still data loss.
+                for catch in (c for c in node.children if c.type == "catch_clause"):
+                    cbody = catch.child_by_field_name("body") or next(
+                        (c for c in catch.children if c.type == "block"), catch
+                    )
+                    if next(_descend(cbody, _THROW), None) is not None:
+                        continue  # this catch rethrows -> not swallowed here
+                    for c in _descend(cbody, _INVOKE):
+                        recv, meth = _call_rm(c, src)
+                        if _is_log_call(recv, meth):
+                            a = _str_args(c.child_by_field_name("arguments"), src)
+                            return Swallow(meth, a[0] if a else "",
+                                           catch.start_point[0] + 1, catch.end_point[0] + 1)
                 return None
         node = node.parent
     return None

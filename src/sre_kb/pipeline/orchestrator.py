@@ -17,6 +17,7 @@ import yaml
 from sre_kb.collectors import scan as run_collectors
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.config import load_config
+from sre_kb.reporting.findings import detect_tier_conflicts
 from sre_kb.scoring.readiness import readiness_spec
 from sre_kb.synth import scaffold
 from sre_kb.synth.context_pack import build_context_pack
@@ -177,6 +178,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         "docs": len(docs),
         "by_status": by_status,
         "by_tier": by_tier,
+        "tierConflicts": detect_tier_conflicts(fs.facts),  # §7.1: Tier-A vs Tier-B disagreements
         "records": records,
     }
     report_path = layout.reports / "validation_report.json"

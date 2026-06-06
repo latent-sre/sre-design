@@ -142,3 +142,39 @@ def test_review_md_surfaces_tier() -> None:
     md = _review_md([{}], report)
     assert "LLM-proposed 1" in md               # by_tier summary line
     assert "[LLM-proposed]" in md               # per-item tier tag
+
+
+# --- §7.1 tier-conflict detector -------------------------------------------------------
+
+
+def _fact(ftype: str, attrs: dict, tier: str):
+    from sre_kb.models.facts import Fact
+
+    ev = Evidence(repo="r", commit="0" * 40, path="p.java", lines=Lines(start=1, end=1),
+                  excerptHash="sha256:" + "0" * 64, detector="d", source_tier=tier)
+    return Fact(type=ftype, attrs=attrs, evidence=ev)
+
+
+def test_tier_conflict_detects_disagreement() -> None:
+    from sre_kb.reporting.findings import detect_tier_conflicts
+
+    # Tier-A found a circuit breaker; Tier-B's gap-finder flags the same target as unguarded.
+    facts = [_fact("resiliency.circuitbreaker", {"targetSymbol": "Inv#call"}, "ast"),
+             _fact("gap.circuit-breaker", {"target": "Inv#call"}, "llm")]
+    conflicts = detect_tier_conflicts(facts)
+    assert len(conflicts) == 1
+    assert conflicts[0]["concern"] == "circuit-breaker" and conflicts[0]["target"] == "Inv#call"
+    assert conflicts[0]["astPresent"] and not conflicts[0]["llmPresent"]
+
+
+def test_tier_conflict_silent_on_agreement_or_single_tier() -> None:
+    from sre_kb.reporting.findings import detect_tier_conflicts
+
+    agree = [_fact("resiliency.circuitbreaker", {"targetSymbol": "X"}, "ast"),
+             _fact("resiliency.circuitbreaker", {"targetSymbol": "X"}, "llm")]
+    assert detect_tier_conflicts(agree) == []                       # both assert present
+    assert detect_tier_conflicts(agree[:1]) == []                   # only Tier-A -> no conflict
+
+
+def test_report_has_no_tier_conflicts_on_ast_only(report: dict) -> None:
+    assert report["tierConflicts"] == []   # no Tier-B producer yet -> nothing to conflict

@@ -413,7 +413,7 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ## 8. Implementation status (2026-06-06)
 
-Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **128 tests
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **131 tests
 passing, ruff-clean.**
 
 ### Phase 0 — Fact contract & trust tiers ✅
@@ -468,6 +468,10 @@ Deferred (tracked, not dropped):
 
 ### §7 enhancements landed alongside
 
+- **§7.1 tier-conflict findings** ✅ — when Tier-A and Tier-B assert opposite presence for the same
+  (concern, target), the validation report flags a `tier-conflict` instead of dropping the Tier-B
+  signal (`reporting/findings.py`) — a near-zero-cost detector for Tier-A extraction bugs. Dormant
+  until a Tier-B producer.
 - **§7.2 tier-aware guardrails** ✅ — only Tier-A findings emit hard Copilot rules; Tier-B surfaces as
   advisory notes (`render/copilot.py`).
 - **§7.5 surface the trust tier** ✅ — the findings digest + PR `REVIEW.md` label each claim
@@ -476,8 +480,7 @@ Deferred (tracked, not dropped):
 ### Phases 3–5 ⬜
 
 Not started: live `LLMChallenger` oracle (Phase 3), Tier-B LLM collectors / gap-finder (Phase 4, §7.9),
-render-adapter breadth (Phase 5). Plus §7.1 (tier-conflict findings), §7.4 (shared signatures), and the
-deferred §7.6 schema governance.
+render-adapter breadth (Phase 5). Plus §7.4 (shared signatures) and the deferred §7.6 schema governance.
 
 > Doc note: `docs/DESIGN.md` still describes the challenge pass + secret gate as "P3 / deferred"
 > though both are built (§4) — trust the code; a DESIGN.md refresh is outstanding.

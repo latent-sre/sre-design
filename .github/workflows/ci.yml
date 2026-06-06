@@ -1,0 +1,30 @@
+name: CI
+
+# Runs the project's own dev checks (the Makefile targets) on every push to main and every PR,
+# so a regression can't merge silently — and so the PR-watch / auto-fix loop has signal to act on.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install (make install)
+        run: make install
+      - name: Lint (make lint)
+        run: make lint
+      - name: Test (make test)
+        run: make test

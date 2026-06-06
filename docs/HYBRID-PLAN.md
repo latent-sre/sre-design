@@ -1,214 +1,254 @@
-# sre-design ↔ resiliency-skills: comparison, findings, and a hybrid plan
+# sre-design ↔ resiliency-skills: deep comparison, findings, and a hybrid plan
 
 A source-level comparison of this repo (`sre-design` / the `sre-kb` engine) with
 [`latent-sre/resiliency-skills`](https://github.com/latent-sre/resiliency-skills)
-(the `latent-sre` engine + Copilot skill suite), and a phased plan to combine their
-strengths.
+(the `latent-sre` engine + Copilot skill suite), the concrete weaknesses found in each,
+and a phased plan to combine their strengths.
 
-> Provenance of this doc: both engines were read in full from source (this repo locally;
-> `resiliency-skills` from a fresh clone of `main`). Every claim below is grounded in a
-> named file, not a README.
+> **Provenance of this doc.** Both repos were read end-to-end from source (this one locally;
+> `resiliency-skills` from a fresh clone of `main`). Every load-bearing claim below was
+> verified at a named file/line or by executing the code — not taken from a README. Where a
+> finding turned out to encode *tested intent* rather than a bug, that is called out.
 
 ---
 
-## 1. The headline difference: fat engine vs. fat skills
+## 1. The headline: fat engine vs. fat skills — and a shared lineage
 
-Both repos are from `latent-sre` and target the same goal — turn a service repo into a
-populated, validated SRE knowledge base / `SRE-<service>` repo (Backstage catalog,
-runbooks, SLOs, alerts, architecture). They make **opposite architectural bets** about
-who does the extraction.
+Both repos are from `latent-sre` and target the same goal: turn a service repo into a
+populated, validated SRE knowledge base / `SRE-<service>` repo (Backstage catalog, runbooks,
+SLOs, alerts, architecture). They make **opposite architectural bets** about who extracts the
+facts.
 
 | | **this repo** (`sre-design` / `sre-kb`) | **`resiliency-skills`** (`latent-sre`) |
 |---|---|---|
 | Philosophy | Deterministic **fat engine**, thin LLM | "**Thin skills, fat config**, deterministic transforms" |
 | Who extracts the facts? | The **engine**, via tree-sitter **AST** parsing | **Copilot**, via 18 granular LLM skills |
-| Role of Copilot | Narrow: enrich scaffolds + adjudicate a challenge loop | Primary: scan / map / assess / generate artifacts |
-| Engine ↔ LLM | "The engine **never calls an LLM**" | Engine is the deterministic post-processor for LLM output |
-| # of Copilot skills | 1 (`sre-flow-analysis`) + 1 agent + 3 prompts | 18 (`assess-*`, `generate-*`, `map-*`, `publish-*`) |
-| Languages today | Java/Spring + .NET/Steeltoe (AST collectors) | Any (LLM generalizes), PCF-focused |
+| Role of the LLM | A *passenger* in a deterministic harness: enriches engine-scaffolded artifacts, adjudicates judgment calls | The *driver*: scans / maps / assesses / generates the artifacts |
+| LLM harness strength | **Mechanical** — citations are hash-checked; challenge is downgrade-only | **Advisory** — skills say "don't fabricate", only schema-shape + human enforce it |
+| # of Copilot skills | 1 (`sre-flow-analysis`) + agent + prompts | 18 (`assess-*`, `generate-*`, `map-*`, `publish-*`) |
+| Languages today | Java/Spring + .NET/Steeltoe (real AST collectors) | Any (LLM), backed by **8** detection signatures |
 
-They are essentially mirror images solving the same problem.
+### These read as two phases of one evolution, not two rivals
 
----
+`docs/DESIGN.md` (`§Security & threat model`, lines ~407-439) lists, as *deferred / "Phase TBD"*
+work: untrusted-data framing, dangerous-pattern lint, mandatory human review, sandboxed Jinja,
+a least-privilege token scoped to PRs-only, CODEOWNERS on prompts/schemas, and pinned+hashed
+deps. **That list is, almost item-for-item, `resiliency-skills`' *implemented* security
+posture.** The most useful way to read the two repos:
 
-## 2. Verified findings
+- **`sre-design`** = the deep, deterministic **extraction core**, with security hardening
+  consciously *documented and deferred*.
+- **`resiliency-skills`** = the **hardened, broadened productization** that executed exactly
+  that deferred roadmap — but, going skill-first for breadth, **dropped the deterministic
+  byte-grounding** that is `sre-design`'s crown jewel.
 
-### Finding A — `resiliency-skills` has **no byte-level citation grounding**
-
-Their full validation surface, read from source:
-
-- `engine/src/latent_sre/validate.py` — **JSON Schema validation only** (Draft 2020-12):
-  required fields, `additionalProperties: false`, enums. No source re-read, no hashing.
-- `engine/src/latent_sre/assemble.py` — a **deterministic in-tree transform**: loads the
-  already-scanned `.sre-scan/<service>/` YAML, copies/renders it, re-runs schema + redact
-  gates. It never re-reads the target repo or hashes a cited excerpt.
-- The only hashing in the engine is `engine/src/latent_sre/hashdiff.py`, and it is
-  **clobber-protection** — it hashes the *output YAML* (provenance stripped) to avoid
-  overwriting human edits, not source excerpts.
-
-Their `provenance` block (required across every schema) is `repo, commit, scanDate, skill`
-— **no `path`, no `lines`, no `excerptHash`.** Nothing in the loop ever asks *"do the cited
-bytes actually contain this claim?"*
-
-**Consequence:** a *confident* hallucination passes. A skill can emit a circuit-breaker
-timeout with `confidence: high` and a syntactically valid provenance block, and
-`validate.py` waves it through — schema-valid, well-attributed, and wrong.
-
-Their anti-hallucination defenses are real but **soft / self-attested**:
-- Copilot instructions: *"Never fabricate thresholds, SLO targets, or dependencies — if
-  unknown, lower confidence and say so."*
-- Skills label `observedIn: code|config` vs `inferred`; *"never assert a gap you cannot
-  evidence."*
-- Self-reported `confidence` (low/med/high) + `unverified-against-live: true`.
-
-Every one of these is the model policing itself; schema validation only checks *shape*.
-
-### Finding B — this repo **does** verify claims against source bytes
-
-The exact gap above is what this repo closes:
-
-- `src/sre_kb/collectors/base.py::hash_excerpt` computes `sha256` over the cited
-  1-based line range; every `Evidence` carries `repo, commit, path, lines, excerptHash,
-  detector` (required by `schemas/_envelope.schema.json`).
-- `src/sre_kb/validation/provenance.py` **recomputes** that hash; a citation whose bytes
-  don't match cannot pass — independent of what the model believed.
-- `src/sre_kb/validation/challenge.py` + `pipeline/challenge_apply.py` add an adversarial
-  grounding pass (monotonic, downgrade-only).
-- `src/sre_kb/validation/gating.py::final_status` downgrades anything unverified to
-  `needs-review` rather than dropping it.
-
-**Net:** this repo's trust is *engine-verified*; theirs is *model-attested*.
-
-### Finding C — `resiliency-skills` has the stronger **security boundary** + supply chain
-
-This is where they are clearly ahead, and it is documented + enforced, not aspirational
-(`docs/ownership-boundary.md`, `docs/publish-path.md`, `SECURITY.md`):
-
-- **Two-role split** — the agent that *reads untrusted code* (scan role: read-only, no
-  terminal, no network, no write token) and the credential that can *write* (publish role:
-  CI, credential scoped to `latent-sre/SRE-*` only) **never share a context**. Injection
-  has nothing to act on: the scan agent holds no credential, so "exfiltrate and open a PR"
-  dead-ends.
-- **The write path is deterministic, not agentic** — publish runs `assemble` (render /
-  validate / redact / scaffold) and opens a PR; it never re-interprets the target, weakens
-  a gate, fills a sentinel, or sets `needs-human-review: false`.
-- **The generated `SRE-<service>` repo defends itself** — ships its own CI against
-  *vendored pinned* `.sre/schemas`, `CODEOWNERS` (sentinel owner), a PR template, and
-  clobber-protection (`.proposed/` instead of overwriting human edits).
-- **Supply chain (enforced):** hash-pinned deps (`pip install --require-hashes`),
-  digest-pinned GitHub Actions (Renovate), two independent secret gates (`redact` +
-  `detect-secrets`), and an air-gapped offline wheel bundle for PCF runners.
-
-This repo's equivalent is implicit (untrusted-input context packs in
-`synth/context_pack.py`, a publish-time secret gate, a forge abstraction) but is **not**
-a formalized scan/publish credential split.
-
-### Finding D — secret gates: entropy-rich vs. deterministic-only
-
-| | `resiliency-skills` `redact.py` | this repo `security/secret_scan.py` |
-|---|---|---|
-| Known patterns | ✅ (AWS, GH, Slack, JWT, PEM, bearer, URI-creds) | ✅ (similar set + jdbc-password, fine-grained PAT) |
-| Entropy heuristic | ✅ Shannon ≥ 4.0 bits/char, len ≥ 20 | ❌ **deliberately omitted** ("avoid flaky false positives") |
-| Value-shape rule | ✅ secretish-key: opaque-value | ✅ assigned-secret (quoted + unquoted) |
-| Placeholder suppression | ✅ + sentinels (`REPLACE_ME__`) | ✅ placeholder regex |
-| Allowlist | inline `# latent-sre:allow` + `.latent-sre-allow` | — |
-| Fail-closed | ✅ (non-zero exit) | ✅ (`SecretLeakError`) |
-| Second independent gate | ✅ `detect-secrets` in CI | — (single gate) |
-
-Trade-off: theirs catches more (entropy) at some false-positive risk and double-gates;
-this repo trades recall for determinism/stability and runs a single gate.
-
-### Finding E — kind/schema coverage: graph-depth vs. breadth
-
-Both emit `apiVersion`+`kind` artifacts with a governance block. Overlap is large; the
-*shape* of the non-overlap is the interesting part.
-
-- **Overlapping kinds:** architecture, dependencies, slo, tech-stack, resiliency,
-  runbook, alert, observability, api-contracts/interface, pcf-deployment/deployment.
-- **This repo is deeper on the call/flow graph:** `Flow` (request sequence flows),
-  `Topology` + `estate` (cross-service co-tenancy), `BlastRadius`, `Fallback`,
-  `DataStore`, `ConfigManagement`, `ReadinessScore` (PRR grade), plus `diff` (drift) and
-  `findings` (ranked risk digest).
-- **`resiliency-skills` is broader on coverage surface:** first-class `dashboard`, `jobs`,
-  `delivery`, `criticality`, `messaging`, `infrastructure`, `logging` as separate concerns,
-  and multi-tool alert `render-adapters` (Splunk / Wavefront / AppDynamics / Prometheus —
-  beyond this repo's current Splunk + Prometheus).
+So the hybrid is not "merge competitors"; it is **reunite the two halves the same lineage
+split apart.**
 
 ---
 
-## 3. Which is "better"?
+## 2. Two theories of trust
 
-Neither, unconditionally — they optimize different axes:
+Read end to end, **both systems quietly rely on the human as the real correctness gate.**
+`resiliency-skills` says so openly (`needs-human-review: true` is a schema `const`); `sre-design`
+implies it (everything non-trivial downgrades to `needs-review`; its LLM challenge oracle is a
+hook that isn't wired live yet). Neither's automated gates *decide* "is this claim true."
 
-- **Correctness / reproducibility / auditability → this repo.** AST extraction is
-  deterministic and re-runnable; claims are grounded to `path:line` + recomputed hash.
-- **Breadth / maintenance-to-grow / security boundary → `resiliency-skills`.** LLM skills
-  generalize to any stack without writing a parser; the scan/publish split is the more
-  mature containment design.
+What differs is how they make that human review viable:
 
-**Pick by estate:** mostly Java/.NET and correctness-critical → this repo; polyglot and
-breadth-first → `resiliency-skills`. But the strongest system is the **hybrid** below.
+- **`sre-design` = verifiability.** Every claim carries `path:line` + a recomputed `excerptHash`,
+  so a reviewer can check it in one click. *Gives the reviewer the tools to check.*
+- **`resiliency-skills` = containment + a hard human gate.** The scan agent has no terminal /
+  network / write credential, so a wrong or hostile artifact can't escalate while it waits.
+  *Gives the reviewer the mandate, and makes review safe.*
+
+`resiliency-skills` has the safe gate with **nothing to check against** (its artifacts carry no
+file:line evidence). `sre-design` has **checkable evidence with a breakable gate** (a textual
+injection fence, see §4). That gap is the entire argument for the hybrid.
 
 ---
 
-## 4. The hybrid plan
+## 3. What each does that the other can't
 
-**Thesis:** keep `resiliency-skills`' skill-driven breadth *and* security boundary, but
-fence the LLM output behind **this repo's byte-level grounding + 5-layer validation**. The
-single highest-value move is forcing the LLM skills to emit `path:line` citations that
-*this engine recomputes* — converting "trust the model's confidence" (Finding A) into
-"verify the bytes" (Finding B).
+**`sre-design` is the more trustworthy *analysis*:**
+- Real, tested **AST extraction** (`parsing/code_model.py`) — per-class scoping, field-type→receiver
+  correlation, try/catch swallow detection. 95→101 tests.
+- **Byte-grounded provenance** (`collectors/base.py:hash_excerpt` + `validation/provenance.py`):
+  proves the cited bytes exist verbatim. (It does *not* prove the claim is true — see honest
+  docstring at `provenance.py:4-10`.)
+- A **sound 5-layer pipeline** wired in correct order; challenge gating is genuinely monotonic
+  downgrade-only with an audit trail (`pipeline/orchestrator.py`, `validation/challenge.py:207-217`).
+- **Reliability guardrails** (`render/copilot.py`) — a genuinely unique forward feature: the KB
+  is projected back into the developer's Copilot as rules ("don't remove `@CircuitBreaker`",
+  "don't swallow this exception — add an outbox") so future edits don't regress reliability.
+  `resiliency-skills` has no analogue.
+- Substantive differentiating features: `findings` (ranked risk digest), `drift` (semantic diff
+  that flags data-loss regressions), `estate` (cross-service co-tenancy detection).
 
-This is mostly *adding a second kind of collector*, because the repo already pivots on the
-right seam: a language-neutral `Fact` with provenance (`models/facts.py`) that collectors
-emit and the scaffolder consumes. AST collectors and LLM skills can both produce `Fact`s;
-everything downstream (scaffold → validate → render → publish) is unchanged.
+**`resiliency-skills` is the more defensible *system*:**
+- **Architectural injection containment**, *tested* with `examples/malicious/{AGENTS.md,README.md,manifest.yml}`:
+  the scan agent holds no credential, `needs-human-review` is `const: true`, names are sanitized.
+- **Safe-by-construction renderers** — `render.py` (sandboxed Jinja + `tojson`/`sanitize`),
+  `dashboard.py` (dict→`json.dumps`), `runbook.py` — all tested with hostile payloads.
+- **Fail-closed `redact`** secret gate + an independent second gate (`tools/second_secret_gate.py`
+  wrapping `detect-secrets`); fan-out cap (`appnames.py:FANOUT_CAP=20`); supply-chain pinning;
+  self-defending generated repo (vendored schemas, least-privilege CI, CODEOWNERS sentinel).
+
+But its **breadth is thinner than it looks**: the "18 skills / fat config" are `SKILL.md`
+stubs + Copilot reasoning, backed by only **8 deterministic signatures** (`lib/signatures/`:
+5 frameworks, 3 messaging systems, 0 datastores/infra/observability). It defines 17 artifact
+*shapes* comprehensively; the *detection* behind them is LLM reasoning, not implemented detectors.
+
+---
+
+## 4. Verified findings
+
+### `sre-design` — bugs found (fixed on this branch)
+
+These were verified at the source and **fixed with regression tests** in the same change as this doc:
+
+1. **Swallow false-positive** (`parsing/code_model.py`): `"log" in (recv+meth)` flagged
+   `catalog`/`backlog`/`dialog` receivers in a catch block as logged-and-swallowed, seeding a
+   spurious data-loss claim — which then propagated into a wrong *reliability guardrail* in the
+   developer's editor. **Fixed:** match log-level method names / logger-shaped receivers; also
+   now inspects every catch clause, not just the first (a logged-swallow in a later catch was
+   previously missed).
+2. **Ungrounded attribution in the deterministic path** (`collectors/java_spring/flow_builder.py`):
+   `_match_pub`/`_match_repo` fell back to the *first* publisher/repo when a receiver's type was
+   unresolved, fabricating a wrong-but-confident sink. **Fixed:** fall back only to a *sole*
+   unambiguous candidate; never guess among several. (The sole-candidate fallback is intended
+   and tested.)
+3. **`findings.py` didn't understand `"critical"`** (`reporting/findings.py`): `_SEV_RANK` had
+   no `critical` entry, so a co-tenancy `severityHint: critical` finding sorted to rank 9 (below
+   `info`) and wasn't counted in the high/medium tally — the most severe findings were
+   effectively hidden. **Fixed:** `critical` ranks above `high` and counts as high-or-above.
+4. **Mermaid output not sanitized** (`render/diagrams.py`): untrusted strings (service name and
+   REST path from annotations, resource/binding names from `manifest.yml`) were interpolated raw
+   into Mermaid labels/messages/relations — a render-integrity / diagram-spoofing gap.
+   `resiliency-skills` hardened exactly this. **Fixed:** sanitize the metacharacters that could
+   break out of a label or inject diagram syntax (node ids were already sanitized).
+
+### `sre-design` — weaknesses noted (not yet fixed; tracked for the hybrid)
+
+- **Injection fence is textual and breakable** (`synth/context_pack.py:40`): the
+  `<<<UNTRUSTED …>>> … <<<END UNTRUSTED>>>` delimiters and the path field are unescaped, so a
+  hostile source file can close the fence early and inject instructions into the "trusted"
+  region. The architectural defense in `resiliency-skills` is strictly stronger.
+- **Publish path** (`publish/forge/github.py:98`): the token is embedded in the remote URL and
+  passed as a `git` argv (visible to `ps`); `open_pr` has no target-repo allowlist (relies
+  wholly on the ambient token's scope).
+- **Gates not status-aware**: `crossref.py` resolves a reference if *any* artifact with that
+  name exists, regardless of whether it is `verified`/`rejected`; `readiness` counts artifacts
+  by kind, not status — a "verified" graph can cite unverified artifacts and grade "A".
+- **`provenance.py:28`** has no path-confinement (`root / path` with no `is_relative_to` check) —
+  harmless for engine output (always in-root) but bites edited / future LLM-sourced artifacts.
+- **`DESIGN.md` is internally stale**: its header says the challenge pass and secret gate are
+  built (they are — verified), while its body still says "P3 / deferred". Trust the code.
+
+### Findings that turned out to be *tested intent*, not bugs (calibration)
+
+- `scoring/risk.py`: the `"low"` severity branch is **unreachable**, but `test_risk.py:21-23`
+  asserts a contained single-flow dependency is `medium` — the design **deliberately floors a
+  tracked dependency at medium**. Dead code, not wrong output; left as-is. (The real bug nearby
+  was the `findings.py` `"critical"` handling, fixed above.)
+- `estate/topology.py` hard-codes `severityHint: "critical"` for co-tenancy, which `test_estate.py:44`
+  asserts. Defensible for a shared datastore with data loss; the genuine downstream bug was that
+  `findings.py` mis-ranked that `critical`, now fixed.
+
+### `resiliency-skills` — weaknesses
+
+- **No file:line evidence in any artifact.** Provenance is `repo/commit/scanDate/skill`; even the
+  optional `source.path` is unenforced and `RunbookSpec` has no source field. The human-review
+  gate has nothing to verify against — the structural epistemic gap.
+- **Schemas are permissive on substance** — `Resiliency` passes with empty `patterns`+`gaps`;
+  `RunbookSpec` requires only `title`. Structure is gated; truth is not.
+- **Breadth is thin** (8 signatures); coverage rides on Copilot reasoning quality.
+- Minor/unverified: `renovate.json` action-pinning claim (T7) couldn't be confirmed from the
+  repo; the "redact + detect-secrets are complementary" claim has no rule matrix.
+
+### Confirmed strengths (both)
+
+- `sre-design`'s **pipeline plumbing is correct** (5 layers in order; challenge monotonic;
+  audit trail). The weaknesses are gate *strength*, not wiring.
+- `resiliency-skills`' **output layer is safe-by-construction and hostile-payload-tested**;
+  6/8 threats in `docs/security.md` are code-backed, 2 are honest deployment preconditions.
+
+---
+
+## 5. Bottom line
+
+- **Most trustworthy *analysis* today: `sre-design`.** Only it verifies a claim against source
+  bytes, and only it has real, tested extraction.
+- **Most defensible *system* today: `resiliency-skills`.** If you had to point one at a hostile
+  repo tomorrow, it's this one.
+- **Neither is production-trustworthy alone.** `sre-design` would leak/spoof through unsanitized
+  output and a breakable fence; `resiliency-skills` would emit confident, unverifiable claims a
+  human can't efficiently check.
+
+Pick by estate if forced to ship one as-is: **mostly Java/.NET and correctness-critical →
+`sre-design`; polyglot and breadth-first → `resiliency-skills`.** Otherwise, build the hybrid.
+
+---
+
+## 6. The hybrid plan
+
+**Thesis:** keep `resiliency-skills`' implemented hardening *and* skill-driven breadth, but fence
+the LLM output behind `sre-design`'s byte-level grounding + sound validation pipeline. This is
+mostly *adding a second kind of collector*, because the repo already pivots on the right seam: a
+language-neutral `Fact` with provenance (`models/facts.py`) that collectors emit and the
+scaffolder consumes. AST collectors and LLM skills can both produce `Fact`s; everything
+downstream (scaffold → validate → render → publish) is unchanged.
 
 ### Trust tiers
 
 Ride a trust tier on the existing `Evidence.detector` provenance:
 
 - **Tier A — AST collectors** (existing): deterministic, high-trust. Java/.NET today.
-- **Tier B — LLM skill collectors** (new, from `resiliency-skills`): broad-stack,
-  lower-trust, **cannot reach `verified`** until grounded against cited bytes.
+- **Tier B — LLM skill collectors** (new, from `resiliency-skills`): broad-stack, lower-trust,
+  **cannot reach `verified`** until grounded.
 
-A router picks Tier A where a tree-sitter grammar exists and falls back to Tier B
-otherwise. On overlap, **AST wins** (deterministic beats generated); Tier B only fills
-gaps AST can't reach (documented limits: non-literal Kafka topics, cross-file call graph).
+A router picks Tier A where a tree-sitter grammar exists, Tier B otherwise. On overlap, **AST
+wins**; Tier B only fills gaps AST can't reach.
 
-### Phases
+### The non-circular Tier-B contract (the crux)
 
-| Phase | What | Effort | Risk |
-|---|---|---|---|
-| **0. Fact contract & trust tiers** | Add `source_tier: ast\|llm` to `Fact`/`Evidence`; define a `CollectorProtocol` (`collect(ScanContext) -> FactSet`) both tiers satisfy. No behavior change. | S | low |
-| **1. Security boundary** | Adopt `resiliency-skills`' scan/publish split: scan role = read-only, **no `GITHUB_TOKEN`**, consumes only `synth/context_pack.py` packs; publish role = CI, holds the `SRE-*`-scoped credential, runs `publish/forge/github.py`. Assert the token is absent during scan (a test fails if scan can see it). | M | low |
-| **2. LLM collector fallback** | `collectors/llm/`: build a context pack → invoke a Copilot skill → parse output **back into `Fact`s with full provenance**. Clone `.github/skills/sre-flow-analysis/` into the granular skill set (`map-architecture`, `assess-resiliency`, …). One end-to-end stack (e.g. Node/Express). | L | med |
-| **3. Trust-tiered gating** | Extend `validation/gating.py::final_status`: a doc whose evidence is all Tier B cannot be `verified` unless it passed the challenge/grounding loop. The engine recomputes `excerptHash` for Tier B citations — a hallucinated citation can't pass `validation/provenance.py`. **This is the whole reason the hybrid is safer than either parent.** | M | low |
-| **4. Render-adapter breadth** | Generalize `render/` to neutral-intent → adapter; add Wavefront / AppDynamics emitters (already on this repo's roadmap). | M | low |
-| **5. Router & precedence** | Per-file/per-stack router (AST if grammar present, else LLM; AST wins on overlap). `findings` shows tier provenance per claim. | S | low |
+The naïve "LLM emits `path:line`, engine recomputes the hash" is **circular** — if the same model
+produces both the claim and the cited excerpt, the hash only proves the excerpt is real, and a
+substring grounding check only proves the model quoted its own keyword (exactly the self-consistency
+trap `validation/challenge.py:9-13` warns about). Instead:
 
-**Sequencing:** 0 → 1 → 3 is the trust spine (low-risk, extends existing code) and lands
-first. Phase 2 is the only heavy lift and the only new LLM-integration risk. Phase 4 is
-independent and can run in parallel.
+1. Treat the LLM as a **pointer/hypothesis generator**, not a fact source. It proposes a claim +
+   the excerpt *text* (not a line number — LLMs are unreliable at exact lines); the engine
+   *locates* the bytes and stamps `path:line:hash` itself.
+2. The engine **independently re-derives** the fact at that location with the *same deterministic
+   rule Tier A uses* (AST/regex confirms the breaker annotation is actually there). The LLM only
+   widened coverage; the assertion is deterministic.
+3. Where no deterministic confirmation exists (judgment calls — runbook-step safety, alert
+   appropriateness), route to a **separate** LLM adjudication context (finally wire
+   `LLMChallenger`'s oracle) — never self-grade.
 
-### The load-bearing contract
+### Phases (reordered by everything the deep review found)
 
-The discipline that makes Tier B safe: **the LLM proposes a claim + a `path:line`
-citation; the engine recomputes the hash from those lines and rejects the claim if the
-bytes don't match.** That single rule (Finding B applied to Finding A) keeps the breadth
-of `resiliency-skills` from being a hallucination hole.
+| Phase | What | Why first/last |
+|---|---|---|
+| **0. Fact contract & trust tiers** | Add `source_tier: ast\|llm` to `Fact`/`Evidence`; a `CollectorProtocol` both tiers satisfy. No behavior change. | Foundation. |
+| **1. Adopt `resiliency-skills`' hardening wholesale** | Architectural scan/publish split (no-credential scan role; scoped publish credential), sandboxed/`json.dumps` renderers, `redact` + second gate, fan-out cap, `needs-human-review` const. | This *is* `sre-design`'s own deferred roadmap. Closes the textual-fence and publish-path weaknesses **before** any LLM breadth is added. |
+| **2. Make the trust spine status-aware** | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). | Or Tier-B facts will silently inflate "verified" graphs. |
+| **3. Wire `LLMChallenger` to a live oracle** | Real adjudication for judgment-call claims. | Prerequisite for Tier-B, not polish — deterministic grounding is circular for LLM claims. |
+| **4. LLM collectors as pointer-generators** | `collectors/llm/`; clone `sre-flow-analysis` into the granular skill set; engine re-confirms each pointer (§ contract). | The breadth payoff, now safely fenced. |
+| **5. Render-adapter breadth** | Generalize `render/` to neutral-intent → adapter; add Wavefront/AppDynamics. | Independent; can run in parallel. |
 
-### Worth lifting verbatim from `resiliency-skills`
+Phases 0→1→2 are the trust/security spine and are low-risk extensions of existing code; they land
+first. Phase 4 is the only heavy lift and the only new LLM-integration risk.
 
-- The ownership/credential boundary (`docs/ownership-boundary.md`) — copy faithfully.
-- Self-defending generated repo (vendored pinned schemas, own CI, CODEOWNERS, PR template).
-- Supply-chain posture (`--require-hashes`, digest-pinned Actions, second `detect-secrets`
-  gate, air-gapped bundle).
-- `render-adapters` multi-tool alert breadth.
+### Lift verbatim from `resiliency-skills`
 
-### Worth keeping from this repo
+Ownership/credential boundary (`docs/ownership-boundary.md`); safe renderers (sandboxed Jinja,
+dict→`json.dumps`); `redact` + second secret gate; fan-out cap + name sanitization; self-defending
+generated repo; supply-chain pinning; `render-adapters` multi-tool breadth.
 
-- Byte-level provenance (`hash_excerpt`) + the adversarial challenge loop — the grounding
-  layer they lack.
-- `Flow` / `Topology` / `estate` / `BlastRadius` graph depth.
-- `findings` (ranked risk) and `diff` (drift).
+### Keep from `sre-design`
+
+Byte-level provenance (`hash_excerpt`) + the monotonic challenge pipeline; the AST extraction core;
+the `Flow`/`Topology`/`estate`/`BlastRadius` graph depth; `findings` + `drift`; and the unique
+**reliability guardrails** that feed the KB back into the developer's editing loop.

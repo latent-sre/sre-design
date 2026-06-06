@@ -26,7 +26,7 @@ from sre_kb.validation.challenge import (
     build_worklist,
     challenge_doc,
 )
-from sre_kb.validation.crossref import check_crossrefs
+from sre_kb.validation.crossref import check_crossrefs, status_aware_downgrades
 from sre_kb.validation.gating import final_status
 from sre_kb.validation.provenance import verify_evidence
 from sre_kb.validation.report import write_report
@@ -97,12 +97,10 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
 
     crossref_problems = check_crossrefs(docs)
     challenger = GroundingChallenger()
-    by_status: dict[str, int] = {}
-    by_tier: dict[str, int] = {}
-    records = []
+    # Pass 1: per-artifact status (everything except the status-aware crossref constraint).
+    staged = []
     for d in docs:
         key = f"{d['kind']}/{d['metadata']['name']}"
-        tier = artifact_tier(d)  # "llm" if any cited evidence is Tier-B, else "ast"
         struct = validate_doc(d)
         prov = verify_evidence(d, target_path)
         xref = crossref_problems.get(key, [])
@@ -119,6 +117,27 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
             status = "needs-review"
         verdicts = challenge_doc(d, ctx.read_lines, challenger)  # adversarial grounding pass
         status, challenge_notes = apply_challenge_gating(status, verdicts)
+        staged.append(
+            {"d": d, "key": key, "tier": artifact_tier(d), "status": status, "struct": struct,
+             "prov": prov, "xref": xref, "safety": safety, "verdicts": verdicts,
+             "challenge_notes": challenge_notes}
+        )
+
+    # Pass 2: status-aware crossref — downgrade any verified artifact that depends on a
+    # non-verified referent (monotonic fixpoint), so a "verified" graph stays self-consistent.
+    downgrades = status_aware_downgrades(
+        {s["key"]: s["status"] for s in staged},
+        {s["key"]: (s["d"].get("crossRefs") or []) for s in staged},
+    )
+
+    # Pass 3: finalize status, persist artifacts, and build the report records.
+    by_status: dict[str, int] = {}
+    by_tier: dict[str, int] = {}
+    records = []
+    for s in staged:
+        d, key, status = s["d"], s["key"], s["status"]
+        if key in downgrades:
+            status = "needs-review"
         d["status"] = status
         if status == "rejected":
             out = layout.reports / "rejected" / d["kind"]
@@ -127,12 +146,16 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         out.mkdir(parents=True, exist_ok=True)
         _dump_yaml(out / f"{d['metadata']['name']}.yaml", d)
         by_status[status] = by_status.get(status, 0) + 1
-        by_tier[tier] = by_tier.get(tier, 0) + 1
-        records.append(
-            {"artifact": key, "status": status, "tier": tier, "structural": struct, "provenance": prov,
-             "crossref": xref, "safety": safety, "challenger": challenger.id,
-             "challenge": [v.__dict__ for v in verdicts], "challengeNotes": challenge_notes}
-        )
+        by_tier[s["tier"]] = by_tier.get(s["tier"], 0) + 1
+        rec = {
+            "artifact": key, "status": status, "tier": s["tier"], "structural": s["struct"],
+            "provenance": s["prov"], "crossref": s["xref"], "safety": s["safety"],
+            "challenger": challenger.id, "challenge": [v.__dict__ for v in s["verdicts"]],
+            "challengeNotes": s["challenge_notes"],
+        }
+        if key in downgrades:
+            rec["crossrefStatus"] = downgrades[key]
+        records.append(rec)
 
     report = {
         "run_id": run_id,

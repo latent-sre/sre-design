@@ -20,13 +20,25 @@ from pathlib import Path
 from sre_kb.collectors.base import hash_excerpt
 
 
+def _within(root: Path, p: Path) -> bool:
+    """True iff `p` resolves to a location inside `root` — no `..`/symlink/absolute escape."""
+    try:
+        return p.resolve().is_relative_to(root.resolve())
+    except (OSError, ValueError):
+        return False
+
+
 def _verify_one(ev: dict, root: Path, i: int) -> list[str]:
     path = ev.get("path")
     lines = ev.get("lines") or {}
     start, end = lines.get("start"), lines.get("end")
     want = ev.get("excerptHash")
-    fpath = root / path if path else None
-    if not fpath or not fpath.exists():
+    if not path:
+        return [f"evidence[{i}]: path not found: {path}"]
+    fpath = root / path
+    if not _within(root, fpath):
+        return [f"evidence[{i}]: path escapes repo root: {path}"]
+    if not fpath.exists():
         return [f"evidence[{i}]: path not found: {path}"]
     content = fpath.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
     if not (isinstance(start, int) and isinstance(end, int)) or start < 1 or end > len(content):

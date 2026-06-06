@@ -1,0 +1,24 @@
+# Planted: an LLM claims a log-pattern alert on a detection string that the cited code never
+# logs. The cited line is the publish call (no log, no rethrow) -> grounding: UNSUPPORTED.
+apiVersion: sre.kb/v1alpha1
+kind: Alert
+metadata:
+  name: orders-dropped-silently
+  service: order-service
+spec:
+  alertType: threshold
+  signalSource: log-pattern
+  severity: high
+  forFlow: create-order
+  expr:
+    splunk: 'index=app sourcetype=order-service "orders dropped silently" | stats count by host'
+  rationale: LLM asserted this line is logged on a swallowed failure; it is not in the cited code.
+status: verified
+evidence:
+  - repo: file://order-service
+    commit: "0000000000000000000000000000000000000000"
+    path: InventoryClient.java
+    lines: {start: 10, end: 10}
+    excerptHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    detector: copilot.enrichment
+    source_tier: llm

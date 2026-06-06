@@ -1,0 +1,25 @@
+# Planted: an LLM claims a swallowed-failure alert, but the cited code RE-THROWS after logging
+# (line 13). The excerpt contains "throw" -> grounding: CONTRADICTED -> rejected. This is the
+# §4.1 false-positive class the challenge gate must catch.
+apiVersion: sre.kb/v1alpha1
+kind: Alert
+metadata:
+  name: publish-failed-rethrown
+  service: order-service
+spec:
+  alertType: threshold
+  signalSource: log-pattern
+  severity: high
+  forFlow: create-order
+  expr:
+    splunk: 'index=app sourcetype=order-service "publish failed for" | stats count'
+  rationale: LLM asserted the publish failure is swallowed; the cited code rethrows it.
+status: verified
+evidence:
+  - repo: file://order-service
+    commit: "0000000000000000000000000000000000000000"
+    path: InventoryClient.java
+    lines: {start: 12, end: 13}
+    excerptHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    detector: copilot.enrichment
+    source_tier: llm

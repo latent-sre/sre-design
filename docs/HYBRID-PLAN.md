@@ -413,7 +413,7 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ## 8. Implementation status (2026-06-06)
 
-Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **131 tests
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **137 tests
 passing, ruff-clean.**
 
 ### Phase 0 — Fact contract & trust tiers ✅
@@ -474,13 +474,18 @@ Deferred (tracked, not dropped):
   until a Tier-B producer.
 - **§7.2 tier-aware guardrails** ✅ — only Tier-A findings emit hard Copilot rules; Tier-B surfaces as
   advisory notes (`render/copilot.py`).
+- **§7.3 non-circular contract testable** ✅ — an adversarial-LLM corpus
+  (`tests/fixtures/adversarial-llm/`) of planted claims the cited code doesn't support; the challenge
+  gate must reject/downgrade each (`tests/test_adversarial_llm.py`). Regression teeth before a live
+  oracle — the dual of `examples/malicious/`. (Prerequisite for Phase 3.)
 - **§7.5 surface the trust tier** ✅ — the findings digest + PR `REVIEW.md` label each claim
   AST-grounded / LLM-proposed, with a by-tier roll-up. A shared `tiers.py` is the single source of truth.
 
 ### Phases 3–5 ⬜
 
 Not started: live `LLMChallenger` oracle (Phase 3), Tier-B LLM collectors / gap-finder (Phase 4, §7.9),
-render-adapter breadth (Phase 5). Plus §7.4 (shared signatures) and the deferred §7.6 schema governance.
+render-adapter breadth (Phase 5). Plus §7.4 (shared signatures — the real re-derivation rule that
+replaces substring grounding; the Phase 4 foundation) and the deferred §7.6 schema governance.
 
 > Doc note: `docs/DESIGN.md` still describes the challenge pass + secret gate as "P3 / deferred"
 > though both are built (§4) — trust the code; a DESIGN.md refresh is outstanding.

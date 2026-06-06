@@ -1,0 +1,22 @@
+# Positive control: a correctly-anchored flow (createOrder is declared at the cited line) ->
+# grounding: SUPPORTED -> survives. Proves the gate discriminates, not just downgrades everything.
+apiVersion: sre.kb/v1alpha1
+kind: Flow
+metadata:
+  name: create-order
+  service: order-service
+spec:
+  trigger:
+    entrypoint: com.acme.order.InventoryClient#createOrder
+    method: POST
+    path: /orders
+  steps: []
+status: verified
+evidence:
+  - repo: file://order-service
+    commit: "0000000000000000000000000000000000000000"
+    path: InventoryClient.java
+    lines: {start: 8, end: 8}
+    excerptHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    detector: copilot.enrichment
+    source_tier: llm

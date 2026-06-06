@@ -27,22 +27,28 @@ def collect(ctx: ScanContext, fs: FactSet) -> list[Fact]:
 
     raw: list[dict] = []
 
-    def add(call: str, name: str, kind: str, failure_modes: list[dict], refs: list[dict]) -> None:
-        ln = find_line(lines, call)
+    def add(calls: list[str], name: str, kind: str, failure_modes: list[dict], refs: list[dict]) -> None:
+        ln = next((find_line(lines, c) for c in calls if find_line(lines, c)), None)
         if ln:
             raw.append({"line": ln, "name": name, "kind": kind, "failureModes": failure_modes, "refs": refs})
 
     if cb:
         target = cb.attrs.get("target", "reserve")
         add(
-            f".{target}(",
+            [f".{target}("],
             f"call-{slug(target)}",
             "http-egress",
             [{"mode": "timeout", "surfacedAs": "http-503"}, {"mode": "circuit-open", "surfacedAs": "http-503"}],
             [{"kind": "ResiliencyPattern", "name": slug(cb.attrs.get("name", "cb")), "relation": "depends-on"}],
         )
     if repo:
-        add(".save(", "persist", "db-write", [{"mode": "db-unavailable", "surfacedAs": "http-500"}], [])
+        add(
+            [".save(", ".Save(", ".SaveChanges"],
+            "persist",
+            "db-write",
+            [{"mode": "db-unavailable", "surfacedAs": "http-500"}],
+            [],
+        )
     if pub:
         channel = pub.attrs.get("channel", "event")
         if swallowed:
@@ -51,7 +57,13 @@ def collect(ctx: ScanContext, fs: FactSet) -> list[Fact]:
         else:
             fmodes = [{"mode": "broker-unavailable", "surfacedAs": "propagated"}]
             refs = []
-        add(".publish(", f"publish-{slug(channel)}", "message-egress", fmodes, refs)
+        add(
+            [".publish(", ".Publish(", ".PublishAsync(", ".ProduceAsync("],
+            f"publish-{slug(channel)}",
+            "message-egress",
+            fmodes,
+            refs,
+        )
 
     raw.sort(key=lambda s: s["line"])
     steps = []

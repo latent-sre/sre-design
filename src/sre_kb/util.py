@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 _PKG = re.compile(r"^\s*package\s+([\w.]+)\s*;", re.M)
+_NS = re.compile(r"^\s*namespace\s+([\w.]+)", re.M)
 _TYPE = re.compile(r"\b(?:class|interface|enum)\s+([A-Z]\w*)")
 _DURATION = re.compile(r"^\s*(\d+)\s*(ms|s|m)\s*$")
 
@@ -45,6 +46,11 @@ def java_package(text: str) -> str:
 def java_type(text: str) -> str:
     m = _TYPE.search(text)
     return m.group(1) if m else "Unknown"
+
+
+def csharp_namespace(text: str) -> str:
+    m = _NS.search(text)
+    return m.group(1) if m else ""
 
 
 def fqn(pkg: str, type_name: str, member: str | None = None) -> str:

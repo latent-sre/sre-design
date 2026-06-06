@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.collectors.common import manifest_pcf, slo_catalog
+from sre_kb.collectors.dotnet_steeltoe import annotations as dotnet_annotations
+from sre_kb.collectors.dotnet_steeltoe import build as dotnet_build
+from sre_kb.collectors.dotnet_steeltoe import resiliency as dotnet_resiliency
 from sre_kb.collectors.java_spring import (
     annotations,
     build,
@@ -29,6 +32,10 @@ _FILE_COLLECTORS = [
     config_props.collect,
     resiliency.collect,
     observability.collect,
+    # .NET / Steeltoe (self-gating: no *.cs/*.csproj -> emit nothing)
+    dotnet_build.collect,
+    dotnet_annotations.collect,
+    dotnet_resiliency.collect,
 ]
 
 # Derivers: (ctx, FactSet) -> list[Fact]

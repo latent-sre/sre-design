@@ -1,0 +1,18 @@
+---
+applications:
+  - name: orders-dotnet
+    instances: 2
+    memory: 512M
+    disk_quota: 1G
+    buildpacks:
+      - dotnet_core_buildpack
+    stack: cflinuxfs4
+    routes:
+      - route: orders-dotnet.apps.internal
+    services:
+      - orders-pg
+      - orders-kafka
+    health-check-type: http
+    health-check-http-endpoint: /actuator/health
+    env:
+      ASPNETCORE_ENVIRONMENT: Production

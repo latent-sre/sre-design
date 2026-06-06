@@ -45,8 +45,9 @@ network/synthetic).
 ## Implementation status (June 2026)
 
 The design below is the full intent; this section records what is **built and tested
-offline** today (95 tests, ruff-clean). The vertical slice and the items earlier marked
-"deferred to P3/P4" are now implemented.
+offline** today (131 tests, ruff-clean). The vertical slice and the items earlier marked
+"deferred to P3/P4" are now implemented. The forward roadmap — trust tiers and fenced LLM
+(Tier-B) collectors — lives in [`HYBRID-PLAN.md`](HYBRID-PLAN.md) (§8 tracks phase status).
 
 - **Engine** — deterministic `scan → scaffold → validate` for ~22 `kind`s. Collectors:
   **Java/Spring on PCF** and **.NET/Steeltoe on PCF** (same normalized facts → same KB,
@@ -54,22 +55,34 @@ offline** today (95 tests, ruff-clean). The vertical slice and the items earlier
   `parsing/code_model.py`), not line regexes — per-class scoping and receiver→field-type
   correlation. Confidence is signal-derived and BlastRadius risk is computed from impacted
   -flow breadth + containment, not type-keyed constants.
-- **Validation** — 5 layers: structural (schema), provenance (excerpt hash), cross-ref,
-  gating, and an **adversarial challenge pass** (deterministic grounding + an LLM hook;
-  monotonic downgrade-only). Nothing is silently dropped.
+- **Trust tiers** — every `Evidence` carries a `source_tier` (`ast` deterministic | `llm`),
+  rolled up per artifact and surfaced in the validation report. The foundation for fenced
+  LLM (Tier-B) collectors that can only add `needs-review` candidates, never auto-verify.
+- **Validation** — 5 layers: structural (schema), provenance (excerpt hash **+ repo-root
+  path confinement**), **status-aware** cross-ref (a verified artifact can't depend on an
+  unverified one), gating, and an **adversarial challenge pass** (deterministic grounding +
+  an LLM hook; monotonic downgrade-only). Nothing is silently dropped.
 - **Copilot driver** — `sre-analyst` agent + `sre-flow-analysis` skill, including the
   challenge protocol. The engine emits a worklist; `challenge-apply` re-gates verdicts.
-- **Render** — Mermaid sequence + topology diagrams, Copilot reliability guardrails, runbooks.
+- **Render** — Mermaid sequence + topology diagrams, runbooks, and Copilot reliability
+  guardrails that are **tier-aware** (Tier-B findings are advisory, never hard rules) with
+  untrusted values sanitized into the output.
 - **Publish** — SCM-neutral Forge. `--dry-run` stages a Backstage per-service PR tree
-  (REVIEW.md + FINDINGS.md); `--no-dry-run` opens a live PR (git + GitHub REST, token-gated).
+  (REVIEW.md + FINDINGS.md, each claim labeled by trust tier); `--no-dry-run` opens a live
+  PR (git + GitHub REST) confined to a **repo allowlist**, with the token kept out of `git`
+  argv. A **fan-out cap** refuses a runaway tree.
 - **Estate** (`sre-kb estate`) — cross-service topology + co-tenancy blast radius.
 - **Drift** (`sre-kb diff`) — living-KB changelog across two scans.
-- **Findings** (`sre-kb findings`) — ranked, evidence-linked risk digest (CI-gateable).
-- **Security** — publish-time secret-scan gate, dangerous-pattern output lint,
-  untrusted-input context packs.
+- **Findings** (`sre-kb findings`) — ranked, evidence-linked risk digest (CI-gateable),
+  plus a `tier-conflict` detector (Tier-A vs Tier-B disagreement).
+- **Security** — a **redact** pass + publish-time **secret-scan gate** (defense-in-depth), a
+  **non-escapable** untrusted-input context fence, sanitized renderers, the publish-repo
+  allowlist + fan-out cap above, dangerous-pattern output lint, and engine resource limits.
 
-Not yet built: additional language collectors (Node/Python/Go) and additional observability
-backends beyond the Splunk/Prometheus emitters.
+Not yet built: the live `LLMChallenger` oracle (Phase 3) and the fenced Tier-B LLM
+gap-finder collectors (Phase 4); §7.6 schema governance; the full scan/publish credential
+split (deployment/infra); additional language collectors (Node/Python/Go) and observability
+backends beyond the Splunk/Prometheus emitters. See [`HYBRID-PLAN.md`](HYBRID-PLAN.md) §8.
 
 ---
 
@@ -244,10 +257,10 @@ That trims the catalog from 22 kinds to ~19 — less schema/collector/validator 
   editing, so the KB prevents reliability regressions, not just documents them. **P1**.
 
 **Still-additional kinds (same envelope/machinery):** `NetworkTopology` (incl.
-ThousandEyes paths/ASGs), `RateLimiting`, and **`DrBackup`** (extends `DataStore`) →
-**P3/P4**. **`SecurityPosture` + the secrets-redaction / publish-time secret-scan
-gate → deferred future item (P3)** — see *Secret safety* below; baseline safety holds
-today because artifacts store `path:line`+hash, not raw code.
+ThousandEyes paths/ASGs), `RateLimiting`, and **`DrBackup`** (extends `DataStore`). A
+**`SecurityPosture`** collector (record secret *locations/types*, never values) remains a
+future item; the **redact pass + publish-time secret-scan gate** that protect the PR are
+**built** — see *Secret safety* below.
 
 Adding a kind = schema + prompt + (optional) collector + one `registry.yaml` row.
 
@@ -379,60 +392,64 @@ artifacts feed Copilot by default; generated consumer skills are instruction-onl
 
 ## Validation pipeline (layered; nothing silently dropped)
 
-`structural` (jsonschema) → `provenance` (recompute `excerptHash` at scanned commit;
-mismatch ⇒ downgrade) → `crossref` (resolve `crossRefs`/inline refs; dangling ⇒
-downgrade) → `gating` (config thresholds: `verified` needs `confidence ≥ 0.7` **and**
-verified provenance; else routed to `kb/needs-review/`, never discarded). A
-`ValidationReport` (counts by status, top provenance failures, dangling refs)
-becomes part of the PR body. Adversarial "challenge" re-check = P3.
+`structural` (jsonschema) → `provenance` (recompute `excerptHash` at the scanned commit,
+and confirm the path resolves inside the repo root; mismatch/escape ⇒ downgrade) →
+`crossref` (resolve `crossRefs`/inline refs; dangling ⇒ downgrade, **and** a verified
+artifact that depends on a non-verified referent is downgraded to `needs-review`, iterated
+to a fixpoint) → `gating` (config thresholds: `verified` needs `confidence ≥ 0.7` **and**
+verified provenance; else routed to `kb/needs-review/`, never discarded) → an **adversarial
+challenge** pass (deterministic grounding + an LLM hook; monotonic downgrade-only). A
+`ValidationReport` (counts by status and trust tier, tier-conflicts, provenance failures,
+dangling refs) becomes part of the PR body.
 
 ---
 
-## Secret safety (baseline now; active enforcement = P3)
+## Secret safety (baseline + active enforcement)
 
-**Baseline holds today by construction:** artifacts store `path:line` + an
-`excerptHash` (a hash), **not raw code**, so secret *values* are never copied into the
-KB or PR — the design avoids embedding source bytes in the first place.
+**Baseline holds by construction:** artifacts store `path:line` + an `excerptHash` (a
+hash), **not raw code**, so secret *values* are never copied into the KB or PR — the design
+avoids embedding source bytes in the first place.
 
-**Deferred to P3 (your call — "future item"):** the *active* enforcement layer —
-(1) a `SecurityPosture` collector that finds secrets/plaintext creds and records only
-their location/type (never the value), masking any excerpt before render, and (2) a
-**publish-time secret-scan gate** over the whole PR tree that hard-fails on a match.
-Until then, the build will not introduce any path that writes raw secret-bearing
-excerpts into artifacts (keeping the baseline intact), and we'll add the gate when
-this item is scheduled.
+**Active enforcement (built):** a **redact** pass scrubs any secret in the staged PR tree,
+then a **publish-time secret-scan gate** over the whole tree hard-fails on a match — both
+run even on `--dry-run`, so the staged tree is always safe to inspect or publish. Still a
+future item: a `SecurityPosture` collector that records secret *locations/types* (never
+values) discovered in the target, masking any excerpt before render.
 
 ---
 
-## Security & threat model (tracked — hardening deferred per decision)
+## Security & threat model
 
-> **Decision:** the hardening workstream below is **deferred — not in P1.** Captured
-> here so the risks are tracked, not lost. Phase TBD.
+> **Status:** the output/publish hardening workstream below largely **landed in Phase 1**
+> (HYBRID-PLAN §6); ✓ marks what is built. What remains is mostly process/infra (the full
+> scan/publish credential split, supply-chain pinning, SRE-side controls).
 
 **Trust boundary:** the **target repo is untrusted input**; our generated runbooks /
 alerts / skills become **trusted operational guidance** (executed by on-call humans,
 loaded by other engineers' Copilot). Poison in → trusted out, at incident time.
 
-**Top risks → deferred mitigations:**
+**Top risks → mitigations** (✓ = built):
 - **Prompt injection** (repo comments/config steer Copilot into poisoned runbooks /
-  skills / `copilot-instructions`) → untrusted-data framing in context packs +
-  dangerous-pattern output lint + mandatory human review / no auto-merge.
+  skills / `copilot-instructions`) → ✓ untrusted-data framing in context packs (now a
+  **non-escapable** fence) + ✓ dangerous-pattern output lint + ✓ sanitized renderers +
+  mandatory human review / no auto-merge.
 - **Engine RCE / DoS from a hostile repo** (unsafe YAML/XML, executing the target's
-  build, symlink escape, ReDoS, zip-bomb) → safe parsers, **never run the target
-  build**, sandbox (non-root, no-net), resource/regex budgets.
+  build, symlink escape, ReDoS, zip-bomb) → ✓ safe parsers, ✓ **never run the target
+  build**, ✓ no symlink-follow + file-size/resource budgets; sandbox (non-root, no-net)
+  is a deployment concern.
 - **SRE repo = aggregate weakness map + alert control** → access control + audit;
-  no monitoring change auto-applied; SRE-side CI treats the incoming KB as untrusted.
-- **Generated skills as a backdoor / RCE** → consumer skills instruction-only (no
+  no monitoring change auto-applied; SRE-side CI treats the incoming KB as untrusted (infra).
+- **Generated skills as a backdoor / RCE** → ✓ consumer skills instruction-only (no
   executable `scripts/`), least-privilege `tools`.
-- **Secret / recon-data exfil via the PR** → publish-time secret-scan gate (deferred;
-  see *Secret safety*); document the Copilot enterprise data-boundary dependency.
-- **Tool / prompt supply chain** → CODEOWNERS on `prompts/`+`schemas/` (security-
-  critical), pinned+hashed deps, **sandboxed/autoescaped Jinja**.
-- **False confidence → self-inflicted outage** → blast radius labeled "best-effort
-  lower bound; `flow.gap`s may hide impact"; "GENERATED — verify before executing"
+- **Secret / recon-data exfil via the PR** → ✓ redact pass + ✓ publish-time secret-scan
+  gate (see *Secret safety*); document the Copilot enterprise data-boundary dependency.
+- **Tool / prompt supply chain** → ✓ **sandboxed/autoescaped Jinja**; CODEOWNERS on
+  `prompts/`+`schemas/` and pinned+hashed deps are infra (deferred).
+- **False confidence → self-inflicted outage** → ✓ blast radius labeled "best-effort
+  lower bound; `flow.gap`s may hide impact"; ✓ "GENERATED — verify before executing"
   banner + scanned-commit/age on every runbook.
-- **Token blast radius** → least-privilege bot (PRs to the SRE repo only; cannot merge
-  or push to dev repos), short-lived/scoped tokens, never logged.
+- **Token blast radius** → ✓ publish confined to a repo **allowlist** + token kept out of
+  `git` argv; least-privilege bot + short-lived/scoped tokens are infra (deferred).
 
 **Free safe-defaults still used in Phase 0/1** (baseline correctness, *not* a hardening
 feature): `yaml.safe_load`, no target-build execution, Jinja autoescape on, no
@@ -592,11 +609,12 @@ enrichment layers on top in VS Code.
 (full cross-service + co-tenancy + stateful)**/`Observability` (metrics/traces/health)/
 `DataStore`/`ConfigManagement`/**`SloSli`** (full error-budget)/**`ReadinessScore`**
 (full PRR)) + **diagrams** (topology/blast-radius graph) + **drift detection
-(`sre-kb diff`)**. P3 = **the security-hardening workstream** (see *Security & threat
-model*: SecurityPosture + redaction + publish-time secret-scan gate, untrusted-input
-framing + output lint, sandboxing, authoring/consumer skill split), `DrBackup`,
-challenge-pass validator, live GitHub PR. P4 = .NET/Steeltoe, then Node/Python
-collectors (schemas/prompts/validators reused).
+(`sre-kb diff`)**. Most of the original P3/P4 is now built — the challenge-pass validator,
+redaction + publish-time secret-scan gate, untrusted-input framing + output lint, the live
+GitHub PR path, and the .NET/Steeltoe collector. What remains: a `SecurityPosture` collector,
+`DrBackup`, Node/Python collectors, and the hybrid-plan phases (trust tiers ✓, status-aware
+spine ✓, then the LLM-challenger oracle + fenced Tier-B gap-finders) — see
+[`HYBRID-PLAN.md`](HYBRID-PLAN.md).
 
 ---
 

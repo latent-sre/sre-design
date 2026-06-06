@@ -42,6 +42,34 @@ network/synthetic).
 
 ---
 
+## Implementation status (June 2026)
+
+The design below is the full intent; this section records what is **built and tested
+offline** today (65 tests, ruff-clean). The vertical slice and the items earlier marked
+"deferred to P3/P4" are now implemented.
+
+- **Engine** — deterministic `scan → scaffold → validate` for ~22 `kind`s. Collectors:
+  **Java/Spring on PCF** and **.NET/Steeltoe on PCF** (same normalized facts → same KB,
+  proving repo-neutrality). Resource limits + safe parsing.
+- **Validation** — 5 layers: structural (schema), provenance (excerpt hash), cross-ref,
+  gating, and an **adversarial challenge pass** (deterministic grounding + an LLM hook;
+  monotonic downgrade-only). Nothing is silently dropped.
+- **Copilot driver** — `sre-analyst` agent + `sre-flow-analysis` skill, including the
+  challenge protocol. The engine emits a worklist; `challenge-apply` re-gates verdicts.
+- **Render** — Mermaid sequence + topology diagrams, Copilot reliability guardrails, runbooks.
+- **Publish** — SCM-neutral Forge. `--dry-run` stages a Backstage per-service PR tree
+  (REVIEW.md + FINDINGS.md); `--no-dry-run` opens a live PR (git + GitHub REST, token-gated).
+- **Estate** (`sre-kb estate`) — cross-service topology + co-tenancy blast radius.
+- **Drift** (`sre-kb diff`) — living-KB changelog across two scans.
+- **Findings** (`sre-kb findings`) — ranked, evidence-linked risk digest (CI-gateable).
+- **Security** — publish-time secret-scan gate, dangerous-pattern output lint,
+  untrusted-input context packs.
+
+Not yet built: additional language collectors (Node/Python/Go) and additional observability
+backends beyond the Splunk/Prometheus emitters.
+
+---
+
 ## Architecture at a glance
 
 ```

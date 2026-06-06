@@ -1,5 +1,5 @@
 # Planted: an LLM claims a circuit breaker on reserve(), but the cited lines are a plain method
-# with no breaker -> grounding: UNSUPPORTED (the needle "circuitbreaker" is absent).
+# with no breaker -> the circuit-breaker signature does not fire -> UNSUPPORTED.
 apiVersion: sre.kb/v1alpha1
 kind: ResiliencyPattern
 metadata:

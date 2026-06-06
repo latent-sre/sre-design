@@ -153,7 +153,7 @@ def _calls(body: Node | None, src: bytes) -> list[Call]:
 
 
 def _method(m: Node, src: bytes, anns) -> MethodDecl:
-    nm = m.child_by_field_name("name")
+    nm = m.child_by_field_name("name") or next((c for c in m.children if c.type == "identifier"), None)
     return MethodDecl(
         name=_txt(nm, src) if nm else "",
         annotations=anns(m, src),
@@ -220,7 +220,8 @@ def _parse_java(root: Node, src: bytes) -> Module:
         types.append(TypeDecl(
             name=_txt(name, src) if name else "?", kind=t.type.split("_")[0], supertypes=supers,
             annotations=_java_anns(t, src), fields=_java_fields(body, src) if body else {},
-            methods=[_method(m, src, _java_anns) for m in (body.children if body else []) if m.type == "method_declaration"],
+            methods=[_method(m, src, _java_anns) for m in (body.children if body else [])
+                     if m.type in ("method_declaration", "constructor_declaration")],
             start=t.start_point[0] + 1, end=t.end_point[0] + 1,
         ))
     return Module(pkg, types)
@@ -275,12 +276,13 @@ def _parse_csharp(root: Node, src: bytes) -> Module:
     types = []
     for t in _descend(root, {"class_declaration", "interface_declaration"}):
         name, body = t.child_by_field_name("name"), t.child_by_field_name("body")
-        bases = t.child_by_field_name("bases")
+        bases = next((c for c in t.children if c.type == "base_list"), None)  # base_list is unnamed
         types.append(TypeDecl(
             name=_txt(name, src) if name else "?", kind=t.type.split("_")[0],
             supertypes=[_txt(b, src) for b in _descend(bases, {"identifier", "generic_name"})] if bases else [],
             annotations=_cs_anns(t, src), fields=_cs_fields(body, src) if body else {},
-            methods=[_method(m, src, _cs_anns) for m in _descend(body, {"method_declaration"})] if body else [],
+            methods=[_method(m, src, _cs_anns)
+                     for m in _descend(body, {"method_declaration", "constructor_declaration"})] if body else [],
             start=t.start_point[0] + 1, end=t.end_point[0] + 1,
         ))
     return Module(ns, types)

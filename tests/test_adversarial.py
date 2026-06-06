@@ -7,63 +7,48 @@ from __future__ import annotations
 
 import pytest
 
-from sre_kb.collectors.dotnet_steeltoe.annotations import _HTTP, _detect_swallowed
 from sre_kb.collectors.dotnet_steeltoe.build import _TFM
-from sre_kb.collectors.dotnet_steeltoe.resiliency import _method_using
+from sre_kb.parsing import parse
 from sre_kb.publish.forge.base import ForgePublishError
 from sre_kb.publish.forge.github import GitHubForge
 from sre_kb.security.secret_scan import scan_text
 from sre_kb.validation.challenge import extract_claims
 
 
-# --- HIGH: .NET collector regex brittleness ---
+# --- The .NET brittleness is now handled structurally by the AST model ---
 
-def test_swallowed_detection_handles_knr_braces():
-    knr = [
-        "try {",
-        '    await _producer.ProduceAsync("orders.created", m);',
-        "} catch (Exception ex) {",
-        '    _logger.LogError(ex, "failed to publish orders.created");',
-        "}",
-    ]
-    sw = _detect_swallowed(knr, 1)
-    assert sw is not None and "failed to publish" in sw["message"]
+def _cs_swallow(body: str):
+    src = "namespace N; class C { public async Task M() { " + body + " } }"
+    calls = [c for t in parse("csharp", src).types for m in t.methods for c in m.calls
+             if c.method in ("ProduceAsync", "Produce")]
+    return calls[0].swallow if calls else None
 
 
-def test_swallowed_detection_still_handles_allman_braces():
-    allman = [
-        "try",
-        "{",
-        '    await _producer.ProduceAsync("t", m);',
-        "}",
-        "catch (Exception ex)",
-        "{",
-        '    _logger.LogError(ex, "boom");',
-        "}",
-    ]
-    assert _detect_swallowed(allman, 2)["message"] == "boom"
+def test_swallow_detection_handles_knr_braces():
+    sw = _cs_swallow('try { await _producer.ProduceAsync("orders.created", m); } '
+                     'catch (Exception ex) { _logger.LogError(ex, "failed to publish orders.created"); }')
+    assert sw is not None and "failed to publish" in sw.message
 
 
-def test_swallowed_detection_respects_rethrow():
-    rethrow = ["try {", '    _producer.Produce("t", m);', "} catch (Exception ex) {",
-               '    _logger.LogError(ex, "x");', "    throw;", "}"]
-    assert _detect_swallowed(rethrow, 1) is None  # rethrown => not swallowed
+def test_swallow_detection_handles_allman_braces():
+    sw = _cs_swallow('try\n{\n await _producer.ProduceAsync("t", m);\n}\n'
+                     'catch (Exception ex)\n{\n _logger.LogError(ex, "boom");\n}')
+    assert sw is not None and sw.message == "boom"
 
 
-@pytest.mark.parametrize("attr,verb", [
-    ("[HttpPost]", "Post"),
-    ('[HttpGet("{id}")]', "Get"),
-    ('[HttpPost("orders")]', "Post"),
-    ('[HttpGet(Name = "x")]', "Get"),
-])
-def test_http_attribute_matches_route_args(attr, verb):
-    m = _HTTP.search(attr)
-    assert m is not None and m.group(1) == verb
+def test_swallow_detection_respects_rethrow():
+    sw = _cs_swallow('try { _producer.Produce("t", m); } '
+                     'catch (Exception ex) { _logger.LogError(ex, "x"); throw; }')
+    assert sw is None  # rethrown => not swallowed
 
 
-def test_http_attribute_extracts_route_literal():
-    assert _HTTP.search('[HttpGet("{id}")]').group(2) == "{id}"
-    assert _HTTP.search("[HttpPost]").group(2) is None
+def test_http_attribute_route_args_via_ast():
+    src = ('namespace N; [ApiController] [Route("api/v1/orders")] class Ctl { '
+           '[HttpGet("{id}")] public string Get() { return ""; } '
+           '[HttpPost] public string Make() { return ""; } }')
+    by_method = {m.name: m.annotations for m in parse("csharp", src).types[0].methods}
+    assert by_method["Get"]["[HttpGet]"][""] == "{id}"  # route literal captured
+    assert by_method["Make"]["[HttpPost]"] == {}  # bare attribute, no args
 
 
 def test_multi_target_csproj_framework_detected():
@@ -71,20 +56,23 @@ def test_multi_target_csproj_framework_detected():
     assert _TFM.search("<TargetFramework>net6.0</TargetFramework>").group(1) == "net6.0"
 
 
-def test_breaker_target_is_the_method_that_uses_it_not_textual_next():
-    # fallback method is declared BEFORE the protected method, and the breaker is registered
-    # in the ctor — so "next textual public method" would wrongly pick ReserveFallback.
-    lines = [
-        "public InventoryClient() {",
-        "    _breaker = Policy.Handle<Exception>().CircuitBreakerAsync(5, t);",
-        "}",
-        "public Task ReserveFallback() { return Task.CompletedTask; }",
-        "public async Task ReserveAsync() {",
-        "    await _breaker.ExecuteAsync(() => Call());",
-        "}",
-    ]
-    target, _ = _method_using(lines, "_breaker.")
-    assert target == "ReserveAsync"
+def test_breaker_target_is_the_method_that_uses_it(tmp_path):
+    # ReserveFallback is declared BEFORE ReserveAsync and the breaker is registered in the
+    # ctor; textual-next would mispick. The AST keys off which method invokes the breaker.
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.collectors.dotnet_steeltoe import resiliency
+
+    src = """namespace Acme;
+public class InventoryClient {
+    private readonly AsyncCircuitBreakerPolicy _breaker;
+    public InventoryClient() { _breaker = Policy.Handle<Exception>().CircuitBreakerAsync(5, t); }
+    public Task ReserveFallback() { return Task.CompletedTask; }
+    public async Task ReserveAsync() { await _breaker.ExecuteAsync(() => Call()); }
+}"""
+    (tmp_path / "InventoryClient.cs").write_text(src)
+    cb = next(f for f in resiliency.collect(ScanContext(root=tmp_path, repo="file://t"))
+              if f.type == "resiliency.circuitbreaker")
+    assert cb.attrs["target"] == "ReserveAsync"
 
 
 # --- MED: challenge needle decoupled from sourcetype quoting ---

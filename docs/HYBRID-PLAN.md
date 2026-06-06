@@ -231,8 +231,8 @@ trap `validation/challenge.py:9-13` warns about). Instead:
 
 | Phase | What | Why first/last |
 |---|---|---|
-| **0. Fact contract & trust tiers** | Add `source_tier: ast\|llm` to `Fact`/`Evidence`; a `CollectorProtocol` both tiers satisfy. No behavior change. | Foundation. |
-| **1. Adopt `resiliency-skills`' hardening wholesale** | Architectural scan/publish split (no-credential scan role; scoped publish credential), sandboxed/`json.dumps` renderers, `redact` + second gate, fan-out cap, `needs-human-review` const. | This *is* `sre-design`'s own deferred roadmap. Closes the textual-fence and publish-path weaknesses **before** any LLM breadth is added. |
+| **0. Fact contract & trust tiers** ✅ | Add `source_tier: ast\|llm` to `Fact`/`Evidence`; a `CollectorProtocol` both tiers satisfy. No behavior change. | Foundation. |
+| **1. Adopt `resiliency-skills`' hardening wholesale** 🟡 | Architectural scan/publish split (no-credential scan role; scoped publish credential), sandboxed/`json.dumps` renderers, `redact` + second gate, fan-out cap, `needs-human-review` const. | This *is* `sre-design`'s own deferred roadmap. Closes the textual-fence and publish-path weaknesses **before** any LLM breadth is added. |
 | **2. Make the trust spine status-aware** | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). | Or Tier-B facts will silently inflate "verified" graphs. |
 | **3. Wire `LLMChallenger` to a live oracle** | Real adjudication for judgment-call claims. | Prerequisite for Tier-B, not polish — deterministic grounding is circular for LLM claims. |
 | **4. LLM collectors: gap-finders + pointer-generators** | `collectors/llm/`. The LLM reads the engine's facts + the cited code and proposes **(a) gaps the engine missed on code we already cover** (the recall payoff — §7.9) and **(b) pointers for stacks no AST grammar reaches** (breadth). The engine re-derives or *refutes* each (§6.3, §7.9); nothing it proposes can auto-`verify`. | Recall on covered estates **and** breadth, both safely fenced. |
@@ -408,3 +408,58 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
   editor, never a hard "don't remove" rule, precisely because it's Tier-B.
 - **Graduation (§7.9 loop):** if "missing-timeout on WebClient builders" recurs and is confirmed, add
   a deterministic timeout-config collector — it becomes Tier-A and drops out of the LLM's frontier.
+
+---
+
+## 8. Implementation status (2026-06-06)
+
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **116 tests
+passing, ruff-clean.**
+
+### Phase 0 — Fact contract & trust tiers ✅
+
+- `Evidence.source_tier` (`"ast"` default | `"llm"`) on the provenance model + the envelope schema
+  (optional `enum`, so artifacts without it still validate).
+- `ScanContext.evidence(...)` stamps `source_tier`; a keyword-only param lets a future Tier-B
+  collector pass `"llm"`.
+- `CollectorProtocol` (runtime-checkable) that both shapes — `collect(ctx)` and `collect(ctx, fs)` —
+  satisfy.
+- Per-artifact `tier` + a `by_tier` roll-up surfaced in the validation report.
+- Pure plumbing: no artifact status/confidence/content changed.
+
+### Phase 1 — Adopt `resiliency-skills`' hardening 🟡
+
+Both weaknesses §6 assigns to Phase 1 are closed, and the §6 hardening list is implemented in code:
+
+- **Non-escapable injection fence** (`synth/context_pack.py`) — fence/sentinel runs in cited
+  excerpts + paths are defanged, so hostile source can't break out of the untrusted block (§4).
+- **Sanitized renderers** (`render/copilot.py`) — untrusted values in guardrails/runbooks are
+  flattened + de-backticked (diagrams were already sanitized).
+- **Publish-repo allowlist** (`publish/forge/github.py`, `publish.allowed_repos`) — live publishes
+  confined to an allowlist; empty list = block-all by default (§4 publish path).
+- **Token out of `git` argv** — tokenless remote + auth via env config (`GIT_CONFIG_*` /
+  `http.extraheader`).
+- **redact + second gate** (`security/secret_scan.py`) — `redact_tree()` scrubs the staged tree
+  before `enforce_secret_gate` verifies it.
+- **Fan-out cap** (`publish.max_artifacts`) — refuses a runaway/compromised PR tree.
+- `needs-human-review` const — satisfied by our existing `verified | needs-review | rejected`
+  status (§7.6 keeps ours over their const).
+
+Deferred (tracked, not dropped):
+
+- **§7.6 schema governance** — `additionalProperties: false` per kind (must first enumerate every
+  emitted field, e.g. `BlastRadius.riskRationale`, or current artifacts fail), `ownership`,
+  `unverified-against-live`, golden-example corpus. Its own unit (**P2**) because it changes schemas
+  + artifact content.
+- **Full scan/publish credential split** — separate no-credential scan role + scoped publish role +
+  CI wiring is deployment/infra per §7.7; the code-side pieces (allowlist, token-out-of-argv) are done.
+
+### Phases 2–5 ⬜
+
+Not started: status-aware trust spine (Phase 2), live `LLMChallenger` oracle (Phase 3), Tier-B LLM
+collectors / gap-finder (Phase 4, §7.9), render-adapter breadth (Phase 5). Plus the §7 enhancements
+— tier-conflict findings (§7.1), tier-aware guardrails (§7.2), shared signatures (§7.4), and
+human-facing tier surfacing (§7.5).
+
+> Doc note: `docs/DESIGN.md` still describes the challenge pass + secret gate as "P3 / deferred"
+> though both are built (§4) — trust the code; a DESIGN.md refresh is outstanding.

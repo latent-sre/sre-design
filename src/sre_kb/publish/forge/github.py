@@ -8,6 +8,7 @@ without a token or network; the defaults shell out to `git` and urllib.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -15,6 +16,7 @@ import shutil
 import subprocess
 import tempfile
 import urllib.request
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable
 
@@ -37,7 +39,34 @@ def parse_repo(spec: str) -> tuple[str, str]:
 
 
 def _redact(cmd: list[str]) -> list[str]:
-    return [re.sub(r"x-access-token:[^@]+@", "x-access-token:***@", c) for c in cmd]
+    out = []
+    for c in cmd:
+        c = re.sub(r"x-access-token:[^@]+@", "x-access-token:***@", c)
+        c = re.sub(r"(?i)(authorization: (?:basic|bearer) )\S+", r"\1***", c)
+        out.append(c)
+    return out
+
+
+@contextmanager
+def _git_auth_env(token: str):
+    """Provide git HTTPS auth via env-injected config (GIT_CONFIG_*), so the token is never
+    on the `git` command line where `ps` could read it. git >= 2.31 reads these keys."""
+    header = "Authorization: Basic " + base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    keys = {
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "http.https://github.com/.extraheader",
+        "GIT_CONFIG_VALUE_0": header,
+    }
+    saved = {k: os.environ.get(k) for k in keys}
+    os.environ.update(keys)
+    try:
+        yield
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 def _default_run(cmd: list[str]) -> str:
@@ -85,18 +114,28 @@ class GitHubForge:
         runner: Callable[[list[str]], str] | None = None,
         http_post: Callable[[str, dict, str], dict] | None = None,
         token: str | None = None,
+        allowed_repos: list[str] | None = None,
     ):
         self._run = runner or _default_run
         self._post = http_post or _default_post
         self._token = token
+        # None = unrestricted (back-compat); a list confines live publishes to those repos.
+        self._allowed = None if allowed_repos is None else {"/".join(parse_repo(r)).lower() for r in allowed_repos}
 
     def open_pr(self, tree: Path, *, sre_repo: str, branch: str, title: str, body: str) -> str:
         token = self._token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
         if not token:
             raise ForgePublishError("set GITHUB_TOKEN to publish live (or use --dry-run)")
         owner, repo = parse_repo(sre_repo)
-        remote = f"https://x-access-token:{token}@github.com/{owner}/{repo}.git"
-        with tempfile.TemporaryDirectory() as tmp:
+        if self._allowed is not None and f"{owner}/{repo}".lower() not in self._allowed:
+            raise ForgePublishError(
+                f"refusing to publish to {owner}/{repo}: not in the publish allowlist "
+                f"(publish.allowed_repos)"
+            )
+        # Tokenless remote; auth is injected via env config (see _git_auth_env) so the token
+        # never appears in the git argv that `ps` can read.
+        remote = f"https://github.com/{owner}/{repo}.git"
+        with tempfile.TemporaryDirectory() as tmp, _git_auth_env(token):
             work = Path(tmp) / "repo"
             self._run(["git", "clone", "--depth", "1", remote, str(work)])
             base = (self._run(["git", "-C", str(work), "rev-parse", "--abbrev-ref", "HEAD"]).strip() or "main")

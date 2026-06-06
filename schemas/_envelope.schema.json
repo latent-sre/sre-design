@@ -71,7 +71,12 @@
           }
         },
         "excerptHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-        "detector": { "type": "string", "minLength": 1 }
+        "detector": { "type": "string", "minLength": 1 },
+        "source_tier": {
+          "type": "string",
+          "enum": ["ast", "llm"],
+          "description": "Trust tier of the producing collector: ast (deterministic) | llm (LLM-proposed). Optional; absent means ast."
+        }
       }
     },
     "crossRef": {

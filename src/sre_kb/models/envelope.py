@@ -44,6 +44,10 @@ class Evidence(_Strict):
     lines: Lines
     excerptHash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     detector: str
+    # Trust tier of the collector that produced this evidence: "ast" (deterministic,
+    # byte-grounded; Tier-A) or "llm" (LLM-proposed; Tier-B). Defaults to "ast" so all
+    # existing deterministic collectors are unaffected.
+    source_tier: str = "ast"
 
 
 class CrossRef(_Strict):

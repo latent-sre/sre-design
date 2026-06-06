@@ -9,7 +9,7 @@ properties, logback) are parsed directly. File-collectors run first; derivers
 
 from __future__ import annotations
 
-from sre_kb.collectors.base import ScanContext
+from sre_kb.collectors.base import CollectorProtocol, ScanContext
 from sre_kb.collectors.common import manifest_pcf, slo_catalog
 from sre_kb.collectors.dotnet_steeltoe import annotations as dotnet_annotations
 from sre_kb.collectors.dotnet_steeltoe import build as dotnet_build
@@ -26,7 +26,7 @@ from sre_kb.flow import budget_check
 from sre_kb.models.facts import FactSet
 
 # File-collectors: ctx -> list[Fact]
-_FILE_COLLECTORS = [
+_FILE_COLLECTORS: list[CollectorProtocol] = [
     manifest_pcf.collect,
     slo_catalog.collect,
     build.collect,
@@ -41,7 +41,7 @@ _FILE_COLLECTORS = [
 ]
 
 # Derivers: (ctx, FactSet) -> list[Fact]
-_DERIVERS = [
+_DERIVERS: list[CollectorProtocol] = [
     flow_builder.collect,
     budget_check.collect,
 ]

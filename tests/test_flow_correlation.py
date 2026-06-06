@@ -37,3 +37,18 @@ def test_repo_matched_by_type_with_safe_fallback():
     assert _match_repo(repos, "OrderRepository").attrs["name"] == "OrderRepository"
     assert _match_repo(repos, None).attrs["name"] == "OrderRepository"  # unresolved receiver -> sole repo
     assert _match_repo(repos, "SomethingElse") is None  # a save() on a non-repo type is not a db-write
+
+
+def test_unresolved_receiver_among_many_is_not_guessed():
+    # When the receiver's type can't be resolved AND there are several candidates, attribute
+    # nothing — the old code blamed the first publisher/repo, fabricating an ungrounded sink.
+    pubs = [
+        _f(**{"class": "com.acme.OrderEventPublisher", "channel": "order.created"}),
+        _f(**{"class": "com.acme.AuditPublisher", "channel": "audit.log"}),
+    ]
+    assert _match_pub(pubs, None) is None
+    assert _match_pub(pubs[:1], None).attrs["channel"] == "order.created"  # sole candidate still ok
+
+    repos = [_f(name="OrderRepository"), _f(name="AuditRepository")]
+    assert _match_repo(repos, None) is None
+    assert _match_repo(repos[:1], None).attrs["name"] == "OrderRepository"

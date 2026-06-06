@@ -47,3 +47,21 @@ def test_no_findings_when_no_blast_radius():
     found = collect_findings(docs)
     assert found == []
     assert "No high/medium-risk findings" in render_text("svc", "r", found, docs)
+
+
+def test_critical_severity_outranks_high_and_is_counted():
+    # A co-tenancy datastore emits severityHint "critical"; it must sort above "high" and be
+    # counted in the tally, not fall to the bottom of the digest (was rank 9, uncounted).
+    docs = [
+        {"kind": "BlastRadius", "metadata": {"name": "dep"}, "status": "verified",
+         "spec": {"node": {"name": "dep"}, "severityHint": "high",
+                  "dependencyCriticality": "critical", "impactedFlows": ["b"]},
+         "evidence": [{"path": "Y.java", "lines": {"start": 1, "end": 1}}]},
+        {"kind": "BlastRadius", "metadata": {"name": "shared-db"}, "status": "verified",
+         "spec": {"node": {"name": "shared-db"}, "severityHint": "critical",
+                  "stateful": {"dataLossRisk": True}, "impactedFlows": ["a"]},
+         "evidence": [{"path": "X.java", "lines": {"start": 1, "end": 1}}]},
+    ]
+    found = collect_findings(docs)
+    assert found[0]["severity"] == "critical"  # sorts above the "high" finding
+    assert "2 high" in render_text("svc", "r", found, docs)  # critical counted as high-or-above

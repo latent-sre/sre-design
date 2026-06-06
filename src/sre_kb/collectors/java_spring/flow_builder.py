@@ -41,14 +41,18 @@ def _match_repo(repos, rtype: str | None):
     for r in repos:
         if rtype == r.attrs.get("name"):
             return r
-    return repos[0] if (repos and rtype is None) else None
+    # Unresolved receiver: attribute to the sole repo when there's exactly one; never guess
+    # the first among several (that fabricated an ungrounded db-write sink).
+    return repos[0] if (repos and rtype is None and len(repos) == 1) else None
 
 
 def _match_pub(pubs, rtype: str | None):
     for p in pubs:
         if rtype and _short(p.attrs.get("class") or "") == rtype:
             return p
-    return pubs[0] if (pubs and (rtype is None or len(pubs) == 1)) else None
+    # Fall back to the sole publisher only; an unresolved receiver must not be blamed on the
+    # first of several publishers.
+    return pubs[0] if (pubs and len(pubs) == 1) else None
 
 
 def collect(ctx: ScanContext, fs: FactSet) -> list[Fact]:

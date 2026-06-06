@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-_SEV_RANK = {"high": 0, "medium": 1, "low": 2, "info": 3}
+_SEV_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 _TYPE_RANK = {"data-loss-risk": 0, "uncontained-critical-dep": 1, "broad-impact-dependency": 2}
 
 
@@ -64,8 +64,9 @@ def _counts(docs: list[dict]) -> dict[str, int]:
 
 
 def _tally(findings: list[dict]) -> tuple[int, int]:
+    # "critical" (e.g. shared-datastore co-tenancy) counts as high-or-above, not dropped.
     return (
-        sum(1 for f in findings if f["severity"] == "high"),
+        sum(1 for f in findings if f["severity"] in ("critical", "high")),
         sum(1 for f in findings if f["severity"] == "medium"),
     )
 

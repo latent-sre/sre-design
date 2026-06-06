@@ -1,5 +1,13 @@
 """Provenance validation (layer b): recompute excerptHash for every evidence item and
-confirm the cited bytes exist at the scanned path. This is the anti-hallucination gate.
+confirm the cited bytes exist at the scanned path. This is a *citation-integrity* gate.
+
+What it proves and what it does not:
+  - It proves the cited bytes EXIST verbatim at path:line — so a citation can't be
+    fabricated or left dangling after the source moved. That is its real value once an
+    LLM (or a human) edits an artifact's line range.
+  - It does NOT prove the bytes SUPPORT the claim (that's the challenge pass), and on the
+    engine's own unedited output it passes by construction — the scaffold computed the
+    hash from the same bytes — so here it confirms integrity rather than catching error.
 
 `verify_evidence` checks a single-repo artifact; `verify_evidence_roots` checks an
 estate-level artifact whose evidence spans multiple repos (keyed by `evidence.repo`).

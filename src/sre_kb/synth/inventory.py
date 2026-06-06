@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import FactSet
+from sre_kb.scoring.confidence import Signal, confidence
 from sre_kb.synth.emit import emit
 
 _DATASTORE_HINTS = ("postgres", "mysql", "oracle", "mssql", "sqlserver", "db2", "mongo",
@@ -40,7 +41,7 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
         if app:
             spec["pcf"] = {"buildpacks": app.attrs.get("buildpacks", []), "stack": app.attrs.get("stack")}
         docs.append(emit("TechStack", service, spec, [framework.evidence] if framework else [app.evidence],
-                         "verified", 0.85, service))
+                         "verified", confidence(Signal.DIRECT), service))
 
     # --- Architecture (components / layers / patterns) ---
     comps: list[dict] = []
@@ -80,7 +81,7 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
         docs.append(emit("Architecture", service, {
             "components": comps, "layers": sorted(layers),
             "patterns": patterns, "styleTags": ["layered"],
-        }, arch_ev, "verified", 0.7, service))
+        }, arch_ev, "verified", confidence(Signal.DERIVED), service))  # composed from components
 
     # --- Deployment (infra + capacity) ---
     if app:
@@ -96,7 +97,7 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "buildpacks": a.get("buildpacks", []),
             "healthCheck": a.get("healthCheck", {}),
             "profiles": (a.get("env") or {}).get("SPRING_PROFILES_ACTIVE"),
-        }, [app.evidence], "verified", 0.9, service))
+        }, [app.evidence], "verified", confidence(Signal.DIRECT), service))
 
     # --- Dependency (runtime service deps: bindings + downstream HTTP) ---
     for sb in fs.of("pcf.service-binding"):
@@ -107,7 +108,7 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "type": dtype,
             "source": "pcf-service-binding",
             "criticality": "critical",
-        }, [sb.evidence], "verified", 0.85, service))
+        }, [sb.evidence], "verified", confidence(Signal.DIRECT), service))
     for c in fs.of("config.client"):
         cname = c.attrs.get("client", "downstream")
         docs.append(emit("Dependency", f"{cname}-http", {
@@ -116,7 +117,7 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "source": "config",
             "baseUrl": c.attrs.get("baseUrl"),
             "criticality": "contained" if has_cb else "critical",
-        }, [c.evidence], "verified", 0.8, service))
+        }, [c.evidence], "verified", confidence(Signal.DERIVED), service))
 
     # --- Interface (REST + async unified) ---
     endpoints = fs.of("rest.endpoint")
@@ -134,7 +135,7 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
                 {"channel": c.attrs.get("channel"), "role": "producer", "broker": c.attrs.get("broker")}
                 for c in channels
             ],
-        }, ev, "verified", 0.85, service))
+        }, ev, "verified", confidence(Signal.DIRECT), service))
 
     # --- DataStore (per datastore binding) ---
     repo = fs.first("db.repository")
@@ -151,7 +152,7 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "rpo": None,
             "rto": None,
             "sharedBy": [],
-        }, [sb.evidence], "verified", 0.75, service))
+        }, [sb.evidence], "verified", confidence(Signal.DERIVED), service))
 
     # --- ConfigManagement ---
     config_facts = fs.of("config.slo", "config.client", "config.timelimiter", "config.actuator")
@@ -162,6 +163,6 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "profiles": [profiles] if profiles else [],
             "refreshScope": False,
             "properties": [f.attrs for f in config_facts],
-        }, [config_facts[0].evidence], "verified", 0.8, service))
+        }, [config_facts[0].evidence], "verified", confidence(Signal.DIRECT), service))
 
     return docs

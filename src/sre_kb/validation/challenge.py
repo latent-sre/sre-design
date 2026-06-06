@@ -6,6 +6,12 @@ evidence change), the challenge layer asks "does the cited evidence actually SUP
 this claim?" (is the claim grounded). This is what catches an enrichment pass adding a
 plausible-but-ungrounded claim.
 
+Honest scope: on the engine's OWN output the deterministic grounding is largely a
+self-consistency check — the scaffold built the needle (e.g. the alert's log string)
+from the same evidence the grounder then searches, so it mostly proves internal
+consistency. Its real discriminating power is on LLM-edited artifacts, where the claim
+and the evidence can genuinely diverge; that is also where the LLMChallenger applies.
+
 Safety property: a challenge can only ever LOWER confidence, never raise it. A buggy or
 hallucinating challenger's worst case is a false downgrade (a human reviews something
 fine) — never a false pass. Same monotonic-strictness rule as the output safety lint.

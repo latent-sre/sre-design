@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import FactSet
+from sre_kb.scoring.confidence import Signal, confidence
 from sre_kb.scoring.readiness import readiness_spec
 from sre_kb.synth.emit import emit as _doc
 from sre_kb.synth.inventory import inventory_docs
@@ -50,7 +51,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                 },
                 [cb.evidence],
                 "verified",
-                0.9,
+                confidence(Signal.DIRECT),  # explicit @CircuitBreaker / Polly declaration
                 service,
             )
         )
@@ -69,7 +70,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                 },
                 [fb.evidence],
                 "verified",
-                0.85,
+                confidence(Signal.DIRECT),  # a declared fallback method
                 service,
             )
         )
@@ -120,7 +121,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                 },
                 obs_ev,
                 "verified",
-                0.9,
+                confidence(Signal.DIRECT, len(obs_ev)),  # logging/actuator/metrics config present
                 service,
             )
         )
@@ -150,7 +151,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                 },
                 [objective.evidence],
                 "verified",
-                0.85,
+                confidence(Signal.DIRECT),  # explicit objective from the SLO catalog
                 service,
             )
         )
@@ -175,7 +176,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                 },
                 [slo.evidence],
                 "needs-review",
-                0.5,
+                confidence(Signal.WEAK),  # SLO guessed from metric buckets, no objective
                 service,
             )
         )
@@ -392,7 +393,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                 },
                 [app.evidence],
                 "verified",
-                0.8,
+                confidence(Signal.DIRECT),  # from the PCF manifest
                 service,
             )
         )
@@ -408,7 +409,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
             readiness_spec(fs, docs, budget),
             [],
             "needs-review",
-            0.6,
+            confidence(Signal.INFERRED),  # a coverage roll-up, not a source fact
             service,
         )
     )

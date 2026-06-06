@@ -170,9 +170,14 @@ apiVersion: sre.kb/v1alpha1
 kind: <Kind>
 metadata: { name, service, owner, domain, labels, annotations }
 spec: { ...kind-specific... }
-evidence:                       # provenance — ≥1 required to be "verified"
+evidence:                       # citation integrity — ≥1 required to be "verified".
   - { repo, commit, path, lines: {start,end}, excerptHash: sha256:…, detector }
-confidence: 0.0–1.0
+                                #   The hash proves the cited bytes exist verbatim; it
+                                #   does not prove they support the claim (challenge pass
+                                #   does), and on engine output it passes by construction.
+confidence: 0.0–1.0             # signal strength, not a calibrated probability: DIRECT
+                                #   (declared) > DERIVED (composed) > INFERRED > WEAK,
+                                #   plus a corroboration bonus. Gating splits at 0.7.
 status: verified | needs-review | rejected
 provenanceMode: deterministic | llm-asserted
 crossRefs: [ { kind, name, relation } ]    # implements/depends-on/alerts-on/mitigates

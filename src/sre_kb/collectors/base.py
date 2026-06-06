@@ -14,6 +14,7 @@ from sre_kb.models.envelope import Evidence, Lines
 
 LOCAL_COMMIT = "0" * 40  # sentinel commit for local working-tree scans
 _SKIP_DIRS = {".git", ".venv", "venv", "target", "build", "node_modules", "__pycache__"}
+_MAX_FILE_BYTES = 2_000_000  # skip pathologically large files (DoS / decompression-bomb guard)
 
 
 def hash_excerpt(lines: list[str], start: int, end: int) -> str:
@@ -49,6 +50,8 @@ class ScanContext:
                     continue  # no symlink-follow (safe-by-default)
                 if any(part in _SKIP_DIRS for part in p.relative_to(self.root).parts):
                     continue
+                if p.stat().st_size > _MAX_FILE_BYTES:
+                    continue  # resource budget (safe-by-default)
                 out.append(p)
         return out
 

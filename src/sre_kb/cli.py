@@ -137,22 +137,47 @@ def publish(
     sre_repo: str = typer.Option("(unset)", "--sre-repo"),
     forge: str = typer.Option("github", "--forge"),
     dry_run: bool = typer.Option(True, "--dry-run/--no-dry-run"),
+    allow_secrets: bool = typer.Option(False, "--allow-secrets", help="Override the secret-scan gate (unsafe)."),
     work_root: str = typer.Option(".work", "--work-root"),
 ) -> None:
-    """Stage the per-service PR tree and (optionally) open the PR. Defaults to --dry-run."""
+    """Stage the per-service PR tree and (optionally) open the PR. Defaults to --dry-run.
+
+    A publish-time secret-scan gate hard-fails if the PR tree contains secrets.
+    """
     import json
 
     from sre_kb.publish import assemble_pr
     from sre_kb.render import load_kb
+    from sre_kb.security import SecretLeakError
     from sre_kb.workspace import RunLayout
 
     layout = RunLayout(Path(work_root), run_id)
     docs = load_kb(layout.root)
     report_path = layout.reports / "validation_report.json"
     report = json.loads(report_path.read_text()) if report_path.exists() else None
-    tree, ref = assemble_pr(layout, docs, report, sre_repo=sre_repo, forge=forge, dry_run=dry_run)
+    try:
+        tree, ref = assemble_pr(
+            layout, docs, report, sre_repo=sre_repo, forge=forge, dry_run=dry_run, allow_secrets=allow_secrets
+        )
+    except SecretLeakError as exc:
+        typer.echo(f"BLOCKED by secret-scan gate: {exc}", err=True)
+        for f in exc.findings:
+            typer.echo(f"  {f['rule']}  {f['path']}:{f['line']}", err=True)
+        raise typer.Exit(code=2) from exc
     typer.echo(f"PR tree: {tree}")
     typer.echo(ref)
+
+
+@app.command("secret-scan")
+def secret_scan(directory: Path = typer.Argument(..., help="Directory to scan for secrets.")) -> None:
+    """Scan a directory tree for secrets (the publish gate uses the same rules)."""
+    from sre_kb.security import scan_tree
+
+    findings = scan_tree(directory)
+    for f in findings:
+        typer.echo(f"{f['rule']}  {f['path']}:{f['line']}")
+    typer.echo(f"{len(findings)} secret(s) found.")
+    raise typer.Exit(code=1 if findings else 0)
 
 
 @app.command()

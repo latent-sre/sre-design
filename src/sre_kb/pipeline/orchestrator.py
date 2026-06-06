@@ -18,10 +18,12 @@ from sre_kb.collectors import scan as run_collectors
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.config import load_config
 from sre_kb.synth import scaffold
+from sre_kb.synth.context_pack import build_context_pack
 from sre_kb.validation.crossref import check_crossrefs
 from sre_kb.validation.gating import final_status
 from sre_kb.validation.provenance import verify_evidence
 from sre_kb.validation.report import write_report
+from sre_kb.validation.safety import lint_doc
 from sre_kb.validation.structural import validate_doc
 from sre_kb.workspace import RunLayout
 
@@ -75,8 +77,14 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         return RunResult(run_id, layout.root, len(fs.facts), 0, {})
 
     docs = scaffold(fs, ctx)
+    ctx_dir = layout.candidates / "context"
+    ctx_dir.mkdir(exist_ok=True)
     for d in docs:
         _dump_yaml(layout.candidates / f"{d['kind']}-{d['metadata']['name']}.yaml", d)
+        if d.get("evidence"):  # untrusted-input-framed context pack for Copilot
+            (ctx_dir / f"{d['kind']}-{d['metadata']['name']}.md").write_text(
+                build_context_pack(ctx, d), encoding="utf-8"
+            )
     if to_stage == "scaffold":
         return RunResult(run_id, layout.root, len(fs.facts), len(docs), {})
 
@@ -88,6 +96,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         struct = validate_doc(d)
         prov = verify_evidence(d, target_path)
         xref = crossref_problems.get(key, [])
+        safety = lint_doc(d)
         status = final_status(
             d,
             structural_ok=not struct,
@@ -96,6 +105,8 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
             min_confidence=gate.get("verified_min_confidence", 0.7),
             require_verified_provenance=gate.get("require_verified_provenance", True),
         )
+        if safety and status == "verified":  # dangerous content must get a human
+            status = "needs-review"
         d["status"] = status
         if status == "rejected":
             out = layout.reports / "rejected" / d["kind"]
@@ -104,7 +115,10 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         out.mkdir(parents=True, exist_ok=True)
         _dump_yaml(out / f"{d['metadata']['name']}.yaml", d)
         by_status[status] = by_status.get(status, 0) + 1
-        records.append({"artifact": key, "status": status, "structural": struct, "provenance": prov, "crossref": xref})
+        records.append(
+            {"artifact": key, "status": status, "structural": struct, "provenance": prov,
+             "crossref": xref, "safety": safety}
+        )
 
     report = {
         "run_id": run_id,

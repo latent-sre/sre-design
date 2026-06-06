@@ -37,6 +37,7 @@ def assemble_pr(
     branch: str = "sre-kb/update",
     forge: str = "github",
     dry_run: bool = True,
+    allow_secrets: bool = False,
 ) -> tuple[Path, str]:
     docs = docs if docs is not None else load_kb(layout.root)
     proj = layout.root / "projections"
@@ -58,6 +59,10 @@ def assemble_pr(
     (base / "REVIEW.md").write_text(_review_md(docs, report), encoding="utf-8")
 
     tree = layout.root / "pr"
+    # Publish-time secret-scan gate (defense-in-depth) — hard-fails even on --dry-run.
+    from sre_kb.security import enforce_secret_gate
+
+    enforce_secret_gate(tree, allow=allow_secrets)
     if dry_run:
         return tree, f"dry-run: staged PR tree at {tree} (would target {sre_repo})"
     ref = get_forge(forge).open_pr(

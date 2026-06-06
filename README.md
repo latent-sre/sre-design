@@ -19,8 +19,10 @@ The full design lives in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Status
 
-Working engine — P1 vertical slice, P2 breadth, and P3 security hardening implemented
-and tested offline against the bundled fixtures. See `docs/DESIGN.md` for the full design.
+Working engine, tested offline (95 tests, ruff-clean) against bundled **Java/Spring**,
+**.NET/Steeltoe**, and multi-endpoint fixtures — the same collectors emit the same KB for
+both languages (repo-neutrality). See [`docs/DESIGN.md`](docs/DESIGN.md) for the full
+design and a current implementation-status section.
 
 Implemented:
 - **AST-backed extraction** — code structure (classes, methods, calls, annotations,
@@ -33,20 +35,48 @@ Implemented:
   ResiliencyPattern, Observability, SloSli, ReadinessScore (PRR grade), TechStack,
   Architecture, Deployment, Dependency, Interface, DataStore, ConfigManagement.
 - **Render**: Mermaid sequence + topology diagrams, Copilot reliability guardrails, runbooks.
-- **Publish**: Backstage per-service PR tree + REVIEW.md; SCM-neutral Forge. `--dry-run`
-  stages locally; `--no-dry-run` opens a live PR via git + GitHub REST (`GITHUB_TOKEN`).
+- **Publish**: Backstage per-service PR tree + REVIEW.md + FINDINGS.md; SCM-neutral Forge.
+  `--dry-run` stages locally; `--no-dry-run` opens a live PR via git + GitHub REST (`GITHUB_TOKEN`).
+- **Findings** (`sre-kb findings`) — ranked, evidence-linked risk digest (CI-gateable).
 - **Drift** (`sre-kb diff`) and **Estate** (`sre-kb estate`: cross-service topology + co-tenancy).
 - **Security**: publish-time secret-scan gate, dangerous-pattern output lint, untrusted-input
   context packs, engine resource limits.
-- Shipped Copilot driver under `.github/` (sre-analyst agent + sre-flow-analysis skill).
+- **Copilot driver** under `.github/` (sre-analyst agent + sre-flow-analysis skill) with the
+  challenge loop: the engine emits a worklist, Copilot adjudicates, `sre-kb challenge-apply`
+  re-gates the verdicts (monotonic, downgrade-only).
+
+## What's next
+
+Additive work, not architectural — the AST foundation makes the first two straightforward:
+
+- **More language collectors** — Node/Express, Python/FastAPI: a tree-sitter grammar plus a
+  collector per stack, emitting the same normalized facts.
+- **Live Copilot challenge** — wire `LLMChallenger`'s oracle to a real Copilot run so
+  judgment-call claims (runbook-step safety, alert appropriateness) are adjudicated
+  end-to-end, then re-gated by `challenge-apply`.
+- **More observability backends** — AppDynamics / Wavefront (Aria) / ThousandEyes alert
+  emitters beyond the current Splunk + Prometheus.
+- **Live publish demo** — open a real PR into an SRE/Backstage repo (needs a target repo + token).
+
+Known limitations (documented, not bugs): variable-topic egress (non-literal Kafka topics)
+and cross-file call-graph beyond a single handler body are out of scope for the per-file
+AST model.
 
 ## Quickstart (dev)
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                                                   # the test suite
+pytest -q                                                   # the test suite (95 tests)
 sre-kb schema list                                          # the kind registry
-sre-kb run --target tests/fixtures/sample-spring-pcf --to-stage publish
+
+# scan -> scaffold -> validate -> render -> stage a PR tree (dry-run)
+sre-kb run --target tests/fixtures/sample-spring-pcf --run demo --to-stage publish
+sre-kb findings --run demo                                  # ranked risk digest
+
+# repo-neutrality: the same engine on a .NET/Steeltoe service
+sre-kb run --target tests/fixtures/sample-dotnet-steeltoe --run net --to-stage validate
+
+# cross-service co-tenancy blast radius
 sre-kb estate --target tests/fixtures/sample-spring-pcf --target tests/fixtures/sample-billing-pcf
 ```

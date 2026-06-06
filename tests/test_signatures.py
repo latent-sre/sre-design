@@ -5,7 +5,7 @@ ResiliencyPattern claim by asking "does the signature fire at the cited location
 
 from __future__ import annotations
 
-from sre_kb.signatures import concerns, fires, rederive
+from sre_kb.signatures import concerns, fires, rederive, signature
 from sre_kb.validation.challenge import GroundingChallenger, extract_claims
 
 
@@ -33,6 +33,17 @@ def test_unknown_concern_never_fires() -> None:
 def test_rederive_aliases_fires() -> None:
     assert rederive("circuit-breaker", "@CircuitBreaker") is True
     assert rederive("circuit-breaker", "no breaker here") is False
+
+
+def test_signature_exposes_shared_tier_a_tokens() -> None:
+    """One rule, both tiers: the AST tokens the collectors key off live in the same Signature as
+    the text patterns Tier-B re-derives with (HYBRID-PLAN §7.4)."""
+    cb = signature("circuit-breaker")
+    assert cb is not None
+    assert "@CircuitBreaker" in cb.annotations    # the Java AST collector keys off this
+    assert "CircuitBreaker" in cb.call_tokens     # the .NET AST collector keys off this
+    assert cb.fires("@CircuitBreaker(name=x)")    # and the text patterns re-derive the same tokens
+    assert cb.fires("Policy.Handle<Exception>().CircuitBreakerAsync(5, t)")
 
 
 def test_resiliency_claim_re_derives_via_signature() -> None:

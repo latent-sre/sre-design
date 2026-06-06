@@ -1,70 +1,95 @@
-"""Detection signatures — named, deterministic rules for resilience patterns, shared as the
-re-derivation contract (HYBRID-PLAN §6.3 step 2 / §7.4).
+"""Detection signatures — named, deterministic rules for resilience patterns, shared by both
+trust tiers (HYBRID-PLAN §6.3 step 2 / §7.4).
 
-A signature answers one question deterministically: *does pattern `<concern>` appear in this
-excerpt?* The challenge gate uses it to re-derive a proposed claim ("does signature S fire at
-the pointer the LLM proposed?") instead of a bare substring check — the difference between
-proving the model quoted its own keyword and proving the pattern is actually there
-(`validation/challenge.py` warns about exactly that self-consistency trap).
+One concern, one `Signature`, three projections of the same rule:
+  - `annotations` — Java/Spring annotation keys the Tier-A AST collector keys off;
+  - `call_tokens` — substrings in a .NET/Polly call/field name the Tier-A AST collector keys off;
+  - `patterns`    — text regex used for Tier-B *re-derivation* ("does the signature fire at the
+                    LLM-proposed pointer?") and as the grounding check in `validation/challenge.py`.
 
-One library, so the patterns Tier-A (AST) detection keys off and the patterns Tier-B
-re-derivation confirms can't drift — detection config becomes data, not code. Tier-A
-collectors consuming this directly (parameterizing the AST match by signature data) is the
-larger unification step left for Phase 4; today the library is the re-derivation source.
+Because Tier-A detection and Tier-B re-derivation read the same library, the two can't drift —
+detection config is data, not code, and adding a stack means extending the data here.
 """
 
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
-# concern -> patterns evidencing it across Java/Spring (resilience4j), .NET (Polly), and config.
-_SIGNATURES: dict[str, list[re.Pattern]] = {
-    "circuit-breaker": [
-        re.compile(p, re.I)
-        for p in (
-            r"@CircuitBreaker\b",                 # resilience4j annotation
-            r"\bCircuitBreaker(?:Async)?\s*\(",   # Polly: (Async)CircuitBreaker(...)
-            r"\.CircuitBreaker(?:Async)?\b",      # Polly fluent
-            r"resilience4j\.circuitbreaker",      # config
-        )
-    ],
-    "fallback": [
-        re.compile(p, re.I)
-        for p in (
-            r"fallbackMethod\s*=",                # resilience4j @CircuitBreaker(fallbackMethod=...)
-            r"@Recover\b",                        # spring-retry
-            r"\.Fallback(?:Async)?\s*\(",         # Polly
-            r"fallback",                          # XxxFallback method-name convention
-        )
-    ],
-    "timeout": [
-        re.compile(p, re.I)
-        for p in (
-            r"@TimeLimiter\b",                    # resilience4j
-            r"\bTimeout(?:Async)?\s*\(",          # Polly Timeout/TimeoutAsync
-            r"\b(?:connect|read|response)Timeout\b",
-            r"resilience4j\.timelimiter",
-        )
-    ],
-    "retry": [
-        re.compile(p, re.I)
-        for p in (r"@Retry\b", r"\bWaitAndRetry\w*\s*\(", r"\bRetry(?:Async)?\s*\(")
-    ],
+
+@dataclass(frozen=True)
+class Signature:
+    concern: str
+    annotations: tuple[str, ...] = ()     # Tier-A (Java AST): annotation keys, e.g. "@CircuitBreaker"
+    call_tokens: tuple[str, ...] = ()     # Tier-A (.NET AST): call/field-name substrings, e.g. "CircuitBreaker"
+    patterns: tuple[re.Pattern, ...] = ()  # Tier-B re-derivation / grounding: text regex
+
+    def fires(self, excerpt: str) -> bool:
+        return any(p.search(excerpt) for p in self.patterns)
+
+
+def _p(*pats: str) -> tuple[re.Pattern, ...]:
+    return tuple(re.compile(p, re.I) for p in pats)
+
+
+_SIGNATURES: dict[str, Signature] = {
+    s.concern: s
+    for s in (
+        Signature(
+            "circuit-breaker",
+            annotations=("@CircuitBreaker",),
+            call_tokens=("CircuitBreaker",),
+            patterns=_p(
+                r"@CircuitBreaker\b",                 # resilience4j annotation
+                r"\bCircuitBreaker(?:Async)?\s*\(",   # Polly: (Async)CircuitBreaker(...)
+                r"\.CircuitBreaker(?:Async)?\b",      # Polly fluent
+                r"resilience4j\.circuitbreaker",      # config
+            ),
+        ),
+        Signature(
+            "fallback",
+            annotations=("@Recover",),
+            call_tokens=("Fallback",),
+            patterns=_p(r"fallbackMethod\s*=", r"@Recover\b", r"\.Fallback(?:Async)?\s*\(", r"fallback"),
+        ),
+        Signature(
+            "timeout",
+            annotations=("@TimeLimiter",),
+            call_tokens=("Timeout",),
+            patterns=_p(
+                r"@TimeLimiter\b",
+                r"\bTimeout(?:Async)?\s*\(",
+                r"\b(?:connect|read|response)Timeout\b",
+                r"resilience4j\.timelimiter",
+            ),
+        ),
+        Signature(
+            "retry",
+            annotations=("@Retry",),
+            call_tokens=("Retry", "WaitAndRetry"),
+            patterns=_p(r"@Retry\b", r"\bWaitAndRetry\w*\s*\(", r"\bRetry(?:Async)?\s*\("),
+        ),
+    )
 }
 
 
 def concerns() -> list[str]:
-    """The concerns this library can re-derive."""
+    """The concerns this library can detect / re-derive."""
     return list(_SIGNATURES)
+
+
+def signature(concern: str) -> Signature | None:
+    """The full signature for a concern (Tier-A tokens + Tier-B patterns), or None if unknown."""
+    return _SIGNATURES.get(concern)
 
 
 def fires(concern: str, excerpt: str) -> bool:
     """True iff the signature for `concern` matches `excerpt`. Unknown concern -> False."""
-    return any(p.search(excerpt) for p in _SIGNATURES.get(concern, ()))
+    sig = _SIGNATURES.get(concern)
+    return sig.fires(excerpt) if sig else False
 
 
 def rederive(concern: str, excerpt: str) -> bool:
-    """The Tier-B re-derivation contract: an LLM proposes (concern, pointer); the engine
-    confirms the fact deterministically with the same signature Tier-A would key off. Alias of
-    `fires`, named for the call site that matters (HYBRID-PLAN §6.3 step 2)."""
+    """The Tier-B re-derivation contract: an LLM proposes (concern, pointer); the engine confirms
+    the fact deterministically with the same signature Tier-A keys off (HYBRID-PLAN §6.3 step 2)."""
     return fires(concern, excerpt)

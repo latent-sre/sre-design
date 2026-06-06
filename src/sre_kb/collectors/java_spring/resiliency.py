@@ -7,7 +7,12 @@ from __future__ import annotations
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
 from sre_kb.parsing import parse
+from sre_kb.signatures import signature
 from sre_kb.util import fqn
+
+# Which annotation keys mark a circuit breaker comes from the shared signature library, so
+# Tier-A detection and Tier-B re-derivation key off the same rule (HYBRID-PLAN §7.4).
+_CB_ANNOTATIONS = signature("circuit-breaker").annotations
 
 
 def collect(ctx: ScanContext) -> list[Fact]:
@@ -18,7 +23,7 @@ def collect(ctx: ScanContext) -> list[Fact]:
         ns = module.namespace
         for t in module.types:
             for m in t.methods:
-                cb = m.annotations.get("@CircuitBreaker")
+                cb = next((m.annotations[a] for a in _CB_ANNOTATIONS if a in m.annotations), None)
                 if cb is None:
                     continue
                 name = cb.get("name") or "cb"

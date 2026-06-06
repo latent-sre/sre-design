@@ -1,0 +1,41 @@
+apiVersion: sre.kb/v1alpha1
+kind: ConfigManagement
+metadata:
+  name: order-service
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  sources:
+  - application.yml
+  - pcf-manifest-env
+  profiles:
+  - cloud
+  refreshScope: false
+  properties:
+  - meter: http.server.requests
+    buckets: 200ms,500ms,800ms
+  - client: inventory
+    timeout: 3s
+    baseUrl: http://inventory-service.apps.internal
+  - instance: inventory
+    timeout: 2s
+  - exposure: health,info,prometheus
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/resources/application.yml
+  lines:
+    start: 30
+    end: 30
+  excerptHash: sha256:023d6a35f4accb0737022a95572f5a29d35218328c6713fe556c5d8d03545c7f
+  detector: java_spring.config_props
+  source_tier: ast
+confidence: 0.9
+status: verified
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

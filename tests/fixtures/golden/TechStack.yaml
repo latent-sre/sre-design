@@ -1,0 +1,45 @@
+apiVersion: sre.kb/v1alpha1
+kind: TechStack
+metadata:
+  name: order-service
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  languages:
+  - java
+  frameworks:
+  - name: spring-boot
+    version: 2.7.18
+  runtime: jvm
+  buildTool: maven
+  notableLibraries:
+  - order-service
+  - spring-boot-starter-web
+  - spring-boot-starter-data-jpa
+  - spring-boot-starter-actuator
+  - spring-kafka
+  - resilience4j-spring-boot2
+  - micrometer-registry-prometheus
+  pcf:
+    buildpacks:
+    - java_buildpack_offline
+    stack: cflinuxfs4
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: pom.xml
+  lines:
+    start: 6
+    end: 6
+  excerptHash: sha256:bd3fe1e2234eae26d9938d03a22f39a077d6beda9bfb6593f5856ce9fd53b21d
+  detector: java_spring.build
+  source_tier: ast
+confidence: 0.9
+status: verified
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

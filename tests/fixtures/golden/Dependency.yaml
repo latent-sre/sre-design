@@ -1,0 +1,31 @@
+apiVersion: sre.kb/v1alpha1
+kind: Dependency
+metadata:
+  name: inventory-http
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  name: inventory
+  type: http
+  source: config
+  baseUrl: http://inventory-service.apps.internal
+  criticality: contained
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/resources/application.yml
+  lines:
+    start: 6
+    end: 8
+  excerptHash: sha256:1d9e794fb3d613c56c19176a220ecfb781579fa42b2cd1354fb620fcc027b15c
+  detector: java_spring.config_props
+  source_tier: ast
+confidence: 0.8
+status: verified
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

@@ -1,0 +1,30 @@
+apiVersion: sre.kb/v1alpha1
+kind: Fallback
+metadata:
+  name: reserve-fallback
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  trigger: exception-or-circuit-open
+  fallbackSymbol: reserveFallback
+  behavior: degraded
+  forTarget: reserve
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/java/com/acme/order/client/InventoryClient.java
+  lines:
+    start: 29
+    end: 29
+  excerptHash: sha256:6cda62063d154f0ae585099657395ef3455428183ccc3744761c1cac17f849ec
+  detector: java_spring.resiliency
+  source_tier: ast
+confidence: 0.9
+status: verified
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

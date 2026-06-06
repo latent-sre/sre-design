@@ -1,0 +1,43 @@
+apiVersion: sre.kb/v1alpha1
+kind: ReadinessScore
+metadata:
+  name: order-service
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  prrChecks:
+    healthcheck: true
+    structured-logging: true
+    metrics-exposed: true
+    tracing-enabled: false
+    timeout-on-egress: true
+    circuit-breaker-on-egress: true
+    fallback-defined: true
+    slo-target-defined: true
+    burn-rate-alert: true
+    alert-for-top-flow: true
+    runbook-for-top-flow: false
+  score: 0.82
+  grade: B
+  coverage:
+    flows: 1
+    flowsWithAlerts: 2
+    kinds: 16
+    needsReview: 2
+  gaps:
+  - client 'inventory' timeout 3s exceeds flow SLO budget 800ms — one slow call can
+    blow the SLO
+  - timelimiter 'inventory' 2s exceeds flow SLO budget 800ms
+  - No distributed tracing (Sleuth/OTel) detected
+  - A publish failure is logged and swallowed — data-loss risk
+  - Runbook present but not yet verified (needs-review)
+evidence: []
+confidence: 0.6
+status: needs-review
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

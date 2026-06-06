@@ -1,0 +1,51 @@
+apiVersion: sre.kb/v1alpha1
+kind: Alert
+metadata:
+  name: order-created-publish-failures
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  alertType: threshold
+  sloRef: null
+  signalSource: log-pattern
+  severity: high
+  forFlow: create-order
+  logFormatRef: logging
+  expr:
+    splunk: index=app sourcetype=order-service "failed to publish order.created event
+      for order" | stats count by host
+    prometheus: null
+  rationale: Publish failure is logged and swallowed (data-loss risk); no metric exists,
+    so alert on the log line. Add a counter + burn-rate alert once an SLO is defined
+    (needs-review).
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/java/com/acme/order/events/OrderEventPublisher.java
+  lines:
+    start: 22
+    end: 25
+  excerptHash: sha256:88cf339d47ca18a3497204c9c619a3433929ba387c32ab3257e5bae7a0ea2fac
+  detector: java_spring.annotations
+  source_tier: ast
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/resources/logback-spring.xml
+  lines:
+    start: 4
+    end: 4
+  excerptHash: sha256:94b1d3b0a904b433a6463113c15d82b75bd04fea388923baf833527913ddd778
+  detector: java_spring.observability
+  source_tier: ast
+confidence: 0.6
+status: needs-review
+provenanceMode: deterministic
+crossRefs:
+- kind: Flow
+  name: create-order
+  relation: alerts-on
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

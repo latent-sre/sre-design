@@ -1,0 +1,65 @@
+apiVersion: sre.kb/v1alpha1
+kind: Topology
+metadata:
+  name: estate
+  service: estate
+  labels: {}
+  annotations: {}
+spec:
+  nodes:
+  - type: service
+    name: order-service
+  - type: datastore
+    name: orders-postgres
+  - type: broker
+    name: order-kafka
+  - type: external
+    name: inventory
+  - type: service
+    name: billing-service
+  - type: broker
+    name: billing-kafka
+  edges:
+  - from: order-service
+    to: orders-postgres
+    relation: binds
+  - from: order-service
+    to: order-kafka
+    relation: binds
+  - from: order-service
+    to: inventory
+    relation: calls
+  - from: billing-service
+    to: orders-postgres
+    relation: binds
+  - from: billing-service
+    to: billing-kafka
+    relation: binds
+  pcfSpaces: []
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: manifest.yml
+  lines:
+    start: 1
+    end: 18
+  excerptHash: sha256:5eb33fed6989505a5a31f0186ab9102a21cff888c74860b112cc8b6084029bef
+  detector: common.manifest_pcf
+  source_tier: ast
+- repo: file://sample-billing-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: manifest.yml
+  lines:
+    start: 1
+    end: 18
+  excerptHash: sha256:8763e0b7ca1717327c4e7738e8cc2438f9523d51dfd27b75a369522519b30f13
+  detector: common.manifest_pcf
+  source_tier: ast
+confidence: 0.85
+status: verified
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

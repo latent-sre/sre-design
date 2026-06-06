@@ -1,0 +1,39 @@
+apiVersion: sre.kb/v1alpha1
+kind: BlastRadius
+metadata:
+  name: inventory
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  node:
+    type: service
+    name: inventory
+  impactedFlows:
+  - create-order
+  containment:
+  - kind: ResiliencyPattern
+    name: inventory
+  - kind: Fallback
+    name: reserve-fallback
+  dependencyCriticality: degraded
+  severityHint: medium
+  riskRationale: 'severity=medium: 1 impacted flow, behind a circuit breaker / fallback'
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/java/com/acme/order/client/InventoryClient.java
+  lines:
+    start: 23
+    end: 25
+  excerptHash: sha256:e3c97c33e56c4be1906e2ebeefb91f7d48dfef24a67d199455ceea8846143622
+  detector: java_spring.resiliency
+  source_tier: ast
+confidence: 0.8
+status: verified
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

@@ -1,0 +1,51 @@
+apiVersion: sre.kb/v1alpha1
+kind: Architecture
+metadata:
+  name: order-service
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  components:
+  - name: OrderController
+    type: web
+    symbol: com.acme.order.web.OrderController
+  - name: InventoryClient
+    type: client
+    symbol: com.acme.order.client.InventoryClient
+  - name: OrderRepository
+    type: persistence
+    symbol: OrderRepository
+  - name: OrderEventPublisher
+    type: messaging
+    symbol: com.acme.order.events.OrderEventPublisher
+  layers:
+  - client
+  - messaging
+  - persistence
+  - web
+  patterns:
+  - circuit-breaker
+  - fallback
+  - repository
+  - async-messaging
+  styleTags:
+  - layered
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/java/com/acme/order/web/OrderController.java
+  lines:
+    start: 29
+    end: 30
+  excerptHash: sha256:4ef624a9ab6f428565f4dd5fa708fa85452750df080b636084a0ca569832c968
+  detector: java_spring.annotations
+  source_tier: ast
+confidence: 0.8
+status: verified
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

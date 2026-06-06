@@ -1,0 +1,36 @@
+apiVersion: sre.kb/v1alpha1
+kind: SloSli
+metadata:
+  name: create-order-latency
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  objectives:
+  - sli: latency
+    target: 99.5
+    window: 30d
+    percentile: p99
+    thresholdMs: 800
+    errorBudgetPct: 0.5
+  source: catalog
+  forFlow: create-order
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: sre-slo.yml
+  lines:
+    start: 3
+    end: 3
+  excerptHash: sha256:8e2cf1ddaedbe66fd0ceabcc95e2ecc6107722f0bad527554980a51b899ed650
+  detector: common.slo_catalog
+  source_tier: ast
+confidence: 0.9
+status: verified
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1
+unverifiedAgainstLive: true

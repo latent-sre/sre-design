@@ -9,8 +9,12 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from sre_kb.models.envelope import Evidence, Lines
+
+if TYPE_CHECKING:
+    from sre_kb.models.facts import Fact, FactSet
 
 LOCAL_COMMIT = "0" * 40  # sentinel commit for local working-tree scans
 _SKIP_DIRS = {".git", ".venv", "venv", "target", "build", "node_modules", "__pycache__"}
@@ -55,7 +59,9 @@ class ScanContext:
                 out.append(p)
         return out
 
-    def evidence(self, rel: str, start: int, end: int, detector: str) -> Evidence:
+    def evidence(
+        self, rel: str, start: int, end: int, detector: str, *, source_tier: str = "ast"
+    ) -> Evidence:
         end = max(end, start)
         return Evidence(
             repo=self.repo,
@@ -64,4 +70,17 @@ class ScanContext:
             lines=Lines(start=start, end=end),
             excerptHash=hash_excerpt(self.read_lines(rel), start, end),
             detector=detector,
+            source_tier=source_tier,
         )
+
+
+@runtime_checkable
+class CollectorProtocol(Protocol):
+    """The contract every collector satisfies — Tier-A (AST) and Tier-B (LLM) alike.
+
+    File-collectors take only the ``ScanContext``; derivers also read the in-progress
+    ``FactSet``. The ``fs`` parameter is optional so both call shapes — ``collect(ctx)``
+    and ``collect(ctx, fs)`` — satisfy this single protocol.
+    """
+
+    def __call__(self, ctx: ScanContext, fs: FactSet | None = None) -> list[Fact]: ...

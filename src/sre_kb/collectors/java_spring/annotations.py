@@ -1,136 +1,78 @@
-"""Spring annotation collector: REST endpoints, message publishers, repositories,
-HTTP egress, and swallowed-failure detection (the seed for Alerts/Runbooks).
+"""Spring collector (AST-backed): REST endpoints, message publishers, repositories, HTTP
+egress, and swallowed-failure detection.
 
-Bounded heuristics on purpose (no full Java parse); unresolved structure is simply not
-emitted rather than guessed.
+Per-class scoping comes from the AST, so facts are attributed to their actual enclosing
+type (the line-regex version used the first class in the file). Receiver/type resolution
+and real try/catch nodes replace the substring + brace-counting heuristics.
 """
 
 from __future__ import annotations
 
-import re
-
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
-from sre_kb.util import find_line, fqn, java_package, java_type
+from sre_kb.parsing import parse
+from sre_kb.util import fqn
 
-_MAPPING = re.compile(r"@(Get|Post|Put|Delete|Patch)Mapping(?:\(([^)]*)\))?")
-_CLASS_REQ_MAPPING = re.compile(r'@RequestMapping\(\s*(?:value\s*=\s*)?(?:\{\s*)?"([^"]+)"')
-_STR = re.compile(r'"([^"]+)"')
-_METHOD_DECL = re.compile(r"\b(?:public|private|protected)\b[^;{=]*?\b(\w+)\s*\(")
-_KAFKA_SEND = re.compile(r"(\w+)\.send\(\s*\"([^\"]+)\"")
-_RESTTEMPLATE = re.compile(r"\brestTemplate\.(\w+)\(")
-_JPA = re.compile(r"\binterface\s+(\w+)\s+extends\s+[\w<>,\s]*JpaRepository")
-_LOG = re.compile(r'log\.(\w+)\(\s*"([^"]*)"')
-
-_HTTP = {"Get": "GET", "Post": "POST", "Put": "PUT", "Delete": "DELETE", "Patch": "PATCH"}
-
-
-def _next_method(lines: list[str], idx: int) -> tuple[str, int]:
-    for j in range(idx, min(idx + 8, len(lines))):
-        if j > idx and lines[j].lstrip().startswith("@"):
-            continue
-        m = _METHOD_DECL.search(lines[j])
-        if m:
-            return m.group(1), j + 1
-    return "handler", idx + 1
-
-
-def _detect_swallowed(lines: list[str], send_idx: int) -> dict | None:
-    """A try/catch around a publish whose catch logs but does not rethrow = data-loss risk."""
-    if not any("try" in lines[j] for j in range(max(0, send_idx - 4), send_idx + 1)):
-        return None
-    catch_idx = next(
-        (j for j in range(send_idx, min(send_idx + 5, len(lines))) if "catch" in lines[j]),
-        None,
-    )
-    if catch_idx is None:
-        return None
-    depth, end = 1, catch_idx
-    for j in range(catch_idx + 1, min(catch_idx + 14, len(lines))):
-        depth += lines[j].count("{") - lines[j].count("}")
-        end = j
-        if depth <= 0:
-            break
-    body = "".join(lines[catch_idx + 1 : end + 1])
-    if "throw" in body:
-        return None
-    lm = _LOG.search(body)
-    if not lm:
-        return None
-    return {"level": lm.group(1), "message": lm.group(2), "start": catch_idx + 1, "end": end + 1}
+_MAPPING = {
+    "@GetMapping": "GET", "@PostMapping": "POST", "@PutMapping": "PUT",
+    "@DeleteMapping": "DELETE", "@PatchMapping": "PATCH",
+}
 
 
 def collect(ctx: ScanContext) -> list[Fact]:
     facts: list[Fact] = []
     for path in ctx.files("*.java"):
         rel = ctx.rel(path)
-        text = ctx.read_text(rel)
-        lines = ctx.read_lines(rel)
-        pkg, tn = java_package(text), java_type(text)
+        module = parse("java", ctx.read_text(rel))
+        ns = module.namespace
+        for t in module.types:
+            tfqn = fqn(ns, t.name)
 
-        if "@RestController" in text:
-            base = _CLASS_REQ_MAPPING.search(text)
-            base_path = base.group(1) if base else ""
-            for i, line in enumerate(lines):
-                mm = _MAPPING.search(line)
-                if not mm:
-                    continue
-                http = _HTTP[mm.group(1)]
-                sub = ""
-                if mm.group(2):
-                    sm = _STR.search(mm.group(2))
-                    sub = sm.group(1) if sm else ""
-                meth, mln = _next_method(lines, i)
-                facts.append(
-                    Fact(
+            if "@RestController" in t.annotations:
+                base = t.annotations.get("@RequestMapping", {}).get("", "")
+                for m in t.methods:
+                    verb = next((v for ann, v in _MAPPING.items() if ann in m.annotations), None)
+                    if not verb:
+                        continue
+                    sub = next((m.annotations[ann].get("", "") for ann in _MAPPING if ann in m.annotations), "")
+                    handler = fqn(ns, t.name, m.name)
+                    facts.append(Fact(
                         "rest.endpoint",
-                        {"method": http, "path": (base_path + sub) or "/", "handler": fqn(pkg, tn, meth)},
-                        ctx.evidence(rel, i + 1, mln, "java_spring.annotations"),
-                        Symbol(fqn(pkg, tn, meth), "method"),
-                    )
-                )
+                        {"method": verb, "path": (base + sub) or "/", "handler": handler},
+                        ctx.evidence(rel, m.start, m.name_line, "java_spring.annotations"),
+                        Symbol(handler, "method"),
+                    ))
 
-        for i, line in enumerate(lines):
-            km = _KAFKA_SEND.search(line)
-            if km:
-                channel = km.group(2)
-                facts.append(
-                    Fact(
-                        "message.egress",
-                        {"channel": channel, "client": km.group(1), "broker": "kafka", "class": fqn(pkg, tn)},
-                        ctx.evidence(rel, i + 1, i + 1, "java_spring.annotations"),
-                        Symbol(fqn(pkg, tn), "class"),
-                    )
-                )
-                sw = _detect_swallowed(lines, i)
-                if sw:
-                    facts.append(
-                        Fact(
-                            "swallowed.failure",
-                            {"channel": channel, "level": sw["level"], "message": sw["message"], "class": fqn(pkg, tn)},
-                            ctx.evidence(rel, sw["start"], sw["end"], "java_spring.annotations"),
-                            Symbol(fqn(pkg, tn), "class"),
-                        )
-                    )
-            if _RESTTEMPLATE.search(line):
-                facts.append(
-                    Fact(
-                        "http.egress",
-                        {"class": fqn(pkg, tn)},
-                        ctx.evidence(rel, i + 1, i + 1, "java_spring.annotations"),
-                        Symbol(fqn(pkg, tn), "class"),
-                    )
-                )
+            if t.kind == "interface" and any("JpaRepository" in s for s in t.supertypes):
+                facts.append(Fact(
+                    "db.repository", {"name": t.name},
+                    ctx.evidence(rel, t.start, t.start, "java_spring.annotations"),
+                    Symbol(fqn(ns, t.name), "interface"),
+                ))
 
-        jm = _JPA.search(text)
-        if jm:
-            ln = find_line(lines, "JpaRepository") or 1
-            facts.append(
-                Fact(
-                    "db.repository",
-                    {"name": jm.group(1)},
-                    ctx.evidence(rel, ln, ln, "java_spring.annotations"),
-                    Symbol(fqn(pkg, jm.group(1)), "interface"),
-                )
-            )
+            for m in t.methods:
+                for c in m.calls:
+                    rtype = t.fields.get(c.receiver, "")
+                    if c.method == "send" and c.str_args and ("kafka" in c.receiver.lower() or "Kafka" in rtype):
+                        channel = c.str_args[0]
+                        facts.append(Fact(
+                            "message.egress",
+                            {"channel": channel, "client": c.receiver, "broker": "kafka", "class": tfqn},
+                            ctx.evidence(rel, c.line, c.line, "java_spring.annotations"),
+                            Symbol(tfqn, "class"),
+                        ))
+                        if c.swallow:
+                            sw = c.swallow
+                            facts.append(Fact(
+                                "swallowed.failure",
+                                {"channel": channel, "level": sw.log_method, "message": sw.message, "class": tfqn},
+                                ctx.evidence(rel, sw.start, sw.end, "java_spring.annotations"),
+                                Symbol(tfqn, "class"),
+                            ))
+                    if c.receiver == "restTemplate" or "RestTemplate" in rtype:
+                        facts.append(Fact(
+                            "http.egress", {"class": tfqn},
+                            ctx.evidence(rel, c.line, c.line, "java_spring.annotations"),
+                            Symbol(tfqn, "class"),
+                        ))
     return facts

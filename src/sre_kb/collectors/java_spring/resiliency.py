@@ -1,69 +1,43 @@
-"""Resilience4j collector: @CircuitBreaker / fallbackMethod -> resiliency.* facts."""
+"""Resilience4j collector (AST-backed): @CircuitBreaker / fallbackMethod -> resiliency.*
+facts. The breaker is read straight off the annotated method node, so its target and named
+args (name=, fallbackMethod=) are exact regardless of formatting or other annotations."""
 
 from __future__ import annotations
 
-import re
-
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
-from sre_kb.util import find_line, fqn, java_package, java_type
-
-_CB = re.compile(r"@CircuitBreaker\(([^)]*)\)")
-_NAME = re.compile(r'name\s*=\s*"([^"]+)"')
-_FALLBACK = re.compile(r'fallbackMethod\s*=\s*"([^"]+)"')
-_METHOD_DECL = re.compile(r"\b(?:public|private|protected)\b[^;{=]*?\b(\w+)\s*\(")
-
-
-def _next_method(lines: list[str], idx: int) -> tuple[str, int]:
-    for j in range(idx, min(idx + 8, len(lines))):
-        if j > idx and lines[j].lstrip().startswith("@"):
-            continue
-        m = _METHOD_DECL.search(lines[j])
-        if m:
-            return m.group(1), j + 1
-    return "method", idx + 1
+from sre_kb.parsing import parse
+from sre_kb.util import fqn
 
 
 def collect(ctx: ScanContext) -> list[Fact]:
     facts: list[Fact] = []
     for path in ctx.files("*.java"):
         rel = ctx.rel(path)
-        text = ctx.read_text(rel)
-        if "@CircuitBreaker" not in text:
-            continue
-        lines = ctx.read_lines(rel)
-        pkg, tn = java_package(text), java_type(text)
-        for i, line in enumerate(lines):
-            cm = _CB.search(line)
-            if not cm:
-                continue
-            args = cm.group(1)
-            name = (_NAME.search(args).group(1) if _NAME.search(args) else "cb")
-            fb = _FALLBACK.search(args)
-            meth, mln = _next_method(lines, i)
-            facts.append(
-                Fact(
+        module = parse("java", ctx.read_text(rel))
+        ns = module.namespace
+        for t in module.types:
+            for m in t.methods:
+                cb = m.annotations.get("@CircuitBreaker")
+                if cb is None:
+                    continue
+                name = cb.get("name") or "cb"
+                fb_name = cb.get("fallbackMethod")
+                target_sym = fqn(ns, t.name, m.name)
+                facts.append(Fact(
                     "resiliency.circuitbreaker",
-                    {
-                        "name": name,
-                        "target": meth,
-                        "targetSymbol": fqn(pkg, tn, meth),
-                        "library": "resilience4j",
-                        "fallbackMethod": fb.group(1) if fb else None,
-                    },
-                    ctx.evidence(rel, i + 1, mln, "java_spring.resiliency"),
-                    Symbol(fqn(pkg, tn, meth), "method"),
-                )
-            )
-            if fb:
-                fbname = fb.group(1)
-                fbln = find_line(lines, fbname + "(") or mln
-                facts.append(
-                    Fact(
+                    {"name": name, "target": m.name, "targetSymbol": target_sym,
+                     "library": "resilience4j", "fallbackMethod": fb_name},
+                    ctx.evidence(rel, m.start, m.name_line, "java_spring.resiliency"),
+                    Symbol(target_sym, "method"),
+                ))
+                if fb_name:
+                    fb_method = next((x for x in t.methods if x.name == fb_name), None)
+                    fb_line = fb_method.name_line if fb_method else m.name_line
+                    facts.append(Fact(
                         "resiliency.fallback",
-                        {"method": fbname, "forTarget": meth, "forName": name},
-                        ctx.evidence(rel, fbln, fbln, "java_spring.resiliency"),
-                        Symbol(fqn(pkg, tn, fbname), "method"),
-                    )
-                )
+                        {"method": fb_name, "forTarget": m.name, "forName": name},
+                        ctx.evidence(rel, fb_line, fb_line, "java_spring.resiliency"),
+                        Symbol(fqn(ns, t.name, fb_name), "method"),
+                    ))
     return facts

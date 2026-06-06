@@ -1,9 +1,9 @@
 """AST-backed code model (tree-sitter). A small, language-neutral structure the collectors
 query instead of line regexes — which dissolves the regex brittleness (multi-class files,
-multi-line calls, comments, and crucially receiver->field-type resolution for correlation).
+multi-line calls/annotations, comments, receiver->field-type resolution, real try/catch).
 
-`parse(language, text)` returns a Module for "java" or "csharp". Only the few node shapes
-the collectors need are extracted; the grammars carry the rest.
+`parse(language, text)` returns a Module for "java" or "csharp". Only the node shapes the
+collectors need are extracted; the grammars carry the rest.
 """
 
 from __future__ import annotations
@@ -15,6 +15,18 @@ import tree_sitter_c_sharp as ts_cs
 import tree_sitter_java as ts_java
 from tree_sitter import Language, Node, Parser
 
+_STR_KINDS = {"string_literal", "verbatim_string_literal", "raw_string_literal", "interpolated_string_expression"}
+_THROW = {"throw_statement", "throw_expression"}
+_INVOKE = {"method_invocation", "invocation_expression"}
+
+
+@dataclass(frozen=True)
+class Swallow:
+    log_method: str  # the catch's log call ("error" / "LogError")
+    message: str  # the logged string literal
+    start: int  # 1-based catch span
+    end: int
+
 
 @dataclass(frozen=True)
 class Call:
@@ -22,13 +34,15 @@ class Call:
     method: str  # invoked method name ("publish")
     line: int  # 1-based call-site line
     str_args: tuple[str, ...] = ()  # string-literal arguments (e.g. a kafka topic)
+    swallow: Swallow | None = None  # set when the call sits in a try whose catch logs + no rethrow
 
 
 @dataclass
 class MethodDecl:
     name: str
-    annotations: dict[str, str]  # ann-name -> first string-literal arg ("" if none)
-    start: int  # 1-based
+    annotations: dict[str, dict[str, str]]  # ann-name -> args ({"": positional, "name": ...})
+    start: int  # 1-based (first modifier/annotation)
+    name_line: int  # 1-based line of the method name (for precise evidence)
     end: int
     calls: list[Call] = field(default_factory=list)
 
@@ -37,8 +51,8 @@ class MethodDecl:
 class TypeDecl:
     name: str
     kind: str  # class | interface | enum
-    supertypes: list[str]  # extends/implements/base type names
-    annotations: dict[str, str]
+    supertypes: list[str]
+    annotations: dict[str, dict[str, str]]
     fields: dict[str, str]  # field name -> declared type (for receiver resolution)
     methods: list[MethodDecl]
     start: int
@@ -62,16 +76,20 @@ def _parser(language: str) -> Parser:
 
 
 def parse(language: str, text: str) -> Module:
-    tree = _parser(language).parse(text.encode("utf-8"))
     src = text.encode("utf-8")
-    return _MODEL[language](tree.root_node, src)
+    root = _parser(language).parse(src).root_node
+    return (_parse_java if language == "java" else _parse_csharp)(root, src)
 
+
+# ---------------- shared traversal ----------------
 
 def _txt(n: Node, src: bytes) -> str:
     return src[n.start_byte : n.end_byte].decode("utf-8", "replace")
 
 
-def _descend(n: Node, types: set[str]):
+def _descend(n: Node | None, types: set[str]):
+    if n is None:
+        return
     if n.type in types:
         yield n
     for c in n.children:
@@ -79,49 +97,100 @@ def _descend(n: Node, types: set[str]):
 
 
 def _last_ident(node: Node, src: bytes) -> str:
-    """Receiver name: a bare identifier, or the trailing name of `this.x` / `a.b`."""
     if node.type == "identifier":
         return _txt(node, src)
     ids = [c for c in node.children if c.type == "identifier"]
     return _txt(ids[-1], src) if ids else ""
 
 
-def _str_args(args: Node | None, src: bytes, kinds: set[str]) -> tuple[str, ...]:
-    if args is None:
-        return ()
+def _str_args(args: Node | None, src: bytes) -> tuple[str, ...]:
+    return tuple(_txt(s, src).strip("\"'@$") for s in _descend(args, _STR_KINDS)) if args else ()
+
+
+def _call_rm(inv: Node, src: bytes) -> tuple[str, str]:
+    if inv.type == "method_invocation":  # Java
+        obj, name = inv.child_by_field_name("object"), inv.child_by_field_name("name")
+        return (_last_ident(obj, src) if obj else "", _txt(name, src) if name else "")
+    fn = inv.child_by_field_name("function")  # C# invocation_expression
+    if fn and fn.type == "member_access_expression":
+        expr, nm = fn.child_by_field_name("expression"), fn.child_by_field_name("name")
+        return (_last_ident(expr, src) if expr else "", _txt(nm, src) if nm else "")
+    return ("", _last_ident(fn, src) if fn else "")
+
+
+def _enclosing_swallow(inv: Node, src: bytes) -> Swallow | None:
+    """A try whose body holds this call and whose catch logs but does not rethrow."""
+    node = inv.parent
+    while node is not None:
+        if node.type == "try_statement":
+            body = node.child_by_field_name("body") or next((c for c in node.children if c.type == "block"), None)
+            if body and body.start_byte <= inv.start_byte < body.end_byte:
+                catch = next((c for c in node.children if c.type == "catch_clause"), None)
+                if catch is None:
+                    return None
+                cbody = catch.child_by_field_name("body") or next(
+                    (c for c in catch.children if c.type == "block"), catch
+                )
+                if next(_descend(cbody, _THROW), None) is not None:
+                    return None
+                for c in _descend(cbody, _INVOKE):
+                    recv, meth = _call_rm(c, src)
+                    if "log" in (recv + meth).lower():
+                        a = _str_args(c.child_by_field_name("arguments"), src)
+                        return Swallow(meth, a[0] if a else "", catch.start_point[0] + 1, catch.end_point[0] + 1)
+                return None
+        node = node.parent
+    return None
+
+
+def _calls(body: Node | None, src: bytes) -> list[Call]:
     out = []
-    for s in _descend(args, kinds):
-        out.append(_txt(s, src).strip("\"'@$"))
-    return tuple(out)
+    for inv in _descend(body, _INVOKE):
+        recv, meth = _call_rm(inv, src)
+        out.append(Call(recv, meth, inv.start_point[0] + 1,
+                        _str_args(inv.child_by_field_name("arguments"), src), _enclosing_swallow(inv, src)))
+    return out
+
+
+def _method(m: Node, src: bytes, anns) -> MethodDecl:
+    nm = m.child_by_field_name("name")
+    return MethodDecl(
+        name=_txt(nm, src) if nm else "",
+        annotations=anns(m, src),
+        start=m.start_point[0] + 1,
+        name_line=(nm.start_point[0] + 1) if nm else m.start_point[0] + 1,
+        end=m.end_point[0] + 1,
+        calls=_calls(m.child_by_field_name("body"), src),
+    )
 
 
 # ---------------- Java ----------------
 
-def _java_calls(body: Node | None, src: bytes) -> list[Call]:
-    if body is None:
-        return []
-    calls = []
-    for inv in _descend(body, {"method_invocation"}):
-        obj = inv.child_by_field_name("object")
-        name = inv.child_by_field_name("name")
-        calls.append(Call(
-            receiver=_last_ident(obj, src) if obj else "",
-            method=_txt(name, src) if name else "",
-            line=inv.start_point[0] + 1,
-            str_args=_str_args(inv.child_by_field_name("arguments"), src, {"string_literal"}),
-        ))
-    return calls
-
-
-def _java_annotations(node: Node, src: bytes) -> dict[str, str]:
-    out: dict[str, str] = {}
+def _java_anns(node: Node, src: bytes) -> dict[str, dict[str, str]]:
+    out: dict[str, dict[str, str]] = {}
     mods = next((c for c in node.children if c.type == "modifiers"), None)
     for a in (mods.children if mods else []):
-        if a.type in ("annotation", "marker_annotation"):
+        if a.type == "marker_annotation":
             nm = a.child_by_field_name("name")
             if nm:
-                args = _str_args(a.child_by_field_name("arguments"), src, {"string_literal"})
-                out["@" + _txt(nm, src)] = args[0] if args else ""
+                out["@" + _txt(nm, src)] = {}
+        elif a.type == "annotation":
+            nm = a.child_by_field_name("name")
+            if not nm:
+                continue
+            args: dict[str, str] = {}
+            al = a.child_by_field_name("arguments") or next(
+                (c for c in a.children if c.type == "annotation_argument_list"), None
+            )
+            for ch in (al.children if al else []):
+                if ch.type == "element_value_pair":
+                    k, v = ch.child_by_field_name("key"), ch.child_by_field_name("value")
+                    if k and v:
+                        s = _str_args(v, src)
+                        args[_txt(k, src)] = s[0] if s else _txt(v, src)
+                elif ch.type in _STR_KINDS:
+                    args[""] = _txt(ch, src).strip('"')
+            out["@" + _txt(nm, src)] = args
     return out
 
 
@@ -136,15 +205,6 @@ def _java_fields(body: Node, src: bytes) -> dict[str, str]:
     return fields
 
 
-def _java_supertypes(node: Node, src: bytes) -> list[str]:
-    out = []
-    for fname in ("superclass", "interfaces"):
-        sn = node.child_by_field_name(fname)
-        if sn:
-            out += [_txt(t, src) for t in _descend(sn, {"type_identifier", "generic_type"})]
-    return out
-
-
 def _parse_java(root: Node, src: bytes) -> Module:
     pkg = ""
     for p in _descend(root, {"package_declaration"}):
@@ -152,62 +212,42 @@ def _parse_java(root: Node, src: bytes) -> Module:
         break
     types = []
     for t in _descend(root, {"class_declaration", "interface_declaration", "enum_declaration"}):
-        name = t.child_by_field_name("name")
-        body = t.child_by_field_name("body")
-        methods = []
-        for m in (body.children if body else []):
-            if m.type == "method_declaration":
-                mn = m.child_by_field_name("name")
-                methods.append(MethodDecl(
-                    name=_txt(mn, src) if mn else "",
-                    annotations=_java_annotations(m, src),
-                    start=m.start_point[0] + 1, end=m.end_point[0] + 1,
-                    calls=_java_calls(m.child_by_field_name("body"), src),
-                ))
+        name, body = t.child_by_field_name("name"), t.child_by_field_name("body")
+        supers = []
+        for clause in t.children:  # superclass / implements / interface-extends
+            if clause.type in ("superclass", "interfaces", "super_interfaces", "extends_interfaces"):
+                supers += [_txt(x, src) for x in _descend(clause, {"generic_type", "type_identifier", "scoped_type_identifier"})]
         types.append(TypeDecl(
-            name=_txt(name, src) if name else "?",
-            kind=t.type.split("_")[0],
-            supertypes=_java_supertypes(t, src),
-            annotations=_java_annotations(t, src),
-            fields=_java_fields(body, src) if body else {},
-            methods=methods, start=t.start_point[0] + 1, end=t.end_point[0] + 1,
+            name=_txt(name, src) if name else "?", kind=t.type.split("_")[0], supertypes=supers,
+            annotations=_java_anns(t, src), fields=_java_fields(body, src) if body else {},
+            methods=[_method(m, src, _java_anns) for m in (body.children if body else []) if m.type == "method_declaration"],
+            start=t.start_point[0] + 1, end=t.end_point[0] + 1,
         ))
     return Module(pkg, types)
 
 
 # ---------------- C# ----------------
 
-def _cs_calls(body: Node | None, src: bytes) -> list[Call]:
-    if body is None:
-        return []
-    calls = []
-    for inv in _descend(body, {"invocation_expression"}):
-        fn = inv.child_by_field_name("function")
-        receiver, method = "", ""
-        if fn and fn.type == "member_access_expression":
-            expr = fn.child_by_field_name("expression")
-            nm = fn.child_by_field_name("name")
-            receiver = _last_ident(expr, src) if expr else ""
-            method = _txt(nm, src) if nm else ""
-        elif fn:
-            method = _last_ident(fn, src)
-        calls.append(Call(
-            receiver=receiver, method=method, line=inv.start_point[0] + 1,
-            str_args=_str_args(inv.child_by_field_name("arguments"), src,
-                               {"string_literal", "verbatim_string_literal", "raw_string_literal"}),
-        ))
-    return calls
-
-
-def _cs_attributes(node: Node, src: bytes) -> dict[str, str]:
-    out: dict[str, str] = {}
+def _cs_anns(node: Node, src: bytes) -> dict[str, dict[str, str]]:
+    out: dict[str, dict[str, str]] = {}
     for al in (c for c in node.children if c.type == "attribute_list"):
         for a in _descend(al, {"attribute"}):
-            nm = a.child_by_field_name("name")
-            if nm:
-                args = _str_args(a.child_by_field_name("arguments"), src,
-                                 {"string_literal", "verbatim_string_literal"})
-                out["[" + _txt(nm, src) + "]"] = args[0] if args else ""
+            nm = a.child_by_field_name("name") or next(
+                (c for c in a.children if c.type in ("identifier", "qualified_name")), None
+            )
+            if not nm:
+                continue
+            args: dict[str, str] = {}
+            aal = a.child_by_field_name("arguments") or next(
+                (c for c in a.children if c.type == "attribute_argument_list"), None
+            )
+            for arg in _descend(aal, {"attribute_argument"}):
+                ne = next((c for c in arg.children if c.type in ("name_equals", "name_colon")), None)
+                s = _str_args(arg, src)
+                val = s[0] if s else ""
+                key = next((_txt(c, src) for c in (ne.children if ne else []) if c.type == "identifier"), "")
+                args[key] = val
+            out["[" + _txt(nm, src) + "]"] = args
     return out
 
 
@@ -234,27 +274,13 @@ def _parse_csharp(root: Node, src: bytes) -> Module:
             break
     types = []
     for t in _descend(root, {"class_declaration", "interface_declaration"}):
-        name = t.child_by_field_name("name")
-        body = t.child_by_field_name("body")
-        methods = []
-        for m in _descend(body, {"method_declaration"}) if body else []:
-            mn = m.child_by_field_name("name")
-            methods.append(MethodDecl(
-                name=_txt(mn, src) if mn else "",
-                annotations=_cs_attributes(m, src),
-                start=m.start_point[0] + 1, end=m.end_point[0] + 1,
-                calls=_cs_calls(m.child_by_field_name("body"), src),
-            ))
+        name, body = t.child_by_field_name("name"), t.child_by_field_name("body")
         bases = t.child_by_field_name("bases")
         types.append(TypeDecl(
-            name=_txt(name, src) if name else "?",
-            kind=t.type.split("_")[0],
+            name=_txt(name, src) if name else "?", kind=t.type.split("_")[0],
             supertypes=[_txt(b, src) for b in _descend(bases, {"identifier", "generic_name"})] if bases else [],
-            annotations=_cs_attributes(t, src),
-            fields=_cs_fields(body, src) if body else {},
-            methods=methods, start=t.start_point[0] + 1, end=t.end_point[0] + 1,
+            annotations=_cs_anns(t, src), fields=_cs_fields(body, src) if body else {},
+            methods=[_method(m, src, _cs_anns) for m in _descend(body, {"method_declaration"})] if body else [],
+            start=t.start_point[0] + 1, end=t.end_point[0] + 1,
         ))
     return Module(ns, types)
-
-
-_MODEL = {"java": _parse_java, "csharp": _parse_csharp}

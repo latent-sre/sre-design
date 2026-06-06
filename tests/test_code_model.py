@@ -47,3 +47,31 @@ public class C {
     assert c.fields["_publisher"] == "OrderPublisher"
     assert any(call.method == "PublishAsync" and call.receiver == "_publisher"
                for mth in c.methods for call in mth.calls)
+
+
+def test_collector_attributes_facts_to_the_enclosing_class(tmp_path):
+    # A helper class is declared FIRST and the controller SECOND. The old first-match
+    # attribution mislabeled the endpoint with the helper class; AST scoping gets it right.
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.collectors.java_spring import annotations
+
+    src = """package com.acme.demo;
+import org.springframework.web.bind.annotation.*;
+
+class OrderHelper { void noop() {} }
+
+@RestController
+@RequestMapping("/api/widgets")
+class WidgetController {
+    @PostMapping
+    public String create() { return "ok"; }
+}
+"""
+    pkg = tmp_path / "src"
+    pkg.mkdir()
+    (pkg / "WidgetController.java").write_text(src)
+    facts = annotations.collect(ScanContext(root=tmp_path, repo="file://t"))
+    eps = [f for f in facts if f.type == "rest.endpoint"]
+    assert eps and eps[0].attrs["handler"] == "com.acme.demo.WidgetController#create"
+    assert "OrderHelper" not in eps[0].attrs["handler"]
+

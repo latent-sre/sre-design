@@ -1,0 +1,65 @@
+apiVersion: sre.kb/v1alpha1
+kind: Observability
+metadata:
+  name: logging
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  logging:
+    framework: logback
+    format: pattern
+    pattern: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId},%X{spanId}]
+      %logger{36} - %msg%n'
+    correlationFields:
+    - traceId
+    - spanId
+  actuatorEndpoints:
+  - health
+  - info
+  - prometheus
+  metrics:
+  - name: http.server.requests
+    type: timer
+    slo: 200ms,500ms,800ms
+    registry: prometheus
+  tracing: null
+  healthIndicators:
+  - actuator/health
+  - /actuator/health
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/resources/logback-spring.xml
+  lines:
+    start: 4
+    end: 4
+  excerptHash: sha256:94b1d3b0a904b433a6463113c15d82b75bd04fea388923baf833527913ddd778
+  detector: java_spring.observability
+  source_tier: ast
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/resources/application.yml
+  lines:
+    start: 26
+    end: 26
+  excerptHash: sha256:a716956aa0fefb3e409437aa1c06f09181152c7563ed39281fe0764ab3829981
+  detector: java_spring.config_props
+  source_tier: ast
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/resources/application.yml
+  lines:
+    start: 30
+    end: 30
+  excerptHash: sha256:023d6a35f4accb0737022a95572f5a29d35218328c6713fe556c5d8d03545c7f
+  detector: java_spring.config_props
+  source_tier: ast
+confidence: 0.95
+status: verified
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

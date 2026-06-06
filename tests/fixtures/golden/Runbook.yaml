@@ -1,0 +1,47 @@
+apiVersion: sre.kb/v1alpha1
+kind: Runbook
+metadata:
+  name: order-created-publish-failures
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  banner: GENERATED — verify before executing
+  trigger:
+    alertRef: order-created-publish-failures
+  symptoms:
+  - '''failed to publish order.created event for order'' appears in logs'
+  - order.created events missing downstream while orders persist
+  diagnosis:
+  - step: Check the order-kafka service binding and broker health
+  - step: Inspect the publisher catch block (failure is swallowed)
+  remediation:
+  - Verify the order-kafka binding and broker availability
+  - 'No built-in replay: missing events are lost — assess impact window'
+  - 'Code change: make publish transactional / add an outbox (follow-up)'
+  escalation: service owner (needs-review)
+  relatedFlow: create-order
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/java/com/acme/order/events/OrderEventPublisher.java
+  lines:
+    start: 22
+    end: 25
+  excerptHash: sha256:88cf339d47ca18a3497204c9c619a3433929ba387c32ab3257e5bae7a0ea2fac
+  detector: java_spring.annotations
+  source_tier: ast
+confidence: 0.6
+status: needs-review
+provenanceMode: deterministic
+crossRefs:
+- kind: Alert
+  name: order-created-publish-failures
+  relation: covers
+- kind: Flow
+  name: create-order
+  relation: covers
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

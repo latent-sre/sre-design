@@ -413,7 +413,7 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ## 8. Implementation status (2026-06-06)
 
-Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **137 tests
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **166 tests
 passing, ruff-clean.**
 
 ### Phase 0 — Fact contract & trust tiers ✅
@@ -478,14 +478,21 @@ Deferred (tracked, not dropped):
   (`tests/fixtures/adversarial-llm/`) of planted claims the cited code doesn't support; the challenge
   gate must reject/downgrade each (`tests/test_adversarial_llm.py`). Regression teeth before a live
   oracle — the dual of `examples/malicious/`. (Prerequisite for Phase 3.)
+- **§7.4 shared signatures + re-derivation** ✅ — `sre_kb/signatures.py` is one library both tiers
+  read: a `Signature` carries the annotation keys (Java AST) and call tokens (.NET AST) the Tier-A
+  collectors key off, plus the text patterns Tier-B re-derives with. The challenge gate re-derives a
+  ResiliencyPattern claim via "does the signature fire at the pointer?" not a substring, and
+  `rederive()` is the Tier-B contract (§6.3 step 2) the Phase 4 gap-finder calls. One rule, both tiers.
 - **§7.5 surface the trust tier** ✅ — the findings digest + PR `REVIEW.md` label each claim
   AST-grounded / LLM-proposed, with a by-tier roll-up. A shared `tiers.py` is the single source of truth.
+- **§7.6 schema governance** ✅ — `additionalProperties: false` on every per-kind spec (positive
+  allow-list), an `ownership` enum (app|platform|shared) and an `unverifiedAgainstLive` flag on the
+  envelope, and a golden-example-per-kind corpus validated in CI (`tests/fixtures/golden/`).
 
 ### Phases 3–5 ⬜
 
 Not started: live `LLMChallenger` oracle (Phase 3), Tier-B LLM collectors / gap-finder (Phase 4, §7.9),
-render-adapter breadth (Phase 5). Plus §7.4 (shared signatures — the real re-derivation rule that
-replaces substring grounding; the Phase 4 foundation) and the deferred §7.6 schema governance.
+render-adapter breadth (Phase 5).
 
 > Doc note: `docs/DESIGN.md` still describes the challenge pass + secret gate as "P3 / deferred"
 > though both are built (§4) — trust the code; a DESIGN.md refresh is outstanding.

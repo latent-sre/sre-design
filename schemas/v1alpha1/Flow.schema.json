@@ -8,6 +8,7 @@
     "kind": { "const": "Flow" },
     "spec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["trigger", "steps"],
       "properties": {
         "trigger": {

@@ -1,0 +1,42 @@
+apiVersion: sre.kb/v1alpha1
+kind: Deployment
+metadata:
+  name: order-service
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  hosting: PCF
+  instances: 3
+  memory: 1G
+  disk: 1G
+  routes:
+  - order-service.apps.internal
+  services:
+  - orders-postgres
+  - order-kafka
+  stack: cflinuxfs4
+  buildpacks:
+  - java_buildpack_offline
+  healthCheck:
+    type: http
+    endpoint: /actuator/health
+  profiles: cloud
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: manifest.yml
+  lines:
+    start: 1
+    end: 18
+  excerptHash: sha256:5eb33fed6989505a5a31f0186ab9102a21cff888c74860b112cc8b6084029bef
+  detector: common.manifest_pcf
+  source_tier: ast
+confidence: 0.9
+status: verified
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

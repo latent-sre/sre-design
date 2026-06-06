@@ -8,6 +8,7 @@
     "kind": { "const": "SloSli" },
     "spec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["objectives", "source"],
       "properties": {
         "objectives": {

@@ -8,10 +8,12 @@
     "kind": { "const": "ReadinessScore" },
     "spec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["prrChecks", "score"],
       "properties": {
         "prrChecks": { "type": "object" },
         "score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "grade": { "type": "string" },
         "coverage": { "type": "object" },
         "gaps": { "type": "array", "items": { "type": "string" } }
       }

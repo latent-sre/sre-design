@@ -17,6 +17,7 @@ def emit(
     service: str,
     cross_refs: list[dict] | None = None,
     provenance: str = "deterministic",
+    unverified_against_live: bool = False,
 ) -> dict:
     art = Artifact(
         kind=kind,
@@ -28,5 +29,6 @@ def emit(
         provenanceMode=provenance,
         crossRefs=[CrossRef(**c) for c in (cross_refs or [])],
         generatedBy=GeneratedBy(tool="sre-kb", driver="engine", toolVersion=__version__),
+        unverifiedAgainstLive=True if unverified_against_live else None,
     )
     return art.to_doc()

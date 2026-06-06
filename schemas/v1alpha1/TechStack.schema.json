@@ -8,6 +8,7 @@
     "kind": { "const": "TechStack" },
     "spec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["frameworks"],
       "properties": {
         "languages": { "type": "array", "items": { "type": "string" } },

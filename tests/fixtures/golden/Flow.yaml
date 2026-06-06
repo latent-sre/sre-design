@@ -1,0 +1,97 @@
+apiVersion: sre.kb/v1alpha1
+kind: Flow
+metadata:
+  name: create-order
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  trigger:
+    type: http
+    method: POST
+    path: /api/v1/orders
+    entrypoint: com.acme.order.web.OrderController#createOrder
+  steps:
+  - id: s1
+    name: call-reserve
+    kind: http-egress
+    failureModes:
+    - mode: timeout
+      surfacedAs: http-503
+    - mode: circuit-open
+      surfacedAs: http-503
+  - id: s2
+    name: persist
+    kind: db-write
+    failureModes:
+    - mode: db-unavailable
+      surfacedAs: http-500
+  - id: s3
+    name: publish-order-created
+    kind: message-egress
+    failureModes:
+    - mode: broker-unavailable
+      surfacedAs: logged-and-swallowed
+      dataLossRisk: true
+  sinks:
+  - type: http
+    target: inventory
+  - type: db
+    target: order-repository
+  - type: kafka
+    target: order.created
+  sloRef: create-order-latency
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/java/com/acme/order/web/OrderController.java
+  lines:
+    start: 29
+    end: 30
+  excerptHash: sha256:4ef624a9ab6f428565f4dd5fa708fa85452750df080b636084a0ca569832c968
+  detector: java_spring.annotations
+  source_tier: ast
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/java/com/acme/order/web/OrderController.java
+  lines:
+    start: 31
+    end: 31
+  excerptHash: sha256:ef60ec6166c5a8b6cf675b2fc3c1a3799515d1f53ca29c21f518902731c282a0
+  detector: java_spring.flow_builder
+  source_tier: ast
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/java/com/acme/order/web/OrderController.java
+  lines:
+    start: 32
+    end: 32
+  excerptHash: sha256:a3d5b634fbdf7921010fb6a6beabdd3d59bc8a1c13cd67553daf99534cd0ed84
+  detector: java_spring.flow_builder
+  source_tier: ast
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/java/com/acme/order/web/OrderController.java
+  lines:
+    start: 33
+    end: 33
+  excerptHash: sha256:da348988885da4fc166952cf376f14101c52df5e235ad3a57b1d155ea9a3eb3f
+  detector: java_spring.flow_builder
+  source_tier: ast
+confidence: 0.86
+status: verified
+provenanceMode: deterministic
+crossRefs:
+- kind: ResiliencyPattern
+  name: inventory
+  relation: depends-on
+- kind: Alert
+  name: order-created-publish-failures
+  relation: alerts-on
+- kind: Fallback
+  name: reserve-fallback
+  relation: depends-on
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

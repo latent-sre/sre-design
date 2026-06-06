@@ -24,6 +24,7 @@
         "service": { "type": "string" },
         "owner": { "type": "string" },
         "domain": { "type": "string" },
+        "ownership": { "type": "string", "enum": ["app", "platform", "shared"] },
         "labels": { "type": "object", "additionalProperties": { "type": "string" } },
         "annotations": { "type": "object", "additionalProperties": { "type": "string" } }
       }
@@ -50,7 +51,8 @@
       "type": "array",
       "items": { "$ref": "#/$defs/crossRef" }
     },
-    "generatedBy": { "$ref": "#/$defs/generatedBy" }
+    "generatedBy": { "$ref": "#/$defs/generatedBy" },
+    "unverifiedAgainstLive": { "type": "boolean" }
   },
   "$defs": {
     "evidence": {

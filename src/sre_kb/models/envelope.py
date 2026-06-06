@@ -65,11 +65,19 @@ class GeneratedBy(_Strict):
     generatedAt: str | None = None
 
 
+class Ownership(str, Enum):
+    app = "app"
+    platform = "platform"
+    shared = "shared"
+
+
 class Metadata(_Strict):
     name: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$")
     service: str | None = None
     owner: str | None = None
     domain: str | None = None
+    # Who owns this artifact class (governance), distinct from `owner` (the team/person).
+    ownership: Ownership | None = None
     labels: dict[str, str] = Field(default_factory=dict)
     annotations: dict[str, str] = Field(default_factory=dict)
 
@@ -87,6 +95,9 @@ class Artifact(_Strict):
     provenanceMode: ProvenanceMode | None = None
     crossRefs: list[CrossRef] = Field(default_factory=list)
     generatedBy: GeneratedBy | None = None
+    # True for claims that cannot be checked offline (live SLO thresholds, live metrics) — they
+    # keep a normal status but flag that byte-grounding alone can't fully confirm them (§7.6).
+    unverifiedAgainstLive: bool | None = None
 
     def to_doc(self) -> dict:
         """Serialize to a plain dict suitable for YAML + schema validation."""

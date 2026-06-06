@@ -8,6 +8,7 @@
     "kind": { "const": "BlastRadius" },
     "spec": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["node", "impactedFlows"],
       "properties": {
         "node": {
@@ -27,7 +28,8 @@
           "properties": { "dataLossRisk": { "type": "boolean" } }
         },
         "dependencyCriticality": { "type": "string" },
-        "severityHint": { "type": "string", "enum": ["low", "medium", "high", "critical"] }
+        "severityHint": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "riskRationale": { "type": "string" }
       }
     }
   }

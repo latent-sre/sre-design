@@ -29,6 +29,8 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Protocol
 
+from sre_kb.signatures import fires
+
 _QUOTED = re.compile(r'"([^"]+)"')
 
 
@@ -39,6 +41,7 @@ class Claim:
     evidence_index: int
     needle: str | None = None  # token that must appear in the cited excerpt (grounding)
     refute: str | None = None  # token whose presence in the excerpt refutes the claim
+    signature: str | None = None  # re-derivation concern (signatures.fires); preferred over needle
     mode: str = "grounding"  # "grounding" (deterministic) | "review" (LLM judgment call)
 
 
@@ -67,7 +70,8 @@ def extract_claims(doc: dict) -> list[Claim]:
                 0, needle=max(quoted, key=len), refute="throw",
             )]
     if kind == "ResiliencyPattern":
-        return [Claim("resiliency/breaker-present", "the cited code declares the breaker", 0, needle="circuitbreaker")]
+        return [Claim("resiliency/breaker-present", "the cited code declares the breaker", 0,
+                      signature="circuit-breaker")]
     if kind == "Flow":
         handler = (spec.get("trigger") or {}).get("entrypoint") or ""
         short = re.split(r"[#.]", handler)[-1] if handler else ""
@@ -150,6 +154,10 @@ class GroundingChallenger:
         text = _norm(excerpt)
         if claim.refute and _norm(claim.refute) in text:
             return Verdict(claim.id, "contradicted", f"cited evidence contains '{claim.refute}', refuting the claim")
+        if claim.signature is not None:  # re-derive: does the deterministic signature fire here?
+            if fires(claim.signature, excerpt):
+                return Verdict(claim.id, "supported", f"signature '{claim.signature}' fires at the cited location")
+            return Verdict(claim.id, "unsupported", f"signature '{claim.signature}' does not fire at the cited location")
         if claim.needle and _norm(claim.needle) in text:
             return Verdict(claim.id, "supported", "cited evidence contains the claimed token")
         return Verdict(claim.id, "unsupported", f"cited evidence does not contain '{claim.needle}'")

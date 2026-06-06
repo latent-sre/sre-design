@@ -9,7 +9,16 @@ from __future__ import annotations
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
 from sre_kb.parsing import parse
+from sre_kb.signatures import signature
 from sre_kb.util import fqn
+
+# The call/field-name tokens that mark a Polly breaker come from the shared signature library,
+# so Tier-A detection and Tier-B re-derivation key off the same rule (HYBRID-PLAN §7.4).
+_CB_TOKENS = signature("circuit-breaker").call_tokens
+
+
+def _is_breaker(text: str) -> bool:
+    return any(tok in text for tok in _CB_TOKENS)
 
 
 def collect(ctx: ScanContext) -> list[Fact]:
@@ -19,10 +28,10 @@ def collect(ctx: ScanContext) -> list[Fact]:
         module = parse("csharp", ctx.read_text(rel))
         ns = module.namespace
         for t in module.types:
-            cb_lines = [c.line for m in t.methods for c in m.calls if "CircuitBreaker" in c.method]
+            cb_lines = [c.line for m in t.methods for c in m.calls if _is_breaker(c.method)]
             if not cb_lines:
                 continue
-            breaker = next((fn for fn, ft in t.fields.items() if "CircuitBreaker" in ft), None)
+            breaker = next((fn for fn, ft in t.fields.items() if _is_breaker(ft)), None)
             target, target_line = None, 0
             if breaker:
                 for m in t.methods:

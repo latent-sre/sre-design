@@ -17,6 +17,7 @@ import yaml
 from sre_kb.collectors import scan as run_collectors
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.config import load_config
+from sre_kb.scoring.readiness import readiness_spec
 from sre_kb.synth import scaffold
 from sre_kb.synth.context_pack import build_context_pack
 from sre_kb.tiers import artifact_tier
@@ -156,6 +157,18 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         if key in downgrades:
             rec["crossrefStatus"] = downgrades[key]
         records.append(rec)
+
+    # Recompute the readiness roll-up against FINAL statuses — it was built at scaffold time on
+    # pre-gating statuses, so a gating downgrade (e.g. status-aware crossref) wouldn't otherwise
+    # be reflected. Status-aware readiness credits only verified coverage (HYBRID-PLAN Phase 2).
+    final_docs = [s["d"] for s in staged]
+    others = [d for d in final_docs if d.get("kind") != "ReadinessScore"]
+    for d in final_docs:
+        if d.get("kind") == "ReadinessScore":
+            d["spec"] = readiness_spec(fs, others, fs.of("budget.finding"))
+            _dump_yaml(
+                layout.kb_dir(d["status"]) / "ReadinessScore" / f"{d['metadata']['name']}.yaml", d
+            )
 
     report = {
         "run_id": run_id,

@@ -59,3 +59,23 @@ def test_provenance_allows_in_root_path(tmp_path) -> None:
     (tmp_path / "a.txt").write_text("x\n", encoding="utf-8")
     doc = _doc("a.txt", hash_excerpt(["x\n"], 1, 1))
     assert verify_evidence(doc, tmp_path) == []   # in-root + hash matches -> clean
+
+
+# --- status-aware readiness ------------------------------------------------------------
+
+
+def test_readiness_credits_only_verified_artifacts() -> None:
+    from sre_kb.models.facts import FactSet
+    from sre_kb.scoring.readiness import readiness_spec
+
+    fs = FactSet()
+    verified = [{"kind": "Runbook", "status": "verified", "spec": {}},
+                {"kind": "Alert", "status": "verified", "spec": {"alertType": "burn-rate"}}]
+    drafts = [{"kind": "Runbook", "status": "needs-review", "spec": {}},
+              {"kind": "Alert", "status": "needs-review", "spec": {"alertType": "burn-rate"}}]
+    sv, snr = readiness_spec(fs, verified, []), readiness_spec(fs, drafts, [])
+
+    assert sv["prrChecks"]["runbook-for-top-flow"] is True
+    assert snr["prrChecks"]["runbook-for-top-flow"] is False    # a draft doesn't count
+    assert sv["score"] > snr["score"]                           # verified coverage scores higher
+    assert any("not yet verified" in g for g in snr["gaps"])    # present-but-draft is noted, not hidden

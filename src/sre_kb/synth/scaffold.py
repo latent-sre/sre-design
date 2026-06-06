@@ -21,16 +21,11 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
     obs = fs.first("observability.logging")
     slo = fs.first("config.slo")
     flow = fs.first("flow.flow")
-    pub = fs.first("message.egress")
-    repo = fs.first("db.repository")
-    swallowed = fs.first("swallowed.failure")
     budget = fs.of("budget.finding")
 
     flow_name = slug(member_of(flow.symbol.fqn)) if flow else "flow"
     obs_name = "logging"
     slo_name = slug(slo.attrs["meter"]) if slo else None
-    cb_name = slug(cb.attrs["name"]) if cb else None
-    alert_name = f"{slug(pub.attrs['channel'])}-publish-failures" if (pub and swallowed) else None
     objective = next(
         (o for o in fs.of("slo.objective") if o.attrs.get("flow") == flow_name),
         fs.first("slo.objective"),
@@ -181,124 +176,133 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
             )
         )
 
-    # --- Flow ---
-    if flow:
+    # --- Flow (one per endpoint) ---
+    flows = fs.of("flow.flow")
+    cbs = fs.of("resiliency.circuitbreaker")
+    repos = fs.of("db.repository")
+    pubs = fs.of("message.egress")
+    swallowed_by_channel = {s.attrs.get("channel"): s for s in fs.of("swallowed.failure")}
+
+    for ff in flows:
+        fname = ff.attrs["name"]
         steps = [
             {"id": s["id"], "name": s["name"], "kind": s["kind"], "failureModes": s["failureModes"]}
-            for s in flow.attrs["steps"]
+            for s in ff.attrs["steps"]
         ]
-        flow_ev = [flow.evidence] + [
-            ctx.evidence(flow.attrs["path"], s["line"], s["line"], "java_spring.flow_builder")
-            for s in flow.attrs["steps"]
+        flow_ev = [ff.evidence] + [
+            ctx.evidence(ff.attrs["path"], s["line"], s["line"], "java_spring.flow_builder")
+            for s in ff.attrs["steps"]
         ]
         cross: list[dict] = []
-        for s in flow.attrs["steps"]:
+        for s in ff.attrs["steps"]:
             cross.extend(s.get("refs", []))
-        if fb:
+        if fb and any(s["kind"] == "http-egress" for s in ff.attrs["steps"]):
             cross.append({"kind": "Fallback", "name": slug(f"{fb.attrs['forTarget']}-fallback"), "relation": "depends-on"})
-        spec = {
-            "trigger": flow.attrs["trigger"],
-            "steps": steps,
-            "sinks": flow.attrs["sinks"],
-        }
-        if slo_ref:
+        spec = {"trigger": ff.attrs["trigger"], "steps": steps, "sinks": ff.attrs["sinks"]}
+        if slo_ref and fname == flow_name:
             spec["sloRef"] = slo_ref
-        docs.append(_doc("Flow", flow_name, spec, flow_ev, "verified", 0.85, service, cross))
+        docs.append(_doc("Flow", fname, spec, flow_ev, "verified", confidence(Signal.DERIVED, len(flow_ev)), service, cross))
 
-    # --- BlastRadius (minimal, per sink node) ---
-    if flow:
-        if cb:
-            docs.append(
-                _doc(
-                    "BlastRadius",
-                    cb.attrs["name"],
-                    {
-                        "node": {"type": "service", "name": cb.attrs["name"]},
-                        "impactedFlows": [flow_name],
-                        "containment": [
-                            {"kind": "ResiliencyPattern", "name": cb_name},
-                            *([{"kind": "Fallback", "name": slug(f"{fb.attrs['forTarget']}-fallback")}] if fb else []),
-                        ],
-                        "dependencyCriticality": "contained",
-                        "severityHint": "medium",
-                    },
-                    [cb.evidence],
-                    "verified",
-                    0.8,
-                    service,
-                )
-            )
-        if repo:
-            docs.append(
-                _doc(
-                    "BlastRadius",
-                    slug(repo.attrs["name"]),
-                    {
-                        "node": {"type": "datastore", "name": slug(repo.attrs["name"])},
-                        "impactedFlows": [flow_name],
-                        "containment": [],
-                        "stateful": {"dataLossRisk": False},
-                        "dependencyCriticality": "critical",
-                        "severityHint": "high",
-                    },
-                    [repo.evidence],
-                    "verified",
-                    0.8,
-                    service,
-                )
-            )
-        if pub:
-            data_loss = bool(swallowed)
-            docs.append(
-                _doc(
-                    "BlastRadius",
-                    slug(pub.attrs["channel"]),
-                    {
-                        "node": {"type": "broker", "name": pub.attrs["channel"]},
-                        "impactedFlows": [flow_name],
-                        "containment": [],
-                        "stateful": {"dataLossRisk": data_loss},
-                        "dependencyCriticality": "critical" if data_loss else "normal",
-                        "severityHint": "high" if data_loss else "medium",
-                    },
-                    [swallowed.evidence if swallowed else pub.evidence],
-                    "verified",
-                    0.8,
-                    service,
-                )
-            )
+    # --- BlastRadius (one per dependency node, impactedFlows aggregated across flows) ---
+    def _flows_touching(node_slug: str) -> list[str]:
+        return [
+            ff.attrs["name"]
+            for ff in flows
+            if any(slug(str(sk.get("target"))) == node_slug for sk in ff.attrs.get("sinks", []))
+        ]
 
-    # --- Alert (from swallowed failure) ---
-    if alert_name and swallowed:
-        search = swallowed.attrs["message"].split("{")[0].strip()
-        docs.append(
-            _doc(
-                "Alert",
-                alert_name,
-                {
-                    "alertType": "threshold",
-                    "sloRef": None,
-                    "signalSource": "log-pattern",
-                    "severity": "high",
-                    "forFlow": flow_name,
-                    "logFormatRef": obs_name,
-                    "expr": {
-                        "splunk": f'index=app sourcetype={service} "{search}" | stats count by host',
-                        "prometheus": None,
-                    },
-                    "rationale": (
-                        "Publish failure is logged and swallowed (data-loss risk); no metric "
-                        "exists, so alert on the log line. Add a counter + burn-rate alert once "
-                        "an SLO is defined (needs-review)."
-                    ),
-                },
-                [swallowed.evidence] + ([obs.evidence] if obs else []),
-                "needs-review",
-                0.6,
-                service,
-                cross_refs=[{"kind": "Flow", "name": flow_name, "relation": "alerts-on"}],
-            )
-        )
+    for cb_f in cbs:
+        impacted = _flows_touching(slug(cb_f.attrs["name"]))
+        if not impacted:
+            continue
+        containment = [{"kind": "ResiliencyPattern", "name": slug(cb_f.attrs["name"])}]
+        if fb:
+            containment.append({"kind": "Fallback", "name": slug(f"{fb.attrs['forTarget']}-fallback")})
+        docs.append(_doc("BlastRadius", cb_f.attrs["name"], {
+            "node": {"type": "service", "name": cb_f.attrs["name"]},
+            "impactedFlows": impacted,
+            "containment": containment,
+            "dependencyCriticality": "contained",
+            "severityHint": "medium",
+        }, [cb_f.evidence], "verified", confidence(Signal.DERIVED, len(impacted)), service))
+
+    for repo_f in repos:
+        node = slug(repo_f.attrs["name"])
+        impacted = _flows_touching(node)
+        if not impacted:
+            continue
+        docs.append(_doc("BlastRadius", node, {
+            "node": {"type": "datastore", "name": node},
+            "impactedFlows": impacted,
+            "containment": [],
+            "stateful": {"dataLossRisk": False},
+            "dependencyCriticality": "critical",
+            "severityHint": "high",
+        }, [repo_f.evidence], "verified", confidence(Signal.DERIVED, len(impacted)), service))
+
+    for pub_f in pubs:
+        channel = pub_f.attrs["channel"]
+        impacted = _flows_touching(slug(channel))
+        if not impacted:
+            continue
+        sw = swallowed_by_channel.get(channel)
+        data_loss = bool(sw)
+        docs.append(_doc("BlastRadius", slug(channel), {
+            "node": {"type": "broker", "name": channel},
+            "impactedFlows": impacted,
+            "containment": [],
+            "stateful": {"dataLossRisk": data_loss},
+            "dependencyCriticality": "critical" if data_loss else "normal",
+            "severityHint": "high" if data_loss else "medium",
+        }, [sw.evidence if sw else pub_f.evidence], "verified", confidence(Signal.DERIVED, len(impacted)), service))
+
+    # --- Alert + Runbook, one per swallowed publish channel ---
+    for channel, sw in swallowed_by_channel.items():
+        if not any(p.attrs.get("channel") == channel for p in pubs):
+            continue
+        a_name = f"{slug(channel)}-publish-failures"
+        impacted = _flows_touching(slug(channel))
+        for_flow = impacted[0] if impacted else flow_name
+        search = sw.attrs["message"].split("{")[0].strip()
+        docs.append(_doc("Alert", a_name, {
+            "alertType": "threshold",
+            "sloRef": None,
+            "signalSource": "log-pattern",
+            "severity": "high",
+            "forFlow": for_flow,
+            "logFormatRef": obs_name,
+            "expr": {
+                "splunk": f'index=app sourcetype={service} "{search}" | stats count by host',
+                "prometheus": None,
+            },
+            "rationale": (
+                "Publish failure is logged and swallowed (data-loss risk); no metric exists, so "
+                "alert on the log line. Add a counter + burn-rate alert once an SLO is defined "
+                "(needs-review)."
+            ),
+        }, [sw.evidence] + ([obs.evidence] if obs else []), "needs-review", confidence(Signal.INFERRED),
+            service, cross_refs=[{"kind": "Flow", "name": for_flow, "relation": "alerts-on"}]))
+        docs.append(_doc("Runbook", a_name, {
+            "banner": "GENERATED — verify before executing",
+            "trigger": {"alertRef": a_name},
+            "symptoms": [
+                f"'{search}' appears in logs",
+                f"{channel} events missing downstream while orders persist",
+            ],
+            "diagnosis": [
+                {"step": "Check the order-kafka service binding and broker health"},
+                {"step": "Inspect the publisher catch block (failure is swallowed)"},
+            ],
+            "remediation": [
+                "Verify the order-kafka binding and broker availability",
+                "No built-in replay: missing events are lost — assess impact window",
+                "Code change: make publish transactional / add an outbox (follow-up)",
+            ],
+            "escalation": "service owner (needs-review)",
+            "relatedFlow": for_flow,
+        }, [sw.evidence], "needs-review", confidence(Signal.INFERRED), service,
+            cross_refs=[{"kind": "Alert", "name": a_name, "relation": "covers"},
+                        {"kind": "Flow", "name": for_flow, "relation": "covers"}]))
 
     # --- Alert (SLO error-budget burn-rate, when a full objective exists) ---
     if objective and slo_ref and flow:
@@ -334,47 +338,11 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                 },
                 [objective.evidence] + ([slo.evidence] if slo else []),
                 "verified",
-                0.8,
+                confidence(Signal.DERIVED),  # computed from the SLO objective
                 service,
                 cross_refs=[
                     {"kind": "Flow", "name": flow_name, "relation": "alerts-on"},
                     {"kind": "SloSli", "name": slo_ref, "relation": "alerts-on"},
-                ],
-            )
-        )
-
-    # --- Runbook (for the alert) ---
-    if alert_name and swallowed:
-        docs.append(
-            _doc(
-                "Runbook",
-                alert_name,
-                {
-                    "banner": "GENERATED — verify before executing",
-                    "trigger": {"alertRef": alert_name},
-                    "symptoms": [
-                        f"'{swallowed.attrs['message'].split('{')[0].strip()}' appears in logs",
-                        f"{pub.attrs['channel']} events missing downstream while orders persist",
-                    ],
-                    "diagnosis": [
-                        {"step": "Check the order-kafka service binding and broker health"},
-                        {"step": "Inspect the publisher catch block (failure is swallowed)"},
-                    ],
-                    "remediation": [
-                        "Verify the order-kafka binding and broker availability",
-                        "No built-in replay: missing events are lost — assess impact window",
-                        "Code change: make publish transactional / add an outbox (follow-up)",
-                    ],
-                    "escalation": "service owner (needs-review)",
-                    "relatedFlow": flow_name,
-                },
-                [swallowed.evidence],
-                "needs-review",
-                0.6,
-                service,
-                cross_refs=[
-                    {"kind": "Alert", "name": alert_name, "relation": "covers"},
-                    {"kind": "Flow", "name": flow_name, "relation": "covers"},
                 ],
             )
         )

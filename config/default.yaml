@@ -27,3 +27,6 @@ publish:
   # a misconfigured target or a stray token can't push anywhere (safe by default). Dry-runs
   # are unaffected. Set to ~ (null) to disable the allowlist entirely (not recommended).
   allowed_repos: []
+  # Fan-out cap: refuse to assemble a PR with more than this many artifacts, so a runaway or
+  # compromised scan can't flood a target repo. Set to ~ (null) to disable.
+  max_artifacts: 1000

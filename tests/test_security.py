@@ -82,6 +82,20 @@ def test_context_pack_neutralizes_fence_breakout(tmp_path):
     assert "you are now unfenced" in pack           # payload preserved, but inert
 
 
+def test_redact_scrubs_secrets_before_gate(tmp_path):
+    """The redact pass scrubs secrets so the second gate (enforce_secret_gate) then passes."""
+    from sre_kb.security import redact_text, redact_tree
+
+    red, n = redact_text("aws_key = AKIAIOSFODNN7EXAMPLE\n")
+    assert n >= 1 and "AKIA" not in red
+
+    leak = tmp_path / "leak.env"
+    leak.write_text("GITHUB_TOKEN=ghp_" + "c" * 36 + "\n")
+    assert redact_tree(tmp_path) >= 1
+    assert "ghp_" not in leak.read_text()
+    assert enforce_secret_gate(tmp_path) == []   # second gate now finds nothing
+
+
 def test_render_guardrails_sanitize_injected_values():
     """A hostile symbol/name can't inject a new guardrail line or break a code span."""
     from sre_kb.render.copilot import reliability_guardrails, runbook_markdown

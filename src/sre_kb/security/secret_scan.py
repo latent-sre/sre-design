@@ -78,6 +78,46 @@ def scan_tree(root: Path) -> list[dict]:
     return findings
 
 
+_REDACTION = "***REDACTED***"  # also matches _PLACEHOLDER, so redaction is idempotent
+
+
+def redact_text(text: str) -> tuple[str, int]:
+    """Replace detected secrets with a placeholder, preserving line structure. Returns
+    (redacted_text, count). Run before the publish gate (defense-in-depth): scrub first,
+    then let the gate verify nothing slipped through."""
+    count = 0
+    out: list[str] = []
+    for line in text.splitlines(keepends=True):
+        core, eol = line, ""
+        if core.endswith("\r\n"):
+            core, eol = core[:-2], "\r\n"
+        elif core.endswith("\n"):
+            core, eol = core[:-1], "\n"
+        suppress = bool(_PLACEHOLDER.search(core))
+        for rule, pat in _RULES:
+            if rule in _SUPPRESSIBLE and suppress:
+                continue
+            core, n = pat.subn(_REDACTION, core)
+            count += n
+        out.append(core + eol)
+    return "".join(out), count
+
+
+def redact_tree(root: Path) -> int:
+    """Redact secrets in place from every text file under `root`. Returns total redactions."""
+    total = 0
+    for p in sorted(root.rglob("*")):
+        if not p.is_file() or p.is_symlink():
+            continue
+        if p.stat().st_size > _MAX_FILE_BYTES or not _looks_text(p):
+            continue
+        redacted, n = redact_text(p.read_text(encoding="utf-8", errors="replace"))
+        if n:
+            p.write_text(redacted, encoding="utf-8")
+            total += n
+    return total
+
+
 def enforce_secret_gate(tree: Path, *, allow: bool = False) -> list[dict]:
     """Scan `tree`; raise SecretLeakError if anything matches (unless allow=True)."""
     findings = scan_tree(tree)

@@ -47,3 +47,16 @@ def test_pr_tree_structure(result):
 def test_review_flags_needs_review(result):
     review = (result.pr / "catalog" / "order-service" / "REVIEW.md").read_text()
     assert "Alert/order-created-publish-failures" in review
+
+
+def test_fan_out_cap_blocks_runaway_tree(tmp_path):
+    """A runaway artifact count is refused before any tree is assembled."""
+    from sre_kb.publish import assemble_pr
+    from sre_kb.publish.forge import ForgePublishError
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(tmp_path, "cap")
+    docs = [{"kind": "Flow", "metadata": {"name": f"f{i}", "service": "s"}, "spec": {}, "status": "verified"}
+            for i in range(5)]
+    with pytest.raises(ForgePublishError):
+        assemble_pr(layout, docs, None, dry_run=True, max_artifacts=2)

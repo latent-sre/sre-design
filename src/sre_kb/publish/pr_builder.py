@@ -6,7 +6,8 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from sre_kb.publish.forge import get_forge
+from sre_kb.config import load_config
+from sre_kb.publish.forge import ForgePublishError, get_forge
 from sre_kb.render.project import load_kb, render_projections, service_name
 from sre_kb.workspace import RunLayout
 
@@ -39,8 +40,15 @@ def assemble_pr(
     dry_run: bool = True,
     allow_secrets: bool = False,
     allowed_repos: list[str] | None = None,
+    max_artifacts: int | None = None,
 ) -> tuple[Path, str]:
     docs = docs if docs is not None else load_kb(layout.root)
+    cap = max_artifacts if max_artifacts is not None else (load_config().get("publish") or {}).get("max_artifacts")
+    if cap is not None and len(docs) > cap:
+        raise ForgePublishError(
+            f"fan-out cap exceeded: {len(docs)} artifacts exceed publish.max_artifacts={cap} "
+            f"— a runaway/compromised scan must not flood a target repo"
+        )
     proj = layout.root / "projections"
     if not proj.exists():
         render_projections(layout, docs)
@@ -66,9 +74,11 @@ def assemble_pr(
     )
 
     tree = layout.root / "pr"
-    # Publish-time secret-scan gate (defense-in-depth) — hard-fails even on --dry-run.
-    from sre_kb.security import enforce_secret_gate
+    # Defense-in-depth: redact any secret in the tree, THEN the gate verifies nothing slipped
+    # through. Both run even on --dry-run, so the staged tree is safe to inspect/publish.
+    from sre_kb.security import enforce_secret_gate, redact_tree
 
+    redact_tree(tree)
     enforce_secret_gate(tree, allow=allow_secrets)
     if dry_run:
         return tree, f"dry-run: staged PR tree at {tree} (would target {sre_repo})"

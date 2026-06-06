@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from sre_kb.tiers import artifact_tier, tier_label
+
 _SEV_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 _TYPE_RANK = {"data-loss-risk": 0, "uncontained-critical-dep": 1, "broad-impact-dependency": 2}
 
@@ -30,6 +32,7 @@ def collect_findings(docs: list[dict]) -> list[dict]:
             "impactedFlows": spec.get("impactedFlows") or [],
             "artifact": ref,
             "evidence": _first_evidence(d),
+            "tier": artifact_tier(d),
         }
         if (spec.get("stateful") or {}).get("dataLossRisk"):
             out.append({
@@ -76,7 +79,7 @@ def render_text(service: str, run_id: str, findings: list[dict], docs: list[dict
     if not findings:
         lines.append("No high/medium-risk findings. ✓")
     for f in findings:
-        lines.append(f"[{f['severity'].upper()}] {f['type']}: {f['title']}")
+        lines.append(f"[{f['severity'].upper()}] {f['type']} ({tier_label(f.get('tier', 'ast'))}): {f['title']}")
         lines.append(f"    {f['detail']}")
         meta = []
         if f["impactedFlows"]:
@@ -105,6 +108,7 @@ def render_md(service: str, run_id: str, findings: list[dict], docs: list[dict])
         out.append(f"## [{f['severity'].upper()}] {f['title']}")
         out.append("")
         out.append(f"- **type:** `{f['type']}`")
+        out.append(f"- **source:** {tier_label(f.get('tier', 'ast'))}")
         if f["impactedFlows"]:
             out.append(f"- **impacted flows:** {', '.join(f['impactedFlows'])}")
         if f["evidence"]:

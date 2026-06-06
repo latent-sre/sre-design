@@ -14,6 +14,7 @@ import pytest
 from sre_kb.collectors.base import CollectorProtocol, ScanContext
 from sre_kb.models.envelope import Artifact, Evidence, Lines, Metadata
 from sre_kb.pipeline import run as run_pipeline
+from sre_kb.tiers import artifact_tier, tier_label
 from sre_kb.validation import validate_doc
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
@@ -83,3 +84,61 @@ def test_report_exposes_tier_on_every_artifact(report: dict) -> None:
 
 def test_report_has_by_tier_rollup(report: dict) -> None:
     assert report["by_tier"] == {"ast": report["docs"]}
+
+
+# --- §7.2 tier-aware guardrails + §7.5 surface the tier ---------------------------------
+
+
+def test_artifact_tier_rolls_up_from_evidence() -> None:
+    assert artifact_tier({}) == "ast"                                    # no evidence -> ast
+    assert artifact_tier({"evidence": [{"source_tier": "ast"}]}) == "ast"
+    # a single Tier-B citation taints the whole artifact (conservative roll-up)
+    assert artifact_tier({"evidence": [{"source_tier": "ast"}, {"source_tier": "llm"}]}) == "llm"
+
+
+def test_tier_label() -> None:
+    assert tier_label("ast") == "AST-grounded"
+    assert tier_label("llm") == "LLM-proposed"
+
+
+def _cb_doc(name: str, source_tier: str) -> dict:
+    return {"kind": "ResiliencyPattern", "metadata": {"name": name},
+            "spec": {"type": "circuit-breaker", "targetSymbol": "Svc#call"},
+            "evidence": [{"source_tier": source_tier}]}
+
+
+def test_tier_b_finding_is_advisory_not_a_hard_guardrail() -> None:
+    """The blast radius of an LLM mistake must never be a hard editor rule (§7.2)."""
+    from sre_kb.render.copilot import advisory_notes, copilot_instructions, reliability_guardrails
+
+    ast_doc, llm_doc = _cb_doc("a", "ast"), _cb_doc("b", "llm")
+    assert reliability_guardrails([ast_doc]) and not advisory_notes([ast_doc])   # Tier-A -> hard
+    assert advisory_notes([llm_doc]) and not reliability_guardrails([llm_doc])   # Tier-B -> advisory
+
+    ci = copilot_instructions("svc", [llm_doc])
+    assert "Advisory (LLM-proposed, unverified)" in ci
+    hard = ci.split("## Reliability guardrails")[1].split("## Advisory")[0]
+    assert "Svc#call" not in hard               # the Tier-B claim is not a hard rule
+
+
+def test_findings_surface_tier() -> None:
+    from sre_kb.reporting import collect_findings, render_md, render_text
+
+    br = {"kind": "BlastRadius", "metadata": {"name": "kafka"},
+          "spec": {"node": {"name": "kafka", "type": "broker"}, "severityHint": "high",
+                   "stateful": {"dataLossRisk": True}, "impactedFlows": ["f"]},
+          "evidence": [{"source_tier": "llm"}]}
+    found = collect_findings([br])
+    assert found and found[0]["tier"] == "llm"
+    assert "LLM-proposed" in render_text("s", "r", found, [br])
+    assert "LLM-proposed" in render_md("s", "r", found, [br])
+
+
+def test_review_md_surfaces_tier() -> None:
+    from sre_kb.publish.pr_builder import _review_md
+
+    report = {"by_status": {"needs-review": 1}, "by_tier": {"llm": 1},
+              "records": [{"artifact": "BlastRadius/x", "status": "needs-review", "tier": "llm"}]}
+    md = _review_md([{}], report)
+    assert "LLM-proposed 1" in md               # by_tier summary line
+    assert "[LLM-proposed]" in md               # per-item tier tag

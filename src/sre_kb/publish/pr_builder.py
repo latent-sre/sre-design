@@ -9,21 +9,26 @@ from pathlib import Path
 from sre_kb.config import load_config
 from sre_kb.publish.forge import ForgePublishError, get_forge
 from sre_kb.render.project import load_kb, render_projections, service_name
+from sre_kb.tiers import tier_label
 from sre_kb.workspace import RunLayout
 
 
 def _review_md(docs: list[dict], report: dict | None) -> str:
-    by_status = (report or {}).get("by_status", {})
+    rep = report or {}
+    by_status = rep.get("by_status", {})
+    by_tier = rep.get("by_tier", {})
     lines = ["# SRE KB — review summary", "", f"- artifacts: {len(docs)}"]
     lines += [f"- {k}: {by_status[k]}" for k in sorted(by_status)]
+    if by_tier:
+        lines.append("- trust: " + ", ".join(f"{tier_label(k)} {by_tier[k]}" for k in sorted(by_tier)))
     lines += ["", "## Needs review / not auto-verified", ""]
     any_nr = False
-    for r in (report or {}).get("records", []):
+    for r in rep.get("records", []):
         if r.get("status") != "verified":
             any_nr = True
             reasons = [k for k in ("structural", "provenance", "crossref") if r.get(k)]
             extra = f" ({', '.join(reasons)})" if reasons else ""
-            lines.append(f"- [ ] {r['artifact']} → {r['status']}{extra}")
+            lines.append(f"- [ ] {r['artifact']} → {r['status']} [{tier_label(r.get('tier', 'ast'))}]{extra}")
     if not any_nr:
         lines.append("- (all verified)")
     return "\n".join(lines) + "\n"

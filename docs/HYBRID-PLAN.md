@@ -235,7 +235,7 @@ trap `validation/challenge.py:9-13` warns about). Instead:
 | **1. Adopt `resiliency-skills`' hardening wholesale** | Architectural scan/publish split (no-credential scan role; scoped publish credential), sandboxed/`json.dumps` renderers, `redact` + second gate, fan-out cap, `needs-human-review` const. | This *is* `sre-design`'s own deferred roadmap. Closes the textual-fence and publish-path weaknesses **before** any LLM breadth is added. |
 | **2. Make the trust spine status-aware** | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). | Or Tier-B facts will silently inflate "verified" graphs. |
 | **3. Wire `LLMChallenger` to a live oracle** | Real adjudication for judgment-call claims. | Prerequisite for Tier-B, not polish — deterministic grounding is circular for LLM claims. |
-| **4. LLM collectors as pointer-generators** | `collectors/llm/`; clone `sre-flow-analysis` into the granular skill set; engine re-confirms each pointer (§ contract). | The breadth payoff, now safely fenced. |
+| **4. LLM collectors: gap-finders + pointer-generators** | `collectors/llm/`. The LLM reads the engine's facts + the cited code and proposes **(a) gaps the engine missed on code we already cover** (the recall payoff — §7.9) and **(b) pointers for stacks no AST grammar reaches** (breadth). The engine re-derives or *refutes* each (§6.3, §7.9); nothing it proposes can auto-`verify`. | Recall on covered estates **and** breadth, both safely fenced. |
 | **5. Render-adapter breadth** | Generalize `render/` to neutral-intent → adapter; add Wavefront/AppDynamics. | Independent; can run in parallel. |
 
 Phases 0→1→2 are the trust/security spine and are low-risk extensions of existing code; they land
@@ -330,3 +330,81 @@ Surface it: `findings`, `REVIEW.md`, and the digest should label each claim **AS
 Adopt §6's spine and ordering over the earlier 4-workstream sketch. The two highest-value additions
 are **7.1 (tier-conflict findings)** and **7.2 (tier-aware guardrails)**: both turn assets we already
 have — `drift`/`findings` and the editor guardrails — into Tier-B safety nets neither repo has today.
+
+### 7.9 LLM as recall booster (gap-finder) — the primary Tier-B mode — **[HIGH]**
+
+**This is the point of Tier-B for a Java/.NET estate, and it sharpens Phase 4.** §6 framed Tier-B
+mostly as *polyglot breadth* ("gaps AST can't *reach*" = new languages). The higher-value mode is
+**recall on code we already cover**: things the engine *missed*.
+
+The engine is **high-precision, limited-recall** — it emits only what its deterministic rules match
+and hash-grounds every hit, so its real failure mode is **false negatives** (a breaker in a shape we
+don't match, a swallow through an unusual path, a timeout that simply *isn't there*). That is exactly
+the LLM's strength. The division of labour:
+
+- **Engine = precision gate** — finds what it can prove, grounds it (Tier A, may reach `verified`).
+- **LLM = recall booster** — reads the *same* code plus the engine's facts and asks *"what
+  reliability-relevant thing is here that the facts don't mention?"*, emitting **candidates** (Tier B).
+
+It is the mirror of the challenge pass: **challenge checks false positives** ("is this claim
+grounded?"); **the gap-finder checks false negatives** ("what true claim did we miss?"). Together
+they bracket both error types.
+
+**Why it's safe by construction.** Most gaps are *absences* ("no timeout", "swallowed here"), and an
+absence can't be byte-proven the way a present `@CircuitBreaker` can. So gap-finder output is
+inherently Tier-B: it lands as `needs-review` and **can only add candidates to the human's pile —
+never auto-`verify`, never delete an engine fact.** Worst case is noise a reviewer dismisses.
+
+#### Bounded gap taxonomy + a deterministic *refutation* probe per category
+
+Not open-ended LLM rambling — a fixed catalogue, each with a probe that turns "absence" into
+"absence-where-we-know-to-look" so the engine kills the easy false positives before a human sees them:
+
+| Gap category | Example | Engine refutation probe (found ⇒ drop the gap) |
+|---|---|---|
+| `missing-timeout` | critical client, no timeout | search `application.yml` (`resilience4j.timelimiter`), client builder (`setReadTimeout`/WebClient `responseTimeout`) bound to that client |
+| `unguarded-critical-dependency` | sync dep, no breaker/fallback | is there a `resiliency.circuitbreaker`/`fallback` fact whose target is this dependency? |
+| `swallowed-failure` (recall) | catch that drops an error in a shape the AST matcher missed | re-run the deterministic swallow rule at the proposed pointer — **if it fires, promote to Tier-A**; else Tier-B |
+| `data-loss-path` | write-then-publish, no outbox/txn | judgment — route to the oracle (§7.3), no deterministic refute |
+| `missing-idempotency` | retried non-idempotent endpoint | judgment |
+| `undocumented-job` | cron/scheduled work in no `Flow` | is there a `@Scheduled`/Quartz fact for it? |
+| `unbounded-resource` | unbounded cache/queue/threadpool | judgment |
+
+#### Recall eval (the dual of §7.3)
+
+§7.3 tests *precision* (a planted ungrounded claim is rejected). This needs the dual: a fixture with
+**known, planted gaps** (a client with a deliberately removed timeout) and an assert that the
+gap-finder surfaces them. Without a recall eval we cannot tell signal from noise.
+
+#### Noise budget
+
+Rank candidates by `severity × confidence`; cap per run; run the refutation probes above *before* a
+human sees anything. A gap-finder that cries wolf gets muted and the whole tier is wasted.
+
+#### The payoff loop: confirmed gaps graduate to Tier-A
+
+The strategic part. A recurring, human-confirmed gap category is a signal to add a **deterministic
+collector/signature** for it: LLM finds it (Tier-B) → human confirms → engineer adds a signature →
+next run it is Tier-A, hash-grounded, and the LLM moves to the next frontier. **The gap-finder drives
+the engine's recall upward over time** instead of being a permanent crutch. (Pairs with 7.4: the
+signature *is* the re-derivation rule.)
+
+### 7.10 Worked example — `assess-resiliency` in gap-mode
+
+A concrete first Tier-B collector, so Phase 4 has an instance, not just a category.
+
+- **Targets:** every critical synchronous dependency the engine knows about — `Dependency` facts and
+  `http-egress` flow steps — that has **no** `resiliency.circuitbreaker`/`fallback`/timeout fact.
+- **Input (framed untrusted via `synth/context_pack.py`):** those dependency/flow facts + the cited
+  client and config code. The LLM is told the engine's coverage so it doesn't re-report hits.
+- **LLM emits (pointer, not fact):** `{category: unguarded-critical-dependency, target: inventory-client,
+  excerpt: "<the call site text>", rationale: "no timeout/breaker around a sync call to a critical dep"}`.
+- **Engine refutes or stamps:** locate the excerpt → `path:line:hash`; run the `missing-timeout` /
+  `unguarded-critical-dependency` probes (search `application.yml` + the client builder). Found ⇒ drop
+  (false gap). Not found ⇒ emit a Tier-B `BlastRadius`/finding `status: needs-review`,
+  `source_tier: llm`, with `checked: [application.yml, <client>.java]` so the absence is honest.
+- **Cross-check (§7.1):** if the engine *did* emit resiliency for that target but the LLM flags it →
+  `tier-conflict` (may reveal an engine bug). **Guardrails (§7.2):** this finding is advisory in the
+  editor, never a hard "don't remove" rule, precisely because it's Tier-B.
+- **Graduation (§7.9 loop):** if "missing-timeout on WebClient builders" recurs and is confirmed, add
+  a deterministic timeout-config collector — it becomes Tier-A and drops out of the LLM's frontier.

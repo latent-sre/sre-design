@@ -19,6 +19,7 @@ from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.config import load_config
 from sre_kb.synth import scaffold
 from sre_kb.synth.context_pack import build_context_pack
+from sre_kb.tiers import artifact_tier
 from sre_kb.validation.challenge import (
     GroundingChallenger,
     apply_challenge_gating,
@@ -101,11 +102,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     records = []
     for d in docs:
         key = f"{d['kind']}/{d['metadata']['name']}"
-        # Trust tier rolled up from the artifact's evidence: "llm" if any cited evidence
-        # is Tier-B (LLM-proposed), else "ast". Today everything is "ast"; this is the
-        # carrier the Tier-B collectors (Phase 4) and tier-aware guardrails read.
-        tiers = {ev.get("source_tier", "ast") for ev in d.get("evidence", [])}
-        tier = "llm" if "llm" in tiers else "ast"
+        tier = artifact_tier(d)  # "llm" if any cited evidence is Tier-B, else "ast"
         struct = validate_doc(d)
         prov = verify_evidence(d, target_path)
         xref = crossref_problems.get(key, [])

@@ -1,8 +1,10 @@
 """Deterministic collectors: scan a cloned repo into a `FactSet` with provenance.
 
-Collectors are bounded static analyzers (regex/parse heuristics) — never executing the
-target's build. File-collectors run first; derivers (flow_builder, budget_check) then
-enrich the fact set.
+Collectors are bounded static analyzers — never executing the target's build. Code
+structure (classes, methods, calls, annotations, try/catch) is read from a tree-sitter
+AST (`parsing/code_model.py`, Java + C#); config files (PCF manifests, build files, YAML
+properties, logback) are parsed directly. File-collectors run first; derivers
+(flow_builder, budget_check) then enrich the fact set.
 """
 
 from __future__ import annotations

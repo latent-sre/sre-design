@@ -45,12 +45,15 @@ network/synthetic).
 ## Implementation status (June 2026)
 
 The design below is the full intent; this section records what is **built and tested
-offline** today (65 tests, ruff-clean). The vertical slice and the items earlier marked
+offline** today (95 tests, ruff-clean). The vertical slice and the items earlier marked
 "deferred to P3/P4" are now implemented.
 
 - **Engine** — deterministic `scan → scaffold → validate` for ~22 `kind`s. Collectors:
   **Java/Spring on PCF** and **.NET/Steeltoe on PCF** (same normalized facts → same KB,
-  proving repo-neutrality). Resource limits + safe parsing.
+  proving repo-neutrality). Code structure is read from a **tree-sitter AST** (Java + C#,
+  `parsing/code_model.py`), not line regexes — per-class scoping and receiver→field-type
+  correlation. Confidence is signal-derived and BlastRadius risk is computed from impacted
+  -flow breadth + containment, not type-keyed constants.
 - **Validation** — 5 layers: structural (schema), provenance (excerpt hash), cross-ref,
   gating, and an **adversarial challenge pass** (deterministic grounding + an LLM hook;
   monotonic downgrade-only). Nothing is silently dropped.
@@ -258,11 +261,16 @@ Adding a kind = schema + prompt + (optional) collector + one `registry.yaml` row
 - **Normalized facts** (`models/facts.py`): `Fact{type, attrs, symbol, evidence}`
   streamed to `facts/facts.jsonl`. Provenance mandatory on every fact;
   `Symbol.fqn` is language-neutral (`com.acme.OrderController#createOrder`).
-- **Flow/call-graph** (`flow/` + `java_spring/flow_builder.py`): find entry points
-  (`@RestController`/`@KafkaListener`/`@Scheduled`), resolve edges toward sinks
-  (`@FeignClient`/`RestTemplate`/`WebClient`, Spring Data repos/`JdbcTemplate`,
-  `KafkaTemplate`/`RabbitTemplate`) via **DI bean-graph + field tracing**,
-  depth-limited. Unresolved hops become explicit `flow.gap` facts (surfaced, never
+- **Code model** (`parsing/code_model.py`): a tree-sitter AST (Java + C#) is the
+  structural backend for every code collector — per-class scoping, method/annotation
+  spans, field name→type maps, real method invocations (receiver + line + string args),
+  and try/catch. This replaced the line-regex extraction (which mis-scoped multi-class
+  files and guessed correlation from call substrings).
+- **Flow/call-graph** (`java_spring/flow_builder.py`): find entry points
+  (`@RestController` handlers), resolve edges toward sinks (circuit-breaker target,
+  Spring Data repo `save`, `KafkaTemplate`/producer) by walking the handler's actual
+  invocations and **resolving each call's receiver to its field type** (so multiple
+  publishers/clients are disambiguated), depth-limited. Unresolved hops become explicit `flow.gap` facts (surfaced, never
   faked). `failure_modes.py` annotates each edge with timeouts/retries/breakers and
   try-catch behavior (`surfacedAs: http-503` vs `logged-and-swallowed` +
   `dataLossRisk`) — the swallowed-failure detection is what seeds Alerts/Runbooks.

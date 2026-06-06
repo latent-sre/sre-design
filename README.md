@@ -23,6 +23,10 @@ Working engine — P1 vertical slice, P2 breadth, and P3 security hardening impl
 and tested offline against the bundled fixtures. See `docs/DESIGN.md` for the full design.
 
 Implemented:
+- **AST-backed extraction** — code structure (classes, methods, calls, annotations,
+  try/catch) is read from a tree-sitter model (Java + C#, `parsing/code_model.py`) with
+  per-class scoping and receiver→field-type call correlation; only config files use
+  direct parsing. Confidence is signal-derived; BlastRadius risk is computed from breadth.
 - **Scan → scaffold → validate** (5 layers: schema, provenance hash, cross-ref, gating,
   and an adversarial challenge pass that grounds each claim against its cited evidence)
   for ~22 kinds incl. Flow, Alert (log-pattern + SLO burn-rate), Runbook, BlastRadius,

@@ -252,3 +252,81 @@ generated repo; supply-chain pinning; `render-adapters` multi-tool breadth.
 Byte-level provenance (`hash_excerpt`) + the monotonic challenge pipeline; the AST extraction core;
 the `Flow`/`Topology`/`estate`/`BlastRadius` graph depth; `findings` + `drift`; and the unique
 **reliability guardrails** that feed the KB back into the developer's editing loop.
+
+---
+
+## 7. Enhancements (second-pass review)
+
+> **Provenance of this section.** A second pass over §6 after re-reading both repos. These do **not**
+> change the spine or the phase order — they harden the Tier-B contract and exploit two assets §6
+> under-uses: the `drift`/`findings` graph and the reliability guardrails. Each is tagged by value
+> and slotted into the existing phases.
+
+### 7.1 Tier-B as a cross-check on Tier-A, not only a gap-filler — **[HIGH]**
+
+§6 rules "on overlap, AST wins; Tier-B only fills gaps." But **all four bugs in §4 were in
+Tier-A** — "AST wins" discards a free signal. Instead, on overlap, **compare**: when a Tier-B
+claim *disagrees* with a Tier-A fact (the LLM asserts a circuit breaker where the AST found none,
+or misses one the AST has), emit a `tier-conflict` finding rather than silently dropping Tier-B.
+This is a near-zero-cost detector for Tier-A extraction bugs — it would have surfaced the swallow
+false-positive (§4.1) before it reached a guardrail. *Wiring:* both tiers already become `Fact`s;
+route the overlap through `validation/crossref.py` and add a conflict rule in
+`reporting/findings.py`. *Slots into:* finding type in **Phase 2**; activates in **Phase 4**.
+
+### 7.2 Tier-aware reliability guardrails — **[HIGH]**
+
+`render/copilot.py` projects findings back into the developer's editor as hard rules ("don't remove
+`@CircuitBreaker`", "add an outbox"). §4.1 shows the failure mode: a false finding becomes a *wrong
+guardrail* the developer is told to obey. Enhancement: **only Tier-A (byte-grounded) findings emit
+hard guardrails; Tier-B findings emit advisory notes.** The blast radius of an LLM mistake must
+never be a hard editor rule. *Wiring:* gate guardrail strength on `Evidence.source_tier` in
+`render/copilot.py`. *Slots into:* **Phase 0** (the tier field) + a one-line gate.
+
+### 7.3 Make the non-circular contract testable — **[HIGH]**
+
+§6.3 is the whole hybrid, but it is prose. Give it regression teeth: an `examples/adversarial-llm/`
+corpus where a planted *claim + excerpt* does **not** deterministically re-derive (the "breaker" the
+LLM points at isn't a breaker), and assert the engine **rejects/downgrades** it — the dual of
+`resiliency-skills`' `examples/malicious/`. Without this, the re-derivation gate can silently rot
+into the circular check it was built to avoid. *Slots into:* **Phase 3/4**.
+
+### 7.4 `lib/signatures` as the shared re-derivation rule — **[MED]**
+
+§6.3 step 2 says "re-derive with the *same deterministic rule* Tier A uses" but leaves "the rule"
+abstract. Bind it concretely to a shared **signature library** both tiers consume: re-derivation
+becomes "does signature *S* fire at the pointer the LLM proposed?" One `SignatureSet` is cited by
+Tier-A (AST) and Tier-B (LLM) alike — which also unifies detection config and makes a new language
+*data*, not code. *Slots into:* **Phase 0** (define) / **Phase 4** (consume).
+
+### 7.5 Surface the trust tier in human-facing output — **[MED]**
+
+The reviewer's entire job is triage by trust, yet §6 keeps `source_tier` internal to `Evidence`.
+Surface it: `findings`, `REVIEW.md`, and the digest should label each claim **AST-grounded** /
+**LLM-proposed-then-confirmed** / **LLM-judgment**. It is the single most decision-relevant column.
+*Slots into:* **Phase 0** (carry) + `reporting/findings.py` & the publish REVIEW (surface).
+
+### 7.6 Schema-governance specifics (fold into Phase 1/2) — **[MED]**
+
+§6 implies schema hardening (`needs-human-review` const) but doesn't enumerate it. Concretely:
+- **`additionalProperties: false`** on every per-kind schema (a positive allow-list). Ours is loose
+  — `riskRationale` was addable to `BlastRadius` precisely because nothing forbade it.
+- **`ownership: app | platform | shared`** — we lack it; `resiliency-skills` has it and it is core SRE
+  governance (who owns this alert/runbook).
+- **`unverified-against-live`** flag for claims uncheckable offline (SLO thresholds, live metrics) —
+  while **keeping** our `verified | needs-review | rejected` status (a strength over their
+  `needs-human-review: const true`, which we *can* improve on because we ground with hashes).
+- A **golden-example-per-kind** corpus validated in CI, mirroring `examples/golden/`.
+
+### 7.7 Push-back on §6 sequencing
+
+- **Phase 1 is not purely "low-risk code."** The scan/publish **credential split** is a
+  deployment/process architecture (two contexts that never share state, CI wiring, agent config),
+  not a refactor. Track its infra story separately so it isn't under-scoped.
+- **Phase 5 (render-adapter breadth) is independent of the trust spine** and is the one piece with
+  immediate user-visible value and no LLM-trust risk — run it **in parallel, earlier**, not last.
+
+### 7.8 Net
+
+Adopt §6's spine and ordering over the earlier 4-workstream sketch. The two highest-value additions
+are **7.1 (tier-conflict findings)** and **7.2 (tier-aware guardrails)**: both turn assets we already
+have — `drift`/`findings` and the editor guardrails — into Tier-B safety nets neither repo has today.

@@ -38,6 +38,7 @@ def assemble_pr(
     forge: str = "github",
     dry_run: bool = True,
     allow_secrets: bool = False,
+    allowed_repos: list[str] | None = None,
 ) -> tuple[Path, str]:
     docs = docs if docs is not None else load_kb(layout.root)
     proj = layout.root / "projections"
@@ -71,7 +72,7 @@ def assemble_pr(
     enforce_secret_gate(tree, allow=allow_secrets)
     if dry_run:
         return tree, f"dry-run: staged PR tree at {tree} (would target {sre_repo})"
-    ref = get_forge(forge).open_pr(
+    ref = get_forge(forge, allowed_repos=allowed_repos).open_pr(
         tree, sre_repo=sre_repo, branch=branch, title=f"SRE KB: {service}", body=_review_md(docs, report)
     )
     return tree, ref

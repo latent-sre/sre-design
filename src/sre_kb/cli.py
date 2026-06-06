@@ -146,6 +146,7 @@ def publish(
     """
     import json
 
+    from sre_kb.config import load_config
     from sre_kb.publish import assemble_pr
     from sre_kb.publish.forge import ForgePublishError
     from sre_kb.render import load_kb
@@ -156,9 +157,11 @@ def publish(
     docs = load_kb(layout.root)
     report_path = layout.reports / "validation_report.json"
     report = json.loads(report_path.read_text()) if report_path.exists() else None
+    allowed_repos = (load_config().get("publish") or {}).get("allowed_repos")
     try:
         tree, ref = assemble_pr(
-            layout, docs, report, sre_repo=sre_repo, forge=forge, dry_run=dry_run, allow_secrets=allow_secrets
+            layout, docs, report, sre_repo=sre_repo, forge=forge, dry_run=dry_run,
+            allow_secrets=allow_secrets, allowed_repos=allowed_repos,
         )
     except SecretLeakError as exc:
         typer.echo(f"BLOCKED by secret-scan gate: {exc}", err=True)

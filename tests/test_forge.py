@@ -67,3 +67,45 @@ def test_redact_hides_token():
 def test_get_forge_defaults_to_local_for_unknown():
     assert get_forge("nope").name == "local"
     assert get_forge("github").name == "github"
+
+
+def _seam_runner(calls: list[list[str]] | None = None):
+    def runner(cmd):
+        if calls is not None:
+            calls.append(cmd)
+        if "rev-parse" in cmd:
+            return "main\n"
+        if "--porcelain" in cmd:
+            return " M x.yaml\n"
+        return ""
+
+    return runner
+
+
+def test_open_pr_keeps_token_out_of_argv(tmp_path):
+    (tmp_path / "x.yaml").write_text("a: 1\n")
+    calls: list[list[str]] = []
+    forge = GitHubForge(runner=_seam_runner(calls), http_post=lambda *a: {"html_url": "u"}, token="SECRETTOKEN123")
+
+    assert forge.open_pr(tmp_path, sre_repo="o/r", branch="b", title="t", body="x") == "u"
+    flat = " ".join(" ".join(c) for c in calls)
+    assert "SECRETTOKEN123" not in flat            # token is never on the git command line
+    assert "https://github.com/o/r.git" in flat    # remote URL is tokenless
+
+
+def test_open_pr_allowlist_blocks_unlisted_repo(tmp_path):
+    def runner(cmd):
+        raise AssertionError("git must not run when the target repo is blocked")
+
+    forge = GitHubForge(runner=runner, token="T", allowed_repos=["someone/else"])
+    with pytest.raises(ForgePublishError):
+        forge.open_pr(tmp_path, sre_repo="o/r", branch="b", title="t", body="x")
+
+
+def test_open_pr_allowlist_allows_listed_repo(tmp_path):
+    (tmp_path / "x.yaml").write_text("a: 1\n")
+    forge = GitHubForge(
+        runner=_seam_runner(), http_post=lambda *a: {"html_url": "u"}, token="T",
+        allowed_repos=["https://github.com/o/r.git"],  # URL form normalizes to o/r
+    )
+    assert forge.open_pr(tmp_path, sre_repo="o/r", branch="b", title="t", body="x") == "u"

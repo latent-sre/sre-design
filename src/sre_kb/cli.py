@@ -172,6 +172,54 @@ def publish(
     typer.echo(ref)
 
 
+@app.command("challenge-worklist")
+def challenge_worklist(
+    run_id: str = typer.Option(..., "--run"),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Show the LLM challenge worklist (judgment-call claims for Copilot to adjudicate)."""
+    import json
+
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    path = layout.root / "challenge" / "worklist.json"
+    if not path.exists():
+        typer.echo("no worklist (no review claims, or run not validated yet)")
+        raise typer.Exit(code=0)
+    data = json.loads(path.read_text())
+    for item in data["items"]:
+        typer.echo(f"  {item['artifact']}  [{item['claimId']}]")
+    typer.echo(f"{len(data['items'])} claim(s) for review — see {path}")
+
+
+@app.command("challenge-apply")
+def challenge_apply(
+    run_id: str = typer.Option(..., "--run"),
+    verdicts: Path = typer.Option(None, "--verdicts", help="Verdicts JSON (default: <run>/challenge/verdicts.json)."),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Apply Copilot's challenge verdicts and re-gate artifacts (monotonic downgrade-only)."""
+    import json
+
+    from sre_kb.pipeline.challenge_apply import apply_verdicts
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    vpath = verdicts or (layout.root / "challenge" / "verdicts.json")
+    if not vpath.exists():
+        typer.echo(f"no verdicts file at {vpath}", err=True)
+        raise typer.Exit(code=1)
+    summary = apply_verdicts(layout, json.loads(vpath.read_text()))
+    for s in summary:
+        if s.get("result") == "not-found":
+            typer.echo(f"  {s['artifact']}: not found")
+        else:
+            change = f"→ {s['new']}" if s["new"] != s["old"] else "(unchanged)"
+            typer.echo(f"  {s['artifact']}: {s['old']} {change}")
+    typer.echo(f"applied verdicts to {len(summary)} artifact(s).")
+
+
 @app.command("secret-scan")
 def secret_scan(directory: Path = typer.Argument(..., help="Directory to scan for secrets.")) -> None:
     """Scan a directory tree for secrets (the publish gate uses the same rules)."""

@@ -19,7 +19,12 @@ from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.config import load_config
 from sre_kb.synth import scaffold
 from sre_kb.synth.context_pack import build_context_pack
-from sre_kb.validation.challenge import GroundingChallenger, apply_challenge_gating, challenge_doc
+from sre_kb.validation.challenge import (
+    GroundingChallenger,
+    apply_challenge_gating,
+    build_worklist,
+    challenge_doc,
+)
 from sre_kb.validation.crossref import check_crossrefs
 from sre_kb.validation.gating import final_status
 from sre_kb.validation.provenance import verify_evidence
@@ -135,6 +140,14 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     }
     report_path = layout.reports / "validation_report.json"
     write_report(report_path, report)
+
+    # Worklist of judgment-call claims for the LLM challenger (Copilot). Each item carries
+    # an untrusted-input-framed prompt; verdicts re-gate via `sre-kb challenge-apply`.
+    worklist = build_worklist(run_id, docs, lambda d: build_context_pack(ctx, d))
+    if worklist["items"]:
+        cdir = layout.root / "challenge"
+        cdir.mkdir(parents=True, exist_ok=True)
+        (cdir / "worklist.json").write_text(json.dumps(worklist, indent=2), encoding="utf-8")
 
     projections = pr_tree = None
     if to_stage in ("render", "publish"):

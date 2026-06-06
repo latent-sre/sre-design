@@ -147,6 +147,7 @@ def publish(
     import json
 
     from sre_kb.publish import assemble_pr
+    from sre_kb.publish.forge import ForgePublishError
     from sre_kb.render import load_kb
     from sre_kb.security import SecretLeakError
     from sre_kb.workspace import RunLayout
@@ -164,6 +165,9 @@ def publish(
         for f in exc.findings:
             typer.echo(f"  {f['rule']}  {f['path']}:{f['line']}", err=True)
         raise typer.Exit(code=2) from exc
+    except ForgePublishError as exc:
+        typer.echo(f"publish failed: {exc}", err=True)
+        raise typer.Exit(code=3) from exc
     typer.echo(f"PR tree: {tree}")
     typer.echo(ref)
 

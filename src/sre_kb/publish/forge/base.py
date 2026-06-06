@@ -6,6 +6,10 @@ from pathlib import Path
 from typing import Protocol
 
 
+class ForgePublishError(Exception):
+    """A live publish could not complete (missing token, bad repo, git/REST failure)."""
+
+
 class Forge(Protocol):
     name: str
 

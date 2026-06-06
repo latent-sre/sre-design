@@ -23,12 +23,14 @@ Working engine — P1 vertical slice, P2 breadth, and P3 security hardening impl
 and tested offline against the bundled fixtures. See `docs/DESIGN.md` for the full design.
 
 Implemented:
-- **Scan → scaffold → validate** (4 layers: schema, provenance hash, cross-ref, gating)
+- **Scan → scaffold → validate** (5 layers: schema, provenance hash, cross-ref, gating,
+  and an adversarial challenge pass that grounds each claim against its cited evidence)
   for ~22 kinds incl. Flow, Alert (log-pattern + SLO burn-rate), Runbook, BlastRadius,
   ResiliencyPattern, Observability, SloSli, ReadinessScore (PRR grade), TechStack,
   Architecture, Deployment, Dependency, Interface, DataStore, ConfigManagement.
 - **Render**: Mermaid sequence + topology diagrams, Copilot reliability guardrails, runbooks.
-- **Publish** (`--dry-run`): Backstage per-service PR tree + REVIEW.md; SCM-neutral Forge.
+- **Publish**: Backstage per-service PR tree + REVIEW.md; SCM-neutral Forge. `--dry-run`
+  stages locally; `--no-dry-run` opens a live PR via git + GitHub REST (`GITHUB_TOKEN`).
 - **Drift** (`sre-kb diff`) and **Estate** (`sre-kb estate`: cross-service topology + co-tenancy).
 - **Security**: publish-time secret-scan gate, dangerous-pattern output lint, untrusted-input
   context packs, engine resource limits.

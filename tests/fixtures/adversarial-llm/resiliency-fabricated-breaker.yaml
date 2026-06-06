@@ -1,0 +1,20 @@
+# Planted: an LLM claims a circuit breaker on reserve(), but the cited lines are a plain method
+# with no breaker -> grounding: UNSUPPORTED (the needle "circuitbreaker" is absent).
+apiVersion: sre.kb/v1alpha1
+kind: ResiliencyPattern
+metadata:
+  name: reserve-breaker
+  service: order-service
+spec:
+  type: circuit-breaker
+  library: resilience4j
+  targetSymbol: com.acme.order.InventoryClient#reserve
+status: verified
+evidence:
+  - repo: file://order-service
+    commit: "0000000000000000000000000000000000000000"
+    path: InventoryClient.java
+    lines: {start: 17, end: 18}
+    excerptHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    detector: copilot.enrichment
+    source_tier: llm

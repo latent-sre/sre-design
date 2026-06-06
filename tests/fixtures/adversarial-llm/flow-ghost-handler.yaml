@@ -1,0 +1,22 @@
+# Planted: an LLM anchors a flow to a handler (processPayment) that does not exist at the cited
+# line (which declares createOrder) -> grounding: UNSUPPORTED.
+apiVersion: sre.kb/v1alpha1
+kind: Flow
+metadata:
+  name: process-payment
+  service: order-service
+spec:
+  trigger:
+    entrypoint: com.acme.order.InventoryClient#processPayment
+    method: POST
+    path: /payments
+  steps: []
+status: verified
+evidence:
+  - repo: file://order-service
+    commit: "0000000000000000000000000000000000000000"
+    path: InventoryClient.java
+    lines: {start: 8, end: 8}
+    excerptHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    detector: copilot.enrichment
+    source_tier: llm

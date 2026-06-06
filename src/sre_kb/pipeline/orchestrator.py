@@ -19,6 +19,7 @@ from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.config import load_config
 from sre_kb.synth import scaffold
 from sre_kb.synth.context_pack import build_context_pack
+from sre_kb.validation.challenge import GroundingChallenger, apply_challenge_gating, challenge_doc
 from sre_kb.validation.crossref import check_crossrefs
 from sre_kb.validation.gating import final_status
 from sre_kb.validation.provenance import verify_evidence
@@ -89,6 +90,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         return RunResult(run_id, layout.root, len(fs.facts), len(docs), {})
 
     crossref_problems = check_crossrefs(docs)
+    challenger = GroundingChallenger()
     by_status: dict[str, int] = {}
     records = []
     for d in docs:
@@ -107,6 +109,8 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         )
         if safety and status == "verified":  # dangerous content must get a human
             status = "needs-review"
+        verdicts = challenge_doc(d, ctx.read_lines, challenger)  # adversarial grounding pass
+        status, challenge_notes = apply_challenge_gating(status, verdicts)
         d["status"] = status
         if status == "rejected":
             out = layout.reports / "rejected" / d["kind"]
@@ -117,7 +121,8 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         by_status[status] = by_status.get(status, 0) + 1
         records.append(
             {"artifact": key, "status": status, "structural": struct, "provenance": prov,
-             "crossref": xref, "safety": safety}
+             "crossref": xref, "safety": safety, "challenger": challenger.id,
+             "challenge": [v.__dict__ for v in verdicts], "challengeNotes": challenge_notes}
         )
 
     report = {

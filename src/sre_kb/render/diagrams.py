@@ -1,6 +1,8 @@
-"""Mermaid diagrams from Flow artifacts (a projection of facts we already extracted)."""
+"""Mermaid diagrams from Flow + Topology artifacts (projections of facts we extracted)."""
 
 from __future__ import annotations
+
+import re
 
 _PARTICIPANT = {
     "http-egress": "Downstream",
@@ -27,4 +29,28 @@ def mermaid_sequence(flow: dict) -> str:
             notes.append(tag)
         if notes:
             out.append(f"  note over SVC,{peer}: {'; '.join(notes)}")
+    return "\n".join(out)
+
+
+_SHAPE = {
+    "service": '["{}"]',
+    "datastore": '[("{}")]',
+    "broker": '[/"{}"/]',
+    "external": '{{"{}"}}',
+}
+
+
+def mermaid_topology(topology: dict) -> str:
+    spec = topology.get("spec", {})
+
+    def nid(name: str) -> str:
+        return "n_" + re.sub(r"[^A-Za-z0-9]", "_", name)
+
+    out = ["graph LR"]
+    for node in spec.get("nodes", []):
+        label = _SHAPE.get(node.get("type", "service"), '["{}"]').format(node["name"])
+        out.append(f"  {nid(node['name'])}{label}")
+    for e in spec.get("edges", []):
+        rel = e.get("relation", "")
+        out.append(f"  {nid(e['from'])} -->|{rel}| {nid(e['to'])}")
     return "\n".join(out)

@@ -19,6 +19,7 @@
           }
         },
         "impactedFlows": { "type": "array", "items": { "type": "string" } },
+        "impactedServices": { "type": "array", "items": { "type": "string" } },
         "containment": { "type": "array" },
         "coTenancy": { "type": "array" },
         "stateful": {

@@ -156,6 +156,22 @@ def publish(
 
 
 @app.command()
+def estate(
+    target: list[str] = typer.Option(..., "--target", help="Repeatable: each service repo path."),
+    work_root: str = typer.Option(".work", "--work-root"),
+    run_id: str = typer.Option(None, "--run"),
+) -> None:
+    """Build an estate-level Topology + co-tenancy blast radius across services."""
+    from sre_kb.estate import run_estate
+
+    r = run_estate(list(target), work_root=work_root, run_id=run_id)
+    typer.echo(f"estate {r.run_id}: {len(r.services)} services {r.services}, {r.docs} artifact(s)")
+    for status, n in sorted(r.by_status.items()):
+        typer.echo(f"  {status}: {n}")
+    typer.echo(f"  output: {r.root}")
+
+
+@app.command()
 def diff(
     from_target: str = typer.Option(..., "--from", help="Base target repo path (older)."),
     to_target: str = typer.Option(..., "--to", help="Head target repo path (newer)."),

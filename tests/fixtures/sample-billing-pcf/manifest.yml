@@ -1,0 +1,18 @@
+---
+applications:
+  - name: billing-service
+    instances: 2
+    memory: 1G
+    disk_quota: 1G
+    buildpacks:
+      - java_buildpack_offline
+    stack: cflinuxfs4
+    routes:
+      - route: billing-service.apps.internal
+    services:
+      - orders-postgres        # shared with order-service (co-tenancy)
+      - billing-kafka
+    health-check-type: http
+    health-check-http-endpoint: /actuator/health
+    env:
+      SPRING_PROFILES_ACTIVE: cloud

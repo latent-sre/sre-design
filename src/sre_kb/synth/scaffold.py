@@ -6,6 +6,7 @@ from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import FactSet
 from sre_kb.scoring.confidence import Signal, confidence
 from sre_kb.scoring.readiness import readiness_spec
+from sre_kb.scoring.risk import assess as assess_risk
 from sre_kb.synth.emit import emit as _doc
 from sre_kb.synth.inventory import inventory_docs
 from sre_kb.util import member_of, slug
@@ -218,12 +219,14 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
         containment = [{"kind": "ResiliencyPattern", "name": slug(cb_f.attrs["name"])}]
         if fb:
             containment.append({"kind": "Fallback", "name": slug(f"{fb.attrs['forTarget']}-fallback")})
+        risk = assess_risk(impacted_flows=len(impacted), data_loss=False, contained=True)
         docs.append(_doc("BlastRadius", cb_f.attrs["name"], {
             "node": {"type": "service", "name": cb_f.attrs["name"]},
             "impactedFlows": impacted,
             "containment": containment,
-            "dependencyCriticality": "contained",
-            "severityHint": "medium",
+            "dependencyCriticality": risk.criticality,
+            "severityHint": risk.severity,
+            "riskRationale": risk.rationale,
         }, [cb_f.evidence], "verified", confidence(Signal.DERIVED, len(impacted)), service))
 
     for repo_f in repos:
@@ -231,13 +234,15 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
         impacted = _flows_touching(node)
         if not impacted:
             continue
+        risk = assess_risk(impacted_flows=len(impacted), data_loss=False, contained=False)
         docs.append(_doc("BlastRadius", node, {
             "node": {"type": "datastore", "name": node},
             "impactedFlows": impacted,
             "containment": [],
             "stateful": {"dataLossRisk": False},
-            "dependencyCriticality": "critical",
-            "severityHint": "high",
+            "dependencyCriticality": risk.criticality,
+            "severityHint": risk.severity,
+            "riskRationale": risk.rationale,
         }, [repo_f.evidence], "verified", confidence(Signal.DERIVED, len(impacted)), service))
 
     for pub_f in pubs:
@@ -247,13 +252,15 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
             continue
         sw = swallowed_by_channel.get(channel)
         data_loss = bool(sw)
+        risk = assess_risk(impacted_flows=len(impacted), data_loss=data_loss, contained=False)
         docs.append(_doc("BlastRadius", slug(channel), {
             "node": {"type": "broker", "name": channel},
             "impactedFlows": impacted,
             "containment": [],
             "stateful": {"dataLossRisk": data_loss},
-            "dependencyCriticality": "critical" if data_loss else "normal",
-            "severityHint": "high" if data_loss else "medium",
+            "dependencyCriticality": risk.criticality,
+            "severityHint": risk.severity,
+            "riskRationale": risk.rationale,
         }, [sw.evidence if sw else pub_f.evidence], "verified", confidence(Signal.DERIVED, len(impacted)), service))
 
     # --- Alert + Runbook, one per swallowed publish channel ---

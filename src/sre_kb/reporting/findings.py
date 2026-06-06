@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 _SEV_RANK = {"high": 0, "medium": 1, "low": 2, "info": 3}
-_TYPE_RANK = {"data-loss-risk": 0, "uncontained-critical-dep": 1}
+_TYPE_RANK = {"data-loss-risk": 0, "uncontained-critical-dep": 1, "broad-impact-dependency": 2}
 
 
 def _first_evidence(doc: dict) -> str | None:
@@ -43,6 +43,13 @@ def collect_findings(docs: list[dict]) -> list[dict]:
                 "type": "uncontained-critical-dep",
                 "title": f"{node.get('name')} is a critical dependency with no containment",
                 "detail": "No circuit breaker or fallback; a failure propagates straight to the caller.",
+                **common,
+            })
+        elif spec.get("severityHint") == "high" and spec.get("containment"):
+            out.append({
+                "type": "broad-impact-dependency",
+                "title": f"{node.get('name')} is shared across many flows",
+                "detail": "A failure degrades several flows at once even though it is behind a bulkhead.",
                 **common,
             })
     out.sort(key=lambda f: (_SEV_RANK.get(f["severity"], 9), _TYPE_RANK.get(f["type"], 9), f["title"]))

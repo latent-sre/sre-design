@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 
 from sre_kb.render.diagrams import mermaid_sequence
+from sre_kb.tiers import AST, LLM, artifact_tier
 
 GENERATED = "<!-- GENERATED from SRE KB — edit the KB, not this file. -->"
 
@@ -21,32 +22,53 @@ def _inline(text: object) -> str:
     return re.sub(r"\s+", " ", str(text)).replace("`", "").strip()
 
 
-def reliability_guardrails(docs: list[dict]) -> list[str]:
-    rules: list[str] = []
-    for d in docs:
-        spec = d.get("spec", {})
-        if d["kind"] == "ResiliencyPattern" and spec.get("type") == "circuit-breaker":
-            tgt = _inline(spec.get("targetSymbol", "the protected call"))
-            rules.append(
-                f"Preserve the circuit breaker on `{tgt}` (and its timeout). Do not remove "
-                f"`@CircuitBreaker`/`@TimeLimiter` or widen timeouts without an SLO review."
-            )
-        if d["kind"] == "Fallback":
-            rules.append(
-                f"Keep the fallback `{_inline(spec.get('fallbackSymbol'))}` for "
-                f"`{_inline(spec.get('forTarget'))}` — the degraded path is intentional."
-            )
-        if d["kind"] == "Flow":
-            for s in spec.get("steps", []):
-                if any(fm.get("dataLossRisk") for fm in s.get("failureModes", [])):
-                    rules.append(
-                        f"Step `{_inline(s['name'])}` loses data on failure (fire-and-forget "
-                        f"publish). Do NOT swallow the exception; add an outbox/retry instead "
-                        f"of hiding it."
-                    )
-    # de-dup, preserve order
+def _dedup(items: list[str]) -> list[str]:
     seen: set[str] = set()
-    return [r for r in rules if not (r in seen or seen.add(r))]
+    return [x for x in items if not (x in seen or seen.add(x))]
+
+
+def _rules_for(d: dict) -> list[str]:
+    """The reliability rule(s) a single artifact implies (tier-agnostic text)."""
+    spec = d.get("spec", {})
+    out: list[str] = []
+    if d["kind"] == "ResiliencyPattern" and spec.get("type") == "circuit-breaker":
+        tgt = _inline(spec.get("targetSymbol", "the protected call"))
+        out.append(
+            f"Preserve the circuit breaker on `{tgt}` (and its timeout). Do not remove "
+            f"`@CircuitBreaker`/`@TimeLimiter` or widen timeouts without an SLO review."
+        )
+    if d["kind"] == "Fallback":
+        out.append(
+            f"Keep the fallback `{_inline(spec.get('fallbackSymbol'))}` for "
+            f"`{_inline(spec.get('forTarget'))}` — the degraded path is intentional."
+        )
+    if d["kind"] == "Flow":
+        for s in spec.get("steps", []):
+            if any(fm.get("dataLossRisk") for fm in s.get("failureModes", [])):
+                out.append(
+                    f"Step `{_inline(s['name'])}` loses data on failure (fire-and-forget "
+                    f"publish). Do NOT swallow the exception; add an outbox/retry instead "
+                    f"of hiding it."
+                )
+    return out
+
+
+def reliability_guardrails(docs: list[dict]) -> list[str]:
+    """Hard reliability rules — Tier-A (byte-grounded) artifacts only. The blast radius of an
+    LLM mistake must never be a hard editor rule (HYBRID-PLAN §7.2); Tier-B findings surface
+    as advisory notes instead (see `advisory_notes`)."""
+    rules = [r for d in docs if artifact_tier(d) == AST for r in _rules_for(d)]
+    return _dedup(rules)
+
+
+def advisory_notes(docs: list[dict]) -> list[str]:
+    """Tier-B (LLM-proposed, not byte-grounded) findings, surfaced as advisories — never hard
+    rules (HYBRID-PLAN §7.2)."""
+    notes = [
+        f"{r}  (LLM-proposed — verify against the code; not byte-grounded.)"
+        for d in docs if artifact_tier(d) == LLM for r in _rules_for(d)
+    ]
+    return _dedup(notes)
 
 
 def copilot_instructions(service: str, docs: list[dict]) -> str:
@@ -61,6 +83,14 @@ def copilot_instructions(service: str, docs: list[dict]) -> str:
     ]
     rules = reliability_guardrails(docs)
     lines += [f"- {r}" for r in rules] or ["- (none detected)"]
+    advisories = advisory_notes(docs)
+    if advisories:
+        lines += [
+            "",
+            "## Advisory (LLM-proposed, unverified)",
+            "Not byte-grounded — verify before acting; do not enforce these as hard rules.",
+        ]
+        lines += [f"- {a}" for a in advisories]
     if flows:
         lines += ["", "## Critical flows"]
         for f in flows:

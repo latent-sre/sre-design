@@ -233,7 +233,7 @@ trap `validation/challenge.py:9-13` warns about). Instead:
 |---|---|---|
 | **0. Fact contract & trust tiers** ✅ | Add `source_tier: ast\|llm` to `Fact`/`Evidence`; a `CollectorProtocol` both tiers satisfy. No behavior change. | Foundation. |
 | **1. Adopt `resiliency-skills`' hardening wholesale** 🟡 | Architectural scan/publish split (no-credential scan role; scoped publish credential), sandboxed/`json.dumps` renderers, `redact` + second gate, fan-out cap, `needs-human-review` const. | This *is* `sre-design`'s own deferred roadmap. Closes the textual-fence and publish-path weaknesses **before** any LLM breadth is added. |
-| **2. Make the trust spine status-aware** | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). | Or Tier-B facts will silently inflate "verified" graphs. |
+| **2. Make the trust spine status-aware** ✅ | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). | Or Tier-B facts will silently inflate "verified" graphs. |
 | **3. Wire `LLMChallenger` to a live oracle** | Real adjudication for judgment-call claims. | Prerequisite for Tier-B, not polish — deterministic grounding is circular for LLM claims. |
 | **4. LLM collectors: gap-finders + pointer-generators** | `collectors/llm/`. The LLM reads the engine's facts + the cited code and proposes **(a) gaps the engine missed on code we already cover** (the recall payoff — §7.9) and **(b) pointers for stacks no AST grammar reaches** (breadth). The engine re-derives or *refutes* each (§6.3, §7.9); nothing it proposes can auto-`verify`. | Recall on covered estates **and** breadth, both safely fenced. |
 | **5. Render-adapter breadth** | Generalize `render/` to neutral-intent → adapter; add Wavefront/AppDynamics. | Independent; can run in parallel. |
@@ -413,7 +413,7 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ## 8. Implementation status (2026-06-06)
 
-Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **116 tests
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **131 tests
 passing, ruff-clean.**
 
 ### Phase 0 — Fact contract & trust tiers ✅
@@ -454,12 +454,33 @@ Deferred (tracked, not dropped):
 - **Full scan/publish credential split** — separate no-credential scan role + scoped publish role +
   CI wiring is deployment/infra per §7.7; the code-side pieces (allowlist, token-out-of-argv) are done.
 
-### Phases 2–5 ⬜
+### Phase 2 — Status-aware trust spine ✅
 
-Not started: status-aware trust spine (Phase 2), live `LLMChallenger` oracle (Phase 3), Tier-B LLM
-collectors / gap-finder (Phase 4, §7.9), render-adapter breadth (Phase 5). Plus the §7 enhancements
-— tier-conflict findings (§7.1), tier-aware guardrails (§7.2), shared signatures (§7.4), and
-human-facing tier surfacing (§7.5).
+- **Status-aware crossref** (`validation/crossref.py`) — a verified artifact that depends-on/implements
+  a non-verified (or missing) referent is downgraded to needs-review, iterated to a fixpoint so the
+  downgrade cascades. Monotonic/downgrade-only; only trust-dependency relations trigger it (back-links
+  like alerts-on/covers don't). The orchestrator gating loop is now compute → downgrade → persist.
+- **Provenance path confinement** (`validation/provenance.py`) — evidence paths must resolve inside the
+  repo root (`is_relative_to`); `../` and absolute-path escapes are rejected.
+- **Status-aware readiness** (`scoring/readiness.py`) — artifact-presence checks credit only verified
+  coverage; a needs-review draft is a gap ("present but not yet verified"), never counted toward the
+  grade. Recomputed in the orchestrator *after* gating so a downgrade is reflected.
+
+### §7 enhancements landed alongside
+
+- **§7.1 tier-conflict findings** ✅ — when Tier-A and Tier-B assert opposite presence for the same
+  (concern, target), the validation report flags a `tier-conflict` instead of dropping the Tier-B
+  signal (`reporting/findings.py`) — a near-zero-cost detector for Tier-A extraction bugs. Dormant
+  until a Tier-B producer.
+- **§7.2 tier-aware guardrails** ✅ — only Tier-A findings emit hard Copilot rules; Tier-B surfaces as
+  advisory notes (`render/copilot.py`).
+- **§7.5 surface the trust tier** ✅ — the findings digest + PR `REVIEW.md` label each claim
+  AST-grounded / LLM-proposed, with a by-tier roll-up. A shared `tiers.py` is the single source of truth.
+
+### Phases 3–5 ⬜
+
+Not started: live `LLMChallenger` oracle (Phase 3), Tier-B LLM collectors / gap-finder (Phase 4, §7.9),
+render-adapter breadth (Phase 5). Plus §7.4 (shared signatures) and the deferred §7.6 schema governance.
 
 > Doc note: `docs/DESIGN.md` still describes the challenge pass + secret gate as "P3 / deferred"
 > though both are built (§4) — trust the code; a DESIGN.md refresh is outstanding.

@@ -9,6 +9,7 @@ from sre_kb.models.facts import Fact, Symbol
 from sre_kb.util import csharp_namespace, fqn, java_type
 
 _CB_CALL = re.compile(r"CircuitBreaker\w*\(")
+_CB_VAR = re.compile(r"(\w+)\s*=\s*[^=;]*CircuitBreaker")  # the breaker's variable/field name
 _METHOD = re.compile(r"\bpublic\b[^;{=]*?\b(\w+)\s*\(")
 _FALLBACK = re.compile(r"\b(?:public|private)\b[^;{=]*?\b(\w*Fallback)\s*\(")
 _SKIP = {"if", "for", "while", "switch", "using", "catch", "return"}
@@ -20,6 +21,19 @@ def _next_public(lines: list[str], idx: int) -> tuple[str, int]:
         if m and m.group(1) not in _SKIP:
             return m.group(1), j + 1
     return "method", idx + 1
+
+
+def _method_using(lines: list[str], token: str) -> tuple[str | None, int]:
+    """Public method whose body invokes `token` (e.g. `_breaker.`) — the protected method,
+    regardless of where the breaker is declared (ctor / DI / field initializer)."""
+    current, cline = None, 0
+    for i, line in enumerate(lines):
+        m = _METHOD.search(line)
+        if m and m.group(1) not in _SKIP:
+            current, cline = m.group(1), i + 1
+        elif current and token in line:
+            return current, cline
+    return None, 0
 
 
 def collect(ctx: ScanContext) -> list[Fact]:
@@ -35,13 +49,20 @@ def collect(ctx: ScanContext) -> list[Fact]:
         if cb_idx is None:
             continue
         name = tn[:-6].lower() if tn.endswith("Client") else tn.lower()
-        target, mln = _next_public(lines, cb_idx)
+        # Prefer the method that actually invokes the breaker; fall back to textual scan.
+        var_m = _CB_VAR.search(lines[cb_idx])
+        target, mln = (None, 0)
+        if var_m:
+            target, mln = _method_using(lines, f"{var_m.group(1)}.")
+        if not target:
+            target, mln = _next_public(lines, cb_idx)
+        start, end = sorted((cb_idx + 1, mln))
         facts.append(
             Fact(
                 "resiliency.circuitbreaker",
                 {"name": name, "target": target, "targetSymbol": fqn(ns, tn, target),
                  "library": "polly", "fallbackMethod": None},
-                ctx.evidence(rel, cb_idx + 1, mln, "dotnet_steeltoe.resiliency"),
+                ctx.evidence(rel, start, end, "dotnet_steeltoe.resiliency"),
                 Symbol(fqn(ns, tn, target), "method"),
             )
         )

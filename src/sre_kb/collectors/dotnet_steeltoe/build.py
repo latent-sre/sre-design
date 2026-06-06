@@ -8,7 +8,7 @@ from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
 from sre_kb.util import find_line
 
-_TFM = re.compile(r"<TargetFramework>\s*([^<\s]+)\s*</TargetFramework>")
+_TFM = re.compile(r"<TargetFrameworks?>\s*([^<\s]+)\s*</TargetFrameworks?>")  # singular or multi-target
 _PKG = re.compile(r'<PackageReference\s+Include="([^"]+)"')
 
 
@@ -21,10 +21,11 @@ def collect(ctx: ScanContext) -> list[Fact]:
         m = _TFM.search(text)
         if m:
             ln = find_line(lines, "TargetFramework") or 1
+            version = m.group(1).split(";")[0]  # first of a multi-target list
             facts.append(
                 Fact(
                     "tech.framework",
-                    {"name": ".net", "version": m.group(1)},
+                    {"name": ".net", "version": version},
                     ctx.evidence(rel, ln, ln, "dotnet_steeltoe.build"),
                     Symbol(".net", "framework"),
                 )

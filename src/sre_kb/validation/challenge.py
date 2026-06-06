@@ -53,12 +53,12 @@ def extract_claims(doc: dict) -> list[Claim]:
     if not doc.get("evidence"):
         return []
     if kind == "Alert" and spec.get("signalSource") == "log-pattern":
-        m = _QUOTED.search((spec.get("expr") or {}).get("splunk") or "")
-        if m:  # the alert's detection string must be a log line the cited code emits,
-            return [Claim(  # and the catch must not rethrow (else it isn't "swallowed")
+        quoted = _QUOTED.findall((spec.get("expr") or {}).get("splunk") or "")
+        if quoted:  # longest quoted token = the log message (sourcetype/index values are short),
+            return [Claim(  # so this isn't coupled to whether the sourcetype happens to be quoted
                 "alert/detection-grounded",
                 "the alert's detection string is logged-and-swallowed by the cited code",
-                0, needle=m.group(1), refute="throw",
+                0, needle=max(quoted, key=len), refute="throw",
             )]
     if kind == "ResiliencyPattern":
         return [Claim("resiliency/breaker-present", "the cited code declares the breaker", 0, needle="circuitbreaker")]

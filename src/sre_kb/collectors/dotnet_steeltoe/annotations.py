@@ -10,10 +10,12 @@ from sre_kb.models.facts import Fact, Symbol
 from sre_kb.util import csharp_namespace, find_line, fqn, java_type
 
 _ROUTE = re.compile(r'\[Route\(\s*"([^"]+)"')
-_HTTP = re.compile(r"\[Http(Get|Post|Put|Delete|Patch)\]")
+# Match [HttpPost], [HttpGet("{id}")], [HttpPost("orders")], [HttpGet(Name="x")];
+# group(2) captures a leading route literal when present.
+_HTTP = re.compile(r'\[Http(Get|Post|Put|Delete|Patch)(?:\(\s*"([^"]*)"[^)]*\)|\([^)]*\))?\]')
 _METHOD = re.compile(r"\b(?:public|private|protected|internal)\b[^;{=]*?\b(\w+)\s*\(")
 _PRODUCE = re.compile(r"(\w+)\.ProduceAsync\(\s*\"([^\"]+)\"")
-_HTTPCLIENT = re.compile(r"(?i)httpClient\.\w+Async\(")
+_HTTPCLIENT = re.compile(r"(?i)\bhttpClient\.\w+Async\(")
 _DBCTX = re.compile(r"\bclass\s+(\w+)\s*:\s*DbContext\b")
 _LOG = re.compile(r'Log(\w+)\([^)]*?"([^"]*)"')
 _HTTPMAP = {"Get": "GET", "Post": "POST", "Put": "PUT", "Delete": "DELETE", "Patch": "PATCH"}
@@ -40,9 +42,13 @@ def _detect_swallowed(lines: list[str], idx: int) -> dict | None:
     open_idx = next((j for j in range(catch_idx, min(catch_idx + 3, len(lines))) if "{" in lines[j]), None)
     if open_idx is None:
         return None
+    # Count braces only from the catch's own '{' onward, so a K&R `} catch (e) {` line
+    # (whose leading '}' closes the try) doesn't immediately balance to zero.
+    brace_col = lines[open_idx].index("{")
     depth, end = 0, open_idx
     for j in range(open_idx, min(open_idx + 16, len(lines))):
-        depth += lines[j].count("{") - lines[j].count("}")
+        seg = lines[j][brace_col:] if j == open_idx else lines[j]
+        depth += seg.count("{") - seg.count("}")
         end = j
         if depth <= 0:
             break
@@ -72,11 +78,13 @@ def collect(ctx: ScanContext) -> list[Fact]:
                 hm = _HTTP.search(line)
                 if not hm:
                     continue
+                route = hm.group(2)
+                path = f"{base_path.rstrip('/')}/{route.lstrip('/')}" if route else base_path
                 meth, mln = _next_method(lines, i)
                 facts.append(
                     Fact(
                         "rest.endpoint",
-                        {"method": _HTTPMAP[hm.group(1)], "path": base_path or "/", "handler": fqn(ns, tn, meth)},
+                        {"method": _HTTPMAP[hm.group(1)], "path": path or "/", "handler": fqn(ns, tn, meth)},
                         ctx.evidence(rel, i + 1, mln, "dotnet_steeltoe.annotations"),
                         Symbol(fqn(ns, tn, meth), "method"),
                     )

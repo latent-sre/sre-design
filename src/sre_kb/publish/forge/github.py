@@ -43,7 +43,8 @@ def _redact(cmd: list[str]) -> list[str]:
 def _default_run(cmd: list[str]) -> str:
     res = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603
     if res.returncode != 0:
-        raise ForgePublishError(f"git failed ({res.returncode}): {' '.join(_redact(cmd))}\n{res.stderr.strip()}")
+        stderr = _redact([res.stderr.strip()])[0]  # git may echo the tokenized remote URL
+        raise ForgePublishError(f"git failed ({res.returncode}): {' '.join(_redact(cmd))}\n{stderr}")
     return res.stdout
 
 
@@ -102,6 +103,8 @@ class GitHubForge:
             self._run(["git", "-C", str(work), "checkout", "-b", branch])
             _sync_tree(tree, work)
             self._run(["git", "-C", str(work), "add", "-A"])
+            if not self._run(["git", "-C", str(work), "status", "--porcelain"]).strip():
+                raise ForgePublishError("nothing to publish: the KB already matches the target branch")
             self._run(["git", "-C", str(work), *_GIT_USER, "commit", "-m", title])
             self._run(["git", "-C", str(work), "push", "-u", "origin", branch])
         resp = self._post(

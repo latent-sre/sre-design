@@ -33,7 +33,11 @@ def test_open_pr_drives_git_and_rest(tmp_path):
 
     def runner(cmd):
         calls.append(cmd)
-        return "main\n" if "rev-parse" in cmd else ""
+        if "rev-parse" in cmd:
+            return "main\n"
+        if "--porcelain" in cmd:
+            return " M catalog/x.yaml\n"
+        return ""
 
     posted: dict = {}
 

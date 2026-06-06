@@ -17,13 +17,25 @@ _RULES: list[tuple[str, re.Pattern]] = [
     ("aws-access-key-id", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("aws-secret-access-key", re.compile(r"(?i)aws_secret_access_key\s*[=:]\s*[\"']?[A-Za-z0-9/+=]{40}")),
     ("github-token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}\b")),
+    ("github-fine-grained-pat", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b")),
     ("slack-token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b")),
     ("bearer-token", re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._\-]{20,}")),
     ("assigned-secret", re.compile(
         r"(?i)\b(password|passwd|secret|token|api[-_]?key|client[-_]?secret)\b\s*[=:]\s*[\"'][^\"'\s]{6,}[\"']"
     )),
+    ("assigned-secret-unquoted", re.compile(
+        r"(?i)(password|passwd|secret|token|api[-_]?key|access[-_]?key|client[-_]?secret)\b\s*[=:]\s*([^\s\"';]{8,})"
+    )),
     ("jdbc-password", re.compile(r"(?i)jdbc:[^\s\"']*[?&;]password=[^\s\"'&;]{4,}")),
 ]
+
+# Value-based rules suppressed when the line is obviously a placeholder (a false positive
+# here would hard-fail a legitimate publish). Format-strict rules above are never suppressed.
+_SUPPRESSIBLE = {"assigned-secret", "assigned-secret-unquoted", "bearer-token", "jdbc-password"}
+_PLACEHOLDER = re.compile(
+    r"(?i)(your[-_ ]|placeholder|example|change[-_ ]?me|x{4,}|\.\.\.|replace|<[a-z._-]+>|\$\{|\{\{|"
+    r"todo|dummy|sample|redacted|\*{3,}|here)"
+)
 
 
 class SecretLeakError(Exception):
@@ -39,8 +51,11 @@ def scan_text(text: str, path: str) -> list[dict]:
     findings: list[dict] = []
     for i, line in enumerate(text.splitlines(), 1):
         for rule, pat in _RULES:
-            if pat.search(line):
-                findings.append({"path": path, "line": i, "rule": rule})
+            if not pat.search(line):
+                continue
+            if rule in _SUPPRESSIBLE and _PLACEHOLDER.search(line):
+                continue  # obvious placeholder, not a real secret
+            findings.append({"path": path, "line": i, "rule": rule})
     return findings
 
 

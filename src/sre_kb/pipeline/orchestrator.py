@@ -97,9 +97,15 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     crossref_problems = check_crossrefs(docs)
     challenger = GroundingChallenger()
     by_status: dict[str, int] = {}
+    by_tier: dict[str, int] = {}
     records = []
     for d in docs:
         key = f"{d['kind']}/{d['metadata']['name']}"
+        # Trust tier rolled up from the artifact's evidence: "llm" if any cited evidence
+        # is Tier-B (LLM-proposed), else "ast". Today everything is "ast"; this is the
+        # carrier the Tier-B collectors (Phase 4) and tier-aware guardrails read.
+        tiers = {ev.get("source_tier", "ast") for ev in d.get("evidence", [])}
+        tier = "llm" if "llm" in tiers else "ast"
         struct = validate_doc(d)
         prov = verify_evidence(d, target_path)
         xref = crossref_problems.get(key, [])
@@ -124,8 +130,9 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         out.mkdir(parents=True, exist_ok=True)
         _dump_yaml(out / f"{d['metadata']['name']}.yaml", d)
         by_status[status] = by_status.get(status, 0) + 1
+        by_tier[tier] = by_tier.get(tier, 0) + 1
         records.append(
-            {"artifact": key, "status": status, "structural": struct, "provenance": prov,
+            {"artifact": key, "status": status, "tier": tier, "structural": struct, "provenance": prov,
              "crossref": xref, "safety": safety, "challenger": challenger.id,
              "challenge": [v.__dict__ for v in verdicts], "challengeNotes": challenge_notes}
         )
@@ -136,6 +143,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         "facts": len(fs.facts),
         "docs": len(docs),
         "by_status": by_status,
+        "by_tier": by_tier,
         "records": records,
     }
     report_path = layout.reports / "validation_report.json"

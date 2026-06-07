@@ -45,7 +45,7 @@ network/synthetic).
 ## Implementation status (June 2026)
 
 The design below is the full intent; this section records what is **built and tested
-offline** today (227 tests, ruff-clean). The vertical slice and the items earlier marked
+offline** today (233 tests, ruff-clean). The vertical slice and the items earlier marked
 "deferred to P3/P4" are now implemented. The forward roadmap — trust tiers and fenced LLM
 (Tier-B) collectors — lives in [`HYBRID-PLAN.md`](HYBRID-PLAN.md) (§8 tracks phase status).
 
@@ -91,11 +91,13 @@ Landed as a spike: the fenced Tier-B LLM gap-finder collector (Phase 4, `collect
 `ResiliencyGap` — see [`PHASE-4-GAP-FINDER.md`](PHASE-4-GAP-FINDER.md)) with refutation probes
 (`missing-timeout`, `unguarded-critical-dependency`), confirmation probes (`swallowed-failure`,
 `undocumented-job`), judgment routing (`data-loss-path`, `missing-idempotency`,
-`unbounded-resource`), and a first-slice **Python/FastAPI** collector. Not yet proven: useful
-real-Copilot recall/precision, the full recurring-category promotion workflow, the full
-scan/publish credential split (deployment/infra) and supply-chain pinning, further language
-collectors (Node/Go), and Python flow/resiliency parity beyond the endpoint slice. See
-[`HYBRID-PLAN.md`](HYBRID-PLAN.md) §8.
+`unbounded-resource`), and a first-slice **Python/FastAPI** collector. A first real-Copilot run
+against `sample-gap-finder` measured 4/4 proposal recall, 4/4 kept recall, and no false-positive
+survivors; still not proven are service-scale noise/precision, the full recurring-category
+promotion workflow, the full scan/publish credential split (deployment/infra) and supply-chain
+pinning, further language collectors (Node/Go), and Python flow/resiliency parity beyond the
+endpoint slice. See
+[`HYBRID-PLAN.md`](HYBRID-PLAN.md) §8 and §9.5.
 
 ---
 

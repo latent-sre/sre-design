@@ -1,0 +1,36 @@
+{
+  "expected": [
+    {
+      "category": "missing-timeout",
+      "target": "payments-api",
+      "note": "planted gap: payments client has no timeout"
+    },
+    {
+      "category": "unguarded-critical-dependency",
+      "target": "notifications-api",
+      "note": "planted gap: notifications client has no resilience wrapper"
+    },
+    {
+      "category": "swallowed-failure",
+      "target": "ledgerRepository",
+      "note": "planted gap: ledger write failure is logged and swallowed"
+    },
+    {
+      "category": "undocumented-job",
+      "target": "emitDailyReconciliation",
+      "note": "planted gap: scheduled reconciliation job has no job/runbook metadata"
+    }
+  ],
+  "controls": [
+    {
+      "category": "missing-timeout",
+      "target": "shipping-api",
+      "note": "negative control: @TimeLimiter is present and should be refuted"
+    },
+    {
+      "category": "missing-timeout",
+      "target": "refunds-api",
+      "note": "negative control: anchor does not exist and should be unlocatable"
+    }
+  ]
+}

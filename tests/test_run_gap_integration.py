@@ -1,9 +1,10 @@
-"""Tier-B gap-finder wired into the main `run` pipeline (HYBRID-PLAN §9.3, priority 1).
+"""Gap-finder proposals wired into the main `run` pipeline.
 
-When the target carries Copilot's `.sre/gap-proposals.json`, `sre-kb run` must re-ground the
-proposals and surface the survivors as `ResiliencyGap` artifacts through the SAME validate/gate
-path as everything else — landing `needs-review`, `source_tier=llm`, never auto-verified. When no
-proposals file exists, the integration is a complete no-op.
+When the target carries Copilot's `.sre/gap-proposals.json`, `sre-kb run` re-grounds the
+proposals and surfaces the survivors as `ResiliencyGap` artifacts through the same validate/gate
+path as everything else. Refutation-probe survivors land `needs-review`, `source_tier=llm`;
+confirmation-probe survivors graduate to `source_tier=ast` and can verify. When no proposals file
+exists, the integration is a complete no-op.
 """
 
 from __future__ import annotations
@@ -34,35 +35,55 @@ def gap_result(tmp_path_factory):
     return run_pipeline(str(GAP_FIXTURE), work_root=str(work), run_id="g", to_stage="validate")
 
 
-def test_run_surfaces_only_the_confirmed_gap(gap_result):
+def test_run_surfaces_grounded_gap_finder_results(gap_result):
     docs = _load(gap_result.root)
     gaps = {name: d for (kind, name), d in docs.items() if kind == "ResiliencyGap"}
-    # The fixture plants 3 proposals: 1 real gap, 1 refuted (@TimeLimiter present), 1 hallucinated.
-    # Only the real one survives re-grounding and reaches the KB.
-    assert set(gaps) == {"payments-api-missing-timeout"}, sorted(gaps)
+    assert set(gaps) == {
+        "payments-api-missing-timeout",
+        "notifications-api-unguarded-critical-dependency",
+        "ledger-repository-swallowed-failure",
+        "emit-daily-reconciliation-undocumented-job",
+    }, sorted(gaps)
 
 
-def test_surfaced_gap_is_tier_b_and_never_verified(gap_result):
+def test_refutation_gap_is_tier_b_and_needs_review(gap_result):
     docs = _load(gap_result.root)
     gap = docs[("ResiliencyGap", "payments-api-missing-timeout")]
-    assert gap["status"] == "needs-review"          # contract: never auto-verify
-    assert gap["spec"]["sourceTier"] == "llm"        # Tier-B
+    assert gap["status"] == "needs-review"
+    assert gap["spec"]["sourceTier"] == "llm"
     assert gap["spec"]["category"] == "missing-timeout"
-    assert gap["confidence"] < 0.7                    # below the verified floor
-    # It lives under the needs-review tree, not verified.
-    assert (gap_result.root / "kb" / "needs-review" / "ResiliencyGap"
-            / "payments-api-missing-timeout.yaml").exists()
+    assert gap["confidence"] < 0.7
+    assert (
+        gap_result.root
+        / "kb"
+        / "needs-review"
+        / "ResiliencyGap"
+        / "payments-api-missing-timeout.yaml"
+    ).exists()
+
+
+def test_confirmation_gaps_graduate_to_tier_a_and_verify(gap_result):
+    docs = _load(gap_result.root)
+    for name, category in {
+        "ledger-repository-swallowed-failure": "swallowed-failure",
+        "emit-daily-reconciliation-undocumented-job": "undocumented-job",
+    }.items():
+        gap = docs[("ResiliencyGap", name)]
+        assert gap["status"] == "verified"
+        assert gap["spec"]["sourceTier"] == "ast"
+        assert gap["spec"]["category"] == category
+        assert gap["provenanceMode"] == "deterministic"
+        assert "unverifiedAgainstLive" not in gap
 
 
 def test_gap_facts_are_persisted_and_kb_still_validates(gap_result):
     facts = (gap_result.root / "facts" / "facts.jsonl").read_text()
-    assert '"resiliency.gap"' in facts               # merged into the fact stream
+    assert '"resiliency.gap"' in facts
     bad = [r for r in validate_kb_tree(gap_result.root / "kb") if not r.ok]
     assert not bad, [(r.path, r.errors) for r in bad]
 
 
 def test_no_proposals_is_a_noop(tmp_path):
-    # The plain fixture has no .sre/gap-proposals.json — run must produce zero ResiliencyGap docs.
     res = run_pipeline(str(PLAIN_FIXTURE), work_root=str(tmp_path), run_id="p", to_stage="validate")
     docs = _load(res.root)
     assert not [k for k in docs if k[0] == "ResiliencyGap"]

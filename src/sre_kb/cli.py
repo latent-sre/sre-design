@@ -284,6 +284,72 @@ def gap_finder_cmd(
         typer.echo(f"  {status}: {n}")
 
 
+@app.command("copilot-gap-validate")
+def copilot_gap_validate_cmd(
+    target: str = typer.Option(..., "--target", help="Local path of the target repo."),
+    truth: Path = typer.Option(..., "--truth", help="Expected gap truth set JSON."),
+    proposals: Path = typer.Option(
+        None,
+        "--proposals",
+        help="Real Copilot proposals JSON (default: <target>/.sre/gap-proposals.json).",
+    ),
+    service: str = typer.Option(None, "--service", help="Service name (default: target dir name)."),
+    min_recall: float = typer.Option(1.0, "--min-recall", help="Minimum kept recall required."),
+    min_kept_precision: float = typer.Option(
+        1.0, "--min-kept-precision", help="Minimum post-grounding precision required."
+    ),
+    report: Path = typer.Option(None, "--report", help="Optional JSON report path."),
+) -> None:
+    """Validate a saved real-Copilot gap-finder run against a truth set.
+
+    This does not invoke Copilot. Run Copilot in VS Code with the sre-gap-finder skill first,
+    save `.sre/gap-proposals.json`, then use this command to measure raw proposals and
+    post-grounding quality.
+    """
+    import json
+
+    from sre_kb.validation.copilot_gap import validate_copilot_gap_run
+
+    try:
+        result = validate_copilot_gap_run(
+            target, truth_path=truth, proposals_path=proposals, service=service
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+
+    def fmt(value: float | None) -> str:
+        return "n/a" if value is None else f"{value:.2f}"
+
+    typer.echo(f"copilot-gap-validate: {result.proposals_path}")
+    typer.echo(
+        f"  expected={len(result.expected)} proposed={len(result.proposed)} "
+        f"grounded={len(result.grounded)} kept={len(result.kept)} confirmed={len(result.confirmed)}"
+    )
+    typer.echo(
+        f"  proposal-recall={fmt(result.proposal_recall)} kept-recall={fmt(result.kept_recall)} "
+        f"proposal-precision={fmt(result.proposal_precision)} "
+        f"kept-precision={fmt(result.kept_precision)} grounded-rate={fmt(result.grounded_rate)}"
+    )
+    if result.missed_expected:
+        typer.echo(f"  missed: {sorted(result.missed_expected)}")
+    if result.false_positive_kept:
+        typer.echo(f"  false-positive kept: {sorted(result.false_positive_kept)}")
+    if result.controls_proposed:
+        typer.echo(f"  controls proposed: {sorted(result.controls_proposed)}")
+    if result.controls_kept:
+        typer.echo(f"  controls kept: {sorted(result.controls_kept)}")
+
+    payload = result.as_dict()
+    if report:
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        typer.echo(f"  report: {report}")
+
+    ok = result.passes(min_recall=min_recall, min_kept_precision=min_kept_precision)
+    raise typer.Exit(code=0 if ok else 1)
+
+
 @app.command("secret-scan")
 def secret_scan(directory: Path = typer.Argument(..., help="Directory to scan for secrets.")) -> None:
     """Scan a directory tree for secrets (the publish gate uses the same rules)."""

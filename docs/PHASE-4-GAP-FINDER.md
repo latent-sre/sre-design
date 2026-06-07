@@ -4,8 +4,8 @@ The first **Tier-B (LLM) collector**, built as a spike on the primitives already
 (`signatures.py`, `tiers.py`, `Evidence.source_tier`). It implements the recall mode of
 HYBRID-PLAN **§7.9/§7.10**: Copilot proposes resiliency gaps the AST missed (e.g. a critical client
 call with no timeout); the **engine** — never the LLM — locates each proposal, stamps it
-`path:line:excerptHash`, and re-derives or *refutes* it deterministically. Nothing it proposes can
-auto-verify.
+`path:line:excerptHash`, and re-derives or *refutes* it deterministically. Nothing verifies on
+proposal alone.
 
 ## The non-circular contract
 
@@ -27,36 +27,93 @@ negatives ("what true claim did we miss?").
 ## What it emits
 
 A `ResiliencyGap` artifact (new kind; per-kind schema with `additionalProperties:false` + a
-golden-corpus example), forced to:
+golden-corpus example). The tier depends on the probe class:
 
-- `status: needs-review` (never verified), `confidence: 0.5` (below the verified floor),
-- `provenanceMode: llm-asserted`, `unverifiedAgainstLive: true` (an *absence* isn't checkable
-  offline), `spec.sourceTier: llm`, and the `checked:` honest-negative trail.
+- Refutation-probe absence gaps land `status: needs-review`, `confidence: 0.5`,
+  `provenanceMode: llm-asserted`, `unverifiedAgainstLive: true`, `spec.sourceTier: llm`, and the
+  `checked:` honest-negative trail.
+- Confirmation-probe gaps graduate when the deterministic rule fires at the pointer:
+  `status: verified` if the normal gate passes, `provenanceMode: deterministic`,
+  `spec.sourceTier: ast`, and no `unverifiedAgainstLive`.
+- Judgment-routed categories are citation-grounded but stay `needs-review`, `sourceTier: llm`, and
+  never verify automatically.
 
-`tiers.artifact_tier(doc)` rolls this up to `llm`, so §7.2 guardrails keep it advisory and §7.5
-labels it "LLM-proposed".
+`tiers.artifact_tier(doc)` keeps LLM-sourced candidates advisory for §7.2/§7.5, while graduated
+confirmation findings behave like Tier-A engine output.
 
 ## Go/no-go evidence — the recall eval
 
-`tests/test_gap_finder.py` against `tests/fixtures/sample-gap-finder/`: a payments client with a
-**planted** missing-timeout gap, a shipping client that *has* `@TimeLimiter` (control), and a
-simulated Copilot output carrying three proposals.
+`tests/test_gap_finder.py` and `tests/test_copilot_gap_validation.py` against
+`tests/fixtures/sample-gap-finder/`: payments has a **planted** missing-timeout gap, notifications
+is an unguarded synchronous dependency, ledger has a logged-and-swallowed write failure, and the
+report job is scheduled without job/runbook metadata. Shipping (`@TimeLimiter`) and refunds
+(unlocatable anchor) remain negative controls in the truth/harness tests.
 
 ```
 $ sre-kb gap-finder --target tests/fixtures/sample-gap-finder
-gap-finder: 3 proposal(s) -> 1 confirmed gap(s), 2 dropped
-  [confirmed   ] missing-timeout on payments-api  @ .../PaymentsClient.java:22-22  — no timeout signature fires in 2 checked location(s)
-  [refuted     ] missing-timeout on shipping-api  @ .../ShippingClient.java:24-24  — the timeout signature fires in scope
-  [unlocatable ] missing-timeout on refunds-api                                    — anchor not found verbatim in the source
-  needs-review: 1
+gap-finder: 4 proposal(s) -> 4 kept (4 confirmed + 0 routed), 0 dropped
+  [confirmed   ] swallowed-failure on ledgerRepository @ .../LedgerWriter.java:23-25
+  [confirmed   ] undocumented-job on emitDailyReconciliation @ .../ReportJob.java:11-11
+  [confirmed   ] missing-timeout on payments-api @ .../PaymentsClient.java:22-22
+  [confirmed   ] unguarded-critical-dependency on notifications-api @ .../NotificationsClient.java:20-20
+  needs-review: 2
+  verified: 2
 ```
 
-- **Recall** — the planted gap is surfaced.
-- **Non-circular** — the false gap (timeout actually present) is *refuted* by the shared signature;
-  the hallucinated gap (quote doesn't exist) is *dropped*.
-- **Grounded** — the surfaced gap carries a real, hash-checkable `path:line:excerptHash`,
-  `source_tier=llm`.
-- **No auto-verify** — it lands `needs-review`, schema-valid, `confidence 0.5 < 0.7`.
+- **Recall** — all four planted expected gaps are surfaced.
+- **Non-circular** — every proposal is grounded by verbatim bytes and then re-derived by the
+  engine; the shipping/refunds controls still prove refutation and unlocatable-drop behavior.
+- **Tier behavior** — refutation-probe absence gaps (`missing-timeout`,
+  `unguarded-critical-dependency`) land `needs-review`, `source_tier=llm`; confirmation-probe gaps
+  (`swallowed-failure`, `undocumented-job`) graduate to `source_tier=ast` and verify.
+
+## Real-Copilot validation harness
+
+HYBRID-PLAN §9.5 item 1 is closed for the sample target by the checked-in proposal/truth/report
+triple from the real Copilot run:
+
+- `tests/fixtures/sample-gap-finder/.sre/gap-proposals.json` was produced by a real Copilot run
+  using `.github/skills/sre-gap-finder/SKILL.md`.
+- `tests/fixtures/sample-gap-finder/.sre/gap-truth.json` records the four planted expected gaps and
+  two negative controls.
+- `tests/fixtures/sample-gap-finder/.sre/gap-validation-report.json` records
+  expected/proposed/grounded/kept/confirmed all at 4, with proposal/kept recall and precision all
+  `1.00`.
+
+The engine still does not call a model; the manual boundary for a fresh run is explicit:
+
+1. Run `sre-kb run --target <service> --to-stage scaffold` if you want a fresh context pack.
+2. In VS Code, run Copilot with `.github/skills/sre-gap-finder/SKILL.md` and save the answer to
+   `<service>/.sre/gap-proposals.json`.
+3. Create a target-specific truth file, for example:
+
+```json
+{"expected": [{"category": "missing-timeout", "target": "payments-api"}],
+ "controls": [{"category": "missing-timeout", "target": "shipping-api"}]}
+```
+
+4. Measure it:
+
+```bash
+sre-kb copilot-gap-validate \
+  --target <service> \
+  --truth <service>/.sre/gap-truth.json \
+  --report .work/real-copilot-gap-validation.json
+```
+
+The report separates raw proposal quality from post-grounding quality: proposal recall/precision,
+kept recall/precision, grounded rate, missed expected gaps, proposed controls, and false-positive
+survivors. A real run should archive the saved Copilot proposals, the truth file, and the JSON
+report together so the §9.5 claim is reproducible.
+
+First real-Copilot sample result: the 2026-06-07 run against `sample-gap-finder` wrote
+`tests/fixtures/sample-gap-finder/.sre/gap-proposals.json` and archived
+`tests/fixtures/sample-gap-finder/.sre/gap-validation-report.json`.
+It measured `expected=4 proposed=4 grounded=4 kept=4 confirmed=4`, proposal/kept recall and
+precision all `1.00`, `groundedRate=1.00`, and zero false-positive survivors. Two findings graduated
+to Tier-A/`verified` (`swallowed-failure`, `undocumented-job`); two remained Tier-B/`needs-review`
+(`missing-timeout`, `unguarded-critical-dependency`). This closes HYBRID-PLAN §9.5 item 1 for the
+sample target only; §9.5 item 2 remains open until multiple real services measure noise.
 
 The refutation probe also generalizes to the bundled .NET sample (`InventoryClient.cs`: a genuine
 Polly-breaker-but-no-timeout gap → confirmed) and refutes the Spring `InventoryClient` that carries
@@ -70,7 +127,7 @@ Polly-breaker-but-no-timeout gap → confirmed) and refutes the Spring `Inventor
 | Context pack | `synth/gap_prompt.build_gap_context` (nonce-fenced, content-preserving so anchors round-trip) |
 | Collector (engine half) | `collectors/llm/gap_finder.py` — load → locate → stamp → re-derive |
 | Re-derivation | `signatures.fires(concern, …)` per `_REFUTING_CONCERNS` (target-scoped in config) — the same library Tier-A uses |
-| Artifact | `ResiliencyGap` (schema + registry row, phase P4); `needs-review`, `source_tier=llm` |
+| Artifact | `ResiliencyGap` (schema + registry row, phase P4); refutation/judgment gaps stay `needs-review`, `source_tier=llm`; confirmation gaps can graduate to `source_tier=ast` |
 | Pipeline + gating | `pipeline/gap_finder.py` |
 | CLI | `sre-kb gap-finder --target <repo> [--proposals <file>]` |
 
@@ -130,8 +187,11 @@ so `swallowed-failure` confirms-and-graduates on a FastAPI handler just as it do
 
 ## Honest limitations (why it's still a spike)
 
-- **The LLM half has never run for real** — every test uses a hand-written proposals file, so recall
-  and precision on real code are *unmeasured* (HYBRID-PLAN §9.5 ①/②).
+- ~~**The LLM half has never run for real.**~~ Closed for the sample target: a real Copilot run
+  produced `tests/fixtures/sample-gap-finder/.sre/gap-proposals.json`, and
+  `tests/fixtures/sample-gap-finder/.sre/gap-validation-report.json` measures four proposed,
+  grounded, kept, and confirmed gaps with 1.00 proposal/kept recall and precision. Precision at
+  larger scale is still unmeasured (HYBRID-PLAN §9.5 item 2).
 - **All seven §7.9 categories now have a home:** four are deterministically grounded
   (`missing-timeout`, `unguarded-critical-dependency`, `swallowed-failure`, `undocumented-job`);
   three are judgment-routed (`data-loss-path`, `missing-idempotency`, `unbounded-resource`) —

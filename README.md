@@ -19,7 +19,7 @@ The full design lives in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Status
 
-Working engine, tested offline (227 tests, ruff-clean) against bundled **Java/Spring**,
+Working engine, tested offline (233 tests, ruff-clean) against bundled **Java/Spring**,
 **.NET/Steeltoe**, and **Python/FastAPI** fixtures — the same collectors emit the same KB across
 stacks (repo-neutrality). See [`docs/DESIGN.md`](docs/DESIGN.md) for the full
 design and a current implementation-status section.
@@ -35,9 +35,11 @@ Implemented:
   fenced unless the engine independently confirms them with a deterministic rule at the cited bytes.
 - **LLM gap-finder (Tier-B, spike)** — Copilot proposes resiliency gaps the AST missed
   (e.g. a client with no timeout); the engine locates each, stamps `path:line:hash`
-  (`source_tier=llm`), and re-derives/refutes it via the shared `signatures` library — surviving
-  gaps land `ResiliencyGap` / `needs-review`, never auto-verified. `sre-kb gap-finder`; see
-  [`docs/PHASE-4-GAP-FINDER.md`](docs/PHASE-4-GAP-FINDER.md).
+  (`source_tier=llm`), and re-derives/refutes it via the shared `signatures` library. Refutation
+  gaps land `ResiliencyGap` / `needs-review`; confirmation gaps can graduate to Tier-A when the
+  deterministic rule fires. The first real-Copilot sample validation measured 4/4 recall and no
+  false-positive survivors; service-scale noise remains open.
+  `sre-kb gap-finder`; see [`docs/PHASE-4-GAP-FINDER.md`](docs/PHASE-4-GAP-FINDER.md).
 - **Scan → scaffold → validate** (5 layers: schema, provenance hash, cross-ref, gating,
   and an adversarial challenge pass that grounds each claim against its cited evidence)
   for ~22 kinds incl. Flow, Alert (log-pattern + SLO burn-rate), Runbook, BlastRadius,
@@ -82,7 +84,7 @@ AST model.
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                                                   # the test suite (227 tests)
+pytest -q                                                   # the test suite (233 tests)
 sre-kb schema list                                          # the kind registry
 
 # scan -> scaffold -> validate -> render -> stage a PR tree (dry-run)

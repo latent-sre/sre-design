@@ -68,11 +68,3 @@ already-fixed bugs.)
 **Communication**
 - State what was actually done vs. skipped; flag assumptions and known limitations.
 - Reference code as `file:line`.
-
-## Project specifics
-
-Read `docs/DESIGN.md` (architecture) and `docs/HYBRID-PLAN.md` (living roadmap) before proposing
-changes, so you build on the current plan instead of re-deriving it. Key invariants: the engine is
-**deterministic and never calls an LLM**; every fact/artifact carries **byte-level provenance**
-(`path:line` + commit + `excerptHash`) and provenance is never fabricated; validation is
-**monotonic downgrade-only** (it may lower confidence/status, never raise it).

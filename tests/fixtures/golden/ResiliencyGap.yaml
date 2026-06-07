@@ -1,0 +1,39 @@
+apiVersion: sre.kb/v1alpha1
+kind: ResiliencyGap
+metadata:
+  name: payments-api-missing-timeout
+  service: checkout-service
+  labels: {}
+  annotations: {}
+spec:
+  category: missing-timeout
+  target: payments-api
+  severity: high
+  rationale: the payments charge call is behind a circuit breaker but has no timeout
+  rederivation: confirmed
+  sourceTier: llm
+  checked:
+    - src/main/java/com/acme/checkout/client/PaymentsClient.java
+    - src/main/resources/application.yml
+evidence:
+- repo: file://sample-gap-finder
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/java/com/acme/checkout/client/PaymentsClient.java
+  lines:
+    start: 18
+    end: 18
+  excerptHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  detector: llm.gap_finder
+  source_tier: llm
+confidence: 0.5
+status: needs-review
+provenanceMode: llm-asserted
+crossRefs:
+- kind: ResiliencyPattern
+  name: payments-api
+  relation: depends-on
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1
+unverifiedAgainstLive: true

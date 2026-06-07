@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: checkout-service
+
+# Circuit breakers are configured here, but NO timeouts — so the engine's timeout refutation
+# probe finds nothing in config either, and the payments gap stands. (Intentional, for the test.)
+resilience4j:
+  circuitbreaker:
+    instances:
+      payments:
+        failureRateThreshold: 50
+        slidingWindowSize: 20
+      shipping:
+        failureRateThreshold: 50
+        slidingWindowSize: 20

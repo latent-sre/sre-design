@@ -73,6 +73,16 @@ kinds:
   DataStore:        { schema: schemas/v1alpha1/DataStore.schema.json,        phase: P2 }
   ConfigManagement: { schema: schemas/v1alpha1/ConfigManagement.schema.json, phase: P2 }
 
+  # --- P4 Tier-B (LLM): gap-finder (HYBRID-PLAN §7.9/§7.10) ---
+  # Produced by the LLM gap-finder (collectors/llm.gap_finder) and re-grounded by the engine via
+  # the shared signature library. The prompt is the vendored assess-resiliency skill
+  # (.github/skills/sre-gap-finder). Always needs-review — nothing the LLM proposes auto-verifies.
+  ResiliencyGap:
+    schema: schemas/v1alpha1/ResiliencyGap.schema.json
+    collectors: [llm.gap_finder]
+    prompt: assess-resiliency
+    phase: P4
+
   # --- P3/P4 (incl. deferred security workstream) ---
   SecurityPosture:  { schema: schemas/v1alpha1/SecurityPosture.schema.json,  phase: P3 }
   DrBackup:         { schema: schemas/v1alpha1/DrBackup.schema.json,         phase: P3 }

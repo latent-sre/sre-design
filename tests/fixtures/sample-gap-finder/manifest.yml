@@ -1,0 +1,10 @@
+---
+applications:
+  - name: checkout-service
+    instances: 2
+    memory: 1G
+    routes:
+      - route: checkout-service.apps.internal
+    services:
+      - payments-api
+      - shipping-api

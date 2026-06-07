@@ -19,16 +19,17 @@ The full design lives in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Status
 
-Working engine, tested offline (178 tests, ruff-clean) against bundled **Java/Spring**,
-**.NET/Steeltoe**, and multi-endpoint fixtures — the same collectors emit the same KB for
-both languages (repo-neutrality). See [`docs/DESIGN.md`](docs/DESIGN.md) for the full
+Working engine, tested offline (202 tests, ruff-clean) against bundled **Java/Spring**,
+**.NET/Steeltoe**, and **Python/FastAPI** fixtures — the same collectors emit the same KB across
+stacks (repo-neutrality). See [`docs/DESIGN.md`](docs/DESIGN.md) for the full
 design and a current implementation-status section.
 
 Implemented:
 - **AST-backed extraction** — code structure (classes, methods, calls, annotations,
-  try/catch) is read from a tree-sitter model (Java + C#, `parsing/code_model.py`) with
-  per-class scoping and receiver→field-type call correlation; only config files use
-  direct parsing. Confidence is signal-derived; BlastRadius risk is computed from breadth.
+  try/catch) is read from a tree-sitter model (Java, C#, and Python — `parsing/code_model.py`)
+  with per-class scoping and receiver→field-type call correlation; only config files use
+  direct parsing. Python/FastAPI emits the same facts (endpoints, egress, tech stack) so the
+  unchanged scaffolder produces the same KB. Confidence is signal-derived; risk from breadth.
 - **Trust tiers (provenance)** — every evidence item carries a `source_tier` (`ast`
   deterministic | `llm`), rolled up per artifact in the validation report. The foundation for
   fenced LLM (Tier-B) collectors that can only add `needs-review` candidates, never auto-verify.

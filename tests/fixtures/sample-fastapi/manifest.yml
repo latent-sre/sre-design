@@ -1,0 +1,9 @@
+---
+applications:
+  - name: orders-api
+    instances: 2
+    memory: 512M
+    routes:
+      - route: orders-api.apps.internal
+    services:
+      - orders-postgres

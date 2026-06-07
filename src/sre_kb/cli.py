@@ -84,6 +84,60 @@ def validate_kb(
     raise typer.Exit(code=1 if failures else 0)
 
 
+@app.command("confirm-gap")
+def confirm_gap(
+    category: str = typer.Argument(..., help="Gap category a reviewer is confirming (or dismissing)."),
+    target: Path = typer.Option(Path("."), "--target", help="Target repo whose .sre/ holds the tracker."),
+    anchor: str | None = typer.Option(None, "--anchor", help="Excerpt/pointer of the confirmed instance."),
+    run_id: str | None = typer.Option(None, "--run", help="Run id, for the audit trail."),
+    false_positive: bool = typer.Option(
+        False, "--false-positive", help="Record a dismissed/false gap instead of a confirmation."
+    ),
+) -> None:
+    """Record a human verdict on a needs-review gap, feeding the graduation tally (HYBRID-PLAN §9.3 #3)."""
+    from sre_kb.collectors.llm.gap_finder import gap_categories
+    from sre_kb.graduation import GraduationTracker
+
+    if category not in gap_categories():
+        typer.echo(f"unknown gap category: {category}", err=True)
+        typer.echo(f"known: {', '.join(sorted(gap_categories()))}", err=True)
+        raise typer.Exit(code=2)
+    tracker = GraduationTracker.load(target)
+    cat = tracker.refute(category) if false_positive else tracker.confirm(category, run=run_id, anchor=anchor)
+    tracker.save(target)
+    verdict = "false-positive" if false_positive else "confirmation"
+    typer.echo(
+        f"recorded {verdict} for {category}: "
+        f"{cat.confirmed} confirmation(s), {cat.false_positives} false-positive(s)"
+    )
+
+
+@app.command("graduation-candidates")
+def graduation_candidates(
+    target: Path = typer.Option(Path("."), "--target", help="Target repo whose .sre/ holds the tracker."),
+) -> None:
+    """Show graduation status; for each promotion-ready category, draft the deterministic signature to
+    review and merge (assisted promotion — the engine never edits its own rules)."""
+    from sre_kb.collectors.llm.gap_finder import target_concerns
+    from sre_kb.config import load_config
+    from sre_kb.graduation import GraduationTracker, draft_signature
+
+    threshold = int((load_config().get("graduation") or {}).get("confirmation_threshold", 5))
+    tracker = GraduationTracker.load(target)
+    if not tracker.categories:
+        typer.echo("no gap confirmations recorded yet")
+        raise typer.Exit(code=0)
+    ready = 0
+    for name, cat in sorted(tracker.categories.items()):
+        is_ready = cat.is_candidate(threshold)
+        ready += is_ready
+        state = "promoted" if cat.promoted else ("READY to graduate" if is_ready else f"{cat.confirmed}/{threshold}")
+        typer.echo(f"{name}: {state}  (confirmed={cat.confirmed}, false-positives={cat.false_positives})")
+        if is_ready:
+            typer.echo(draft_signature(cat, target_concerns(name)))
+    typer.echo(f"\n{ready} categor{'y' if ready == 1 else 'ies'} ready to graduate (threshold {threshold}).")
+
+
 @app.command()
 def run(
     target: str = typer.Option(..., "--target", help="Local path or git URL of the target repo."),

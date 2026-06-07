@@ -742,9 +742,13 @@ takes §7.7's standing advice that Phase 5 is independent and should run in para
    *confirmation*-class probe — the deterministic swallow rule firing at the LLM's pointer *confirms*
    the gap and **graduates it to Tier-A** (`source_tier=ast`, verified-eligible). The cleanest
    graduation exemplar; see §9.4 status and §9.5 ④ for the trust-boundary note.
-3. **Graduation loop (§7.9).** Now buildable against the concrete instance from (2): a recurring,
-   human-confirmed gap category becomes a deterministic signature, so the gap-finder *ratchets the
-   engine's recall upward* instead of being a permanent crutch. The strategic core of Tier-B.
+3. **Graduation loop (§7.9).** ✅ **Done.** A reviewer records verdicts with `sre-kb confirm-gap`
+   (tallied in the target repo's `.sre/graduation-tracker.yaml`); once a category reaches the
+   threshold (`graduation.confirmation_threshold`, default 5) with zero false positives, `sre-kb
+   graduation-candidates` flags it and **drafts the deterministic signature for a human to review and
+   merge** — assisted, never auto-applied. So a recurring, human-confirmed gap category becomes an
+   engine signature and the gap-finder *ratchets recall upward* instead of being a permanent crutch.
+   The strategic core of Tier-B. (`graduation/`, `tests/test_graduation.py`.)
 4. **Phase 5 render-adapter breadth.** ✅ **Done** (parallel track). The neutral-intent → adapter
    seam plus Prometheus/Splunk/Wavefront/AppDynamics + Grafana/ThousandEyes alert backends have landed
    (6/6; §8 Phase 5), and dashboard panels render for Prometheus/Grafana/Wavefront (splunk/appd panels

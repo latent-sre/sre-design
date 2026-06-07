@@ -221,15 +221,95 @@ def _appdynamics_burn(intent: BurnRateIntent) -> dict:
     }
 
 
+# --- Grafana adapter (unified alerting over a datasource) -----------------------------------------
+def _grafana_burn(intent: BurnRateIntent) -> dict:
+    """Grafana has no metric store of its own; its unified-alert rules evaluate a datasource query.
+    The faithful, deterministic mapping is to run the Prometheus multi-window burn-rate against a
+    Prometheus datasource — so we reuse that engine-generated PromQL verbatim and let the reviewer
+    bind the datasource UID. Fidelity therefore equals the Prometheus adapter, not a fabrication."""
+    prom = _prometheus_burn(intent)
+    rules = {
+        key: {"expr": prom[f"prometheus_{key}"], "for": short_w}
+        for key, _long_w, short_w, _mult in BURN_WINDOWS
+        if f"prometheus_{key}" in prom
+    }
+    return {
+        "grafana": {
+            "datasourceUid": "REPLACE_ME__prometheus_datasource_uid",
+            "rules": rules,
+            "mechanism": (
+                "Grafana unified-alert rules over a Prometheus datasource, reusing the deterministic "
+                "multi-window PromQL burn-rate; supply the datasource UID. Grafana stores no metrics "
+                "of its own, so fidelity equals the Prometheus adapter"
+            ),
+        }
+    }
+
+
+def _grafana_log(intent: LogPatternIntent) -> dict:
+    """Grafana log alerting runs over a Loki datasource (LogQL), built deterministically from the
+    search string; the reviewer supplies the Loki datasource UID."""
+    logql = (
+        f"sum by ({intent.group_by}) "
+        f'(count_over_time({{service="{intent.service}"}} |= "{intent.search}" [5m]))'
+    )
+    return {
+        "grafana": {
+            "datasourceUid": "REPLACE_ME__loki_datasource_uid",
+            "query": logql,
+            "mechanism": (
+                "Grafana log alert over a Loki datasource (LogQL count_over_time); set the "
+                "datasource UID"
+            ),
+        }
+    }
+
+
+# --- ThousandEyes adapter (synthetic test alert rule, not a query) --------------------------------
+def _thousandeyes_burn(intent: BurnRateIntent) -> dict:
+    """ThousandEyes is synthetic (agent-based HTTP Server tests) with no passive request histogram
+    and no error-budget burn-rate. So this emits a static alert-rule template on a synthetic metric —
+    a different mechanism, labelled as such — that the reviewer binds to the covering test(s); never
+    a fabricated query string."""
+    scope = intent.route or "this flow"
+    if intent.is_latency:
+        pct = _pctl(intent.percentile, 95)
+        metric = "Response Time (ms)"
+        condition = f"> {intent.threshold_ms} ms"
+        kind = f"a synthetic p{pct} response-time threshold"
+    else:
+        metric = "Error Rate (%)"
+        condition = f"> {round(intent.budget_frac * 100, 3)}% (SLO error budget as a static threshold)"
+        kind = "a synthetic availability/error-rate threshold"
+    return {
+        "thousandeyes": {
+            "alertRule": {
+                "metric": metric,
+                "condition": condition,
+                "testIds": ["REPLACE_ME__thousandeyes_http_server_test_id"],
+                "roundsViolatingOutOf": "the standard consecutive-rounds setting",
+            },
+            "mechanism": (
+                f"ThousandEyes synthetic HTTP Server test alert rule (not a query); bind testIds to "
+                f"the test(s) covering {scope}. Synthetic monitoring has no passive multi-window "
+                f"error-budget burn-rate — this is {kind}"
+            ),
+        }
+    }
+
+
 _BURN_ADAPTERS: dict[str, Callable[[BurnRateIntent], dict]] = {
     "prometheus": _prometheus_burn,
     "splunk": _splunk_burn,
     "wavefront": _wavefront_burn,
     "appdynamics": _appdynamics_burn,
+    "grafana": _grafana_burn,
+    "thousandeyes": _thousandeyes_burn,
 }
 _LOG_ADAPTERS: dict[str, Callable[[LogPatternIntent], dict]] = {
     "prometheus": _prometheus_log,
     "splunk": _splunk_log,
+    "grafana": _grafana_log,
 }
 
 
@@ -264,6 +344,8 @@ _KEY_BACKEND = {
     "splunk": "splunk",
     "wavefront": "wavefront", "wavefront_fast": "wavefront", "wavefront_slow": "wavefront",
     "appdynamics": "appdynamics",
+    "grafana": "grafana",
+    "thousandeyes": "thousandeyes",
 }
 
 

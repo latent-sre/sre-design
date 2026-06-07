@@ -37,17 +37,25 @@ def test_runbook_embeds_mermaid(result):
 
 
 def test_pr_tree_structure(result):
+    # per-service content lives under the Backstage catalog path
     base = result.pr / "catalog" / "order-service"
     assert (base / "REVIEW.md").exists()
     assert (base / "catalog-info.yaml").exists()
     assert (base / ".github" / "copilot-instructions.md").exists()
-    assert (base / ".github" / "CODEOWNERS").read_text() == "* REPLACE_ME__owning_team\n"
-    assert (base / ".github" / "pull_request_template.md").exists()
-    assert (base / ".github" / "workflows" / "validate-sre-kb.yml").exists()
-    assert (base / ".sre" / "version").read_text().startswith("sre-kb==")
-    assert (base / ".sre" / "schemas" / "_envelope.schema.json").exists()
-    assert (base / ".sre" / "schemas" / "v1alpha1" / "Flow.schema.json").exists()
     assert (base / "kb").exists()
+    # repo-control files must land at the published REPO ROOT — GitHub ignores them under a subdir
+    root = result.pr
+    assert (root / ".github" / "CODEOWNERS").read_text() == "* REPLACE_ME__owning_team\n"
+    assert (root / ".github" / "pull_request_template.md").exists()
+    assert (root / ".sre" / "version").read_text().startswith("sre-kb==")
+    assert (root / ".sre" / "schemas" / "_envelope.schema.json").exists()
+    assert (root / ".sre" / "schemas" / "v1alpha1" / "Flow.schema.json").exists()
+    wf = (root / ".github" / "workflows" / "validate-sre-kb.yml").read_text()
+    assert "catalog/*/kb" in wf  # validate step targets the catalog layout, not a root-level kb/
+    # ...and they must NOT be nested under the service dir (the regression this guards against)
+    assert not (base / ".github" / "CODEOWNERS").exists()
+    assert not (base / ".github" / "workflows").exists()
+    assert not (base / ".sre").exists()
 
 
 def test_review_flags_needs_review(result):
@@ -93,17 +101,18 @@ def test_publish_blocks_secret_before_redaction(tmp_path):
     )
 
 
-def test_publish_reassembly_preserves_human_edit(tmp_path):
-    first = run_pipeline(str(FIXTURE), work_root=str(tmp_path), run_id="preserve", to_stage="publish")
-    base = first.pr / "catalog" / "order-service"
-    review = base / "REVIEW.md"
-    human = review.read_text(encoding="utf-8") + "\nmanual note\n"
-    review.write_text(human, encoding="utf-8")
+def test_publish_restages_cleanly_each_run(tmp_path):
+    """Re-publish rebuilds the staging tree from scratch: a stale file from a prior run is gone.
+    Operator edits are preserved in the published *target* repo by the forge's manifest merge (see
+    test_forge_publish_preserves_operator_edit_and_prunes_orphan), not in this local staging dir."""
+    first = run_pipeline(str(FIXTURE), work_root=str(tmp_path), run_id="restage", to_stage="publish")
+    stray = first.pr / "catalog" / "order-service" / "STALE.txt"
+    stray.write_text("left over from a prior run\n", encoding="utf-8")
 
-    run_pipeline(str(FIXTURE), work_root=str(tmp_path), run_id="preserve", to_stage="publish")
+    second = run_pipeline(str(FIXTURE), work_root=str(tmp_path), run_id="restage", to_stage="publish")
 
-    assert review.read_text(encoding="utf-8") == human
-    assert (base / ".proposed" / "REVIEW.md").is_file()
+    assert not stray.exists()  # clean re-stage removed the stale file
+    assert (second.pr / "catalog" / "order-service" / "REVIEW.md").exists()  # tree rebuilt
 
 
 def test_manifest_merge_prunes_only_ai_owned_orphans(tmp_path):

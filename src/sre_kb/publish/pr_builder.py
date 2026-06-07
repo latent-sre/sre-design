@@ -10,7 +10,6 @@ from pathlib import Path
 from sre_kb import __version__
 from sre_kb.config import load_config
 from sre_kb.publish.forge import ForgePublishError, get_forge
-from sre_kb.publish.manifest import merge_tree
 from sre_kb.render.project import load_kb, render_projections, service_name
 from sre_kb.tiers import tier_label
 from sre_kb.workspace import RunLayout
@@ -56,11 +55,14 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def _write_generated_file(produced: dict[str, Path], stage: Path, rel: Path, content: str) -> None:
-    path = stage / "_generated" / rel
+def _write_file(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
-    _claim_file(produced, path, rel)
+
+
+def _copy_tree(src: Path, dest: Path) -> None:
+    if src.exists():
+        shutil.copytree(src, dest, dirs_exist_ok=True)
 
 
 def _generated_validate_workflow() -> str:
@@ -91,7 +93,14 @@ jobs:
       - name: Install pinned engine
         run: python -m pip install "$(cat .sre/version)"
       - name: Validate KB artifacts
-        run: sre-kb validate-kb --schema-dir .sre/schemas kb
+        run: |
+          shopt -s nullglob
+          found=0
+          for kb in catalog/*/kb; do
+            sre-kb validate-kb --schema-dir .sre/schemas "$kb"
+            found=1
+          done
+          [ "$found" = 1 ] || { echo "::error::no catalog/*/kb directories found"; exit 1; }
       - name: Fail-closed secret gate
         run: sre-kb secret-scan .
 """
@@ -110,22 +119,16 @@ merge.
 """
 
 
-def _claim_generated_repo_hardening(produced: dict[str, Path], stage: Path) -> None:
-    _claim_tree(produced, _repo_root() / "schemas", Path(".sre/schemas"))
-    _write_generated_file(produced, stage, Path(".sre/version"), f"sre-kb=={__version__}\n")
-    _write_generated_file(produced, stage, Path(".github/CODEOWNERS"), "* REPLACE_ME__owning_team\n")
-    _write_generated_file(
-        produced,
-        stage,
-        Path(".github/workflows/validate-sre-kb.yml"),
-        _generated_validate_workflow(),
-    )
-    _write_generated_file(
-        produced,
-        stage,
-        Path(".github/pull_request_template.md"),
-        _generated_pr_template(),
-    )
+def _stage_repo_root_hardening(pr_root: Path) -> None:
+    """Stage repo-control files at the *published repo root*. GitHub honors workflows, CODEOWNERS,
+    and the PR template only at the root (or root ``.github/``), never under ``catalog/<service>/`` —
+    so these must sit beside the catalog, not inside it. The vendored schemas + pinned engine version
+    let the generated CI validate the KB hermetically."""
+    _copy_tree(_repo_root() / "schemas", pr_root / ".sre" / "schemas")
+    _write_file(pr_root / ".sre" / "version", f"sre-kb=={__version__}\n")
+    _write_file(pr_root / ".github" / "CODEOWNERS", "* REPLACE_ME__owning_team\n")
+    _write_file(pr_root / ".github" / "workflows" / "validate-sre-kb.yml", _generated_validate_workflow())
+    _write_file(pr_root / ".github" / "pull_request_template.md", _generated_pr_template())
 
 
 def _stage_pr_tree(stage: Path, layout: RunLayout, proj: Path, service: str, docs: list[dict], report: dict | None) -> None:
@@ -136,7 +139,6 @@ def _stage_pr_tree(stage: Path, layout: RunLayout, proj: Path, service: str, doc
     _claim_tree(produced, proj / "runbooks", Path("runbooks"))
     _claim_tree(produced, proj / "diagrams", Path("diagrams"))
     _claim_file(produced, proj / "catalog-info.yaml", Path("catalog-info.yaml"))
-    _claim_generated_repo_hardening(produced, stage)
 
     review = stage / "_generated" / "REVIEW.md"
     review.parent.mkdir(parents=True, exist_ok=True)
@@ -180,20 +182,36 @@ def assemble_pr(
         render_projections(layout, docs)
 
     service = service_name(docs)
-    base = layout.root / "pr" / "catalog" / service
+    pr_root = layout.root / "pr"
+    base = pr_root / "catalog" / service
+    # Containment: `service` is not schema-pattern-constrained, so guard against a name like
+    # `../../x` letting the staged path escape the catalog before we ever write to disk.
+    if not base.resolve().is_relative_to((pr_root / "catalog").resolve()):
+        raise ForgePublishError(f"unsafe service name for publish path: {service!r}")
+    # Clean re-stage so a prior run's files never linger to be re-scanned or re-published. Operator
+    # edits live in the published *target* repo (preserved by the forge's manifest merge), never in
+    # this throwaway staging dir — so rebuilding it from scratch each run is correct.
+    if pr_root.exists():
+        shutil.rmtree(pr_root)
     base.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="sre-kb-pr-") as tmp:
         stage = Path(tmp)
         _stage_pr_tree(stage, layout, proj, service, docs, report)
-        merge_tree(stage / "tree", base)
+        shutil.copytree(stage / "tree", base, dirs_exist_ok=True)
+    # Repo-control files belong at the published repo root, not under catalog/<service>/.
+    _stage_repo_root_hardening(pr_root)
 
-    tree = layout.root / "pr"
-    # Fail closed before publish: generated output containing a real secret must be surfaced for
-    # human review, not silently scrubbed into an apparently clean tree.
-    from sre_kb.security import enforce_secret_gate
+    tree = pr_root
+    # Fail closed before publish: generated output containing a real secret is surfaced for human
+    # review, not silently scrubbed. Vendored schemas are first-party assets, so they're skipped —
+    # a schema's example value must not be able to wedge every publish.
+    from sre_kb.security import enforce_secret_gate, redact_tree
 
-    enforce_secret_gate(tree, allow=allow_secrets)
+    findings = enforce_secret_gate(tree, allow=allow_secrets, skip_prefixes=(".sre/schemas",))
+    if findings and allow_secrets:
+        # Explicit operator override: redact regex-detectable secrets rather than publish them raw.
+        redact_tree(tree)
     if dry_run:
         return tree, f"dry-run: staged PR tree at {tree} (would target {sre_repo})"
     ref = get_forge(forge, allowed_repos=allowed_repos).open_pr(

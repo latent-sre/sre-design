@@ -38,6 +38,48 @@ def version() -> None:
     typer.echo(f"sre-kb {__version__}")
 
 
+@app.command()
+def plan(
+    target: Path = typer.Option(..., "--target", help="Repo (possibly a monorepo) to discover services in."),
+    max_services: int | None = typer.Option(None, "--max-services", help="Fan-out cap (default scan.max_services)."),
+) -> None:
+    """Discover the deployable services in a repo and print the fan-out-capped scan plan (R8)."""
+    from sre_kb.scan_plan import ScanFanOutError, plan_services
+
+    try:
+        services = plan_services(target, max_services=max_services)
+    except ScanFanOutError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    for s in services:
+        typer.echo(f"{s.name}\t{s.path}")
+    typer.echo(f"\n{len(services)} service(s) to scan.")
+
+
+@app.command("run-plan")
+def run_plan_cmd(
+    target: Path = typer.Option(..., "--target", help="Repo to discover and scan service-by-service."),
+    work_root: str = typer.Option(".work", "--work-root"),
+    run_id: str | None = typer.Option(None, "--run"),
+    to_stage: str = typer.Option("validate", "--to-stage"),
+    max_services: int | None = typer.Option(None, "--max-services", help="Fan-out cap (default scan.max_services)."),
+) -> None:
+    """Scan every discovered service through the pipeline, checkpointing after each (resumable; R8)."""
+    from sre_kb.scan_plan import ScanFanOutError, run_plan
+
+    try:
+        summary = run_plan(
+            target, work_root=work_root, run_id=run_id, to_stage=to_stage, max_services=max_services
+        )
+    except ScanFanOutError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(
+        f"plan {summary['run_id']}: scanned {len(summary['scanned'])}, "
+        f"skipped {len(summary['skipped'])} of {len(summary['services'])} service(s)"
+    )
+
+
 @schema_app.command("list")
 def schema_list() -> None:
     """List registered kinds and their phase."""

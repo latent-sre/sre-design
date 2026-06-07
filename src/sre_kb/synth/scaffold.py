@@ -8,6 +8,7 @@ from sre_kb.models.facts import FactSet
 from sre_kb.render.alerts import (
     BurnRateIntent,
     LogPatternIntent,
+    effective_severity,
     render_burn_rate,
     render_log_pattern,
     rendered_targets,
@@ -18,6 +19,7 @@ from sre_kb.scoring.readiness import readiness_spec
 from sre_kb.scoring.risk import assess as assess_risk
 from sre_kb.synth.emit import emit as _doc
 from sre_kb.synth.inventory import inventory_docs
+from sre_kb.tiers import AST
 from sre_kb.util import member_of, slug
 
 
@@ -52,6 +54,35 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
     service = (app.attrs.get("name") if app else None) or "service"
     alert_tools = _configured_alert_tools()
     docs: list[dict] = []
+
+    # --- Criticality (R1) + the severity floor it feeds (R2) ---
+    # tier/businessCriticality come from a declaration (authoritative `.sre/criticality.yaml` =
+    # Tier-A, or a Copilot `.sre/criticality-proposal.yaml` = Tier-B); dataClassification is the
+    # union of any declared classes and the ones the engine deterministically detected in code.
+    crit_decl = fs.first("criticality.declared")
+    crit_dc = fs.of("criticality.dataclass")
+    floor_tier: str | None = None
+    if crit_decl or crit_dc:
+        da = crit_decl.attrs if crit_decl else {}
+        decl_tier = da.get("tier", "unknown")
+        # A declaration is Tier-B only when it came from a Copilot proposal (llm evidence). An
+        # LLM-proposed tier stays advisory (§7.2): surfaced for review (needs-review), never amplified
+        # into paging. An authoritative declaration and the detected data classes are byte-grounded.
+        is_proposal = bool(crit_decl) and crit_decl.evidence.source_tier != AST
+        classes = set(da.get("dataClassification") or []) | {f.attrs["classification"] for f in crit_dc}
+        crit_spec: dict = {"tier": decl_tier, "source": da.get("source", "inferred")}
+        if da.get("businessCriticality"):
+            crit_spec["businessCriticality"] = da["businessCriticality"]
+        if classes:
+            crit_spec["dataClassification"] = sorted(classes)
+        crit_ev = ([crit_decl.evidence] if crit_decl else []) + [f.evidence for f in crit_dc]
+        docs.append(_doc(
+            "Criticality", service, crit_spec, crit_ev,
+            "needs-review" if is_proposal else "verified",
+            confidence(Signal.INFERRED if is_proposal else Signal.DIRECT), service,
+        ))
+        # Only a byte-grounded (Tier-A) tier feeds the deterministic severity floor (R2).
+        floor_tier = decl_tier if (crit_decl and not is_proposal) else None
 
     cb = fs.first("resiliency.circuitbreaker")
     fb = fs.first("resiliency.fallback")
@@ -313,7 +344,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
             "alertType": "threshold",
             "sloRef": None,
             "signalSource": "log-pattern",
-            "severity": "high",
+            "severity": effective_severity("high", floor_tier),
             "forFlow": for_flow,
             "logFormatRef": obs_name,
             "expr": lp_expr,
@@ -383,7 +414,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                     "alertType": "burn-rate",
                     "sloRef": slo_ref,
                     "signalSource": "metric",
-                    "severity": "high",
+                    "severity": effective_severity("high", floor_tier),
                     "forFlow": flow_name,
                     "logFormatRef": None,
                     "expr": expr,

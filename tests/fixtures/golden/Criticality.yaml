@@ -1,0 +1,32 @@
+apiVersion: sre.kb/v1alpha1
+kind: Criticality
+metadata:
+  name: order-service
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  tier: tier0
+  businessCriticality: critical
+  dataClassification:
+  - pci
+  - pii
+  source: catalog
+evidence:
+- repo: file://order-service
+  commit: '0000000000000000000000000000000000000000'
+  path: .sre/criticality.yaml
+  lines:
+    start: 2
+    end: 2
+  excerptHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  detector: common.criticality
+  source_tier: ast
+confidence: 0.9
+status: verified
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

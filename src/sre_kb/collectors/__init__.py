@@ -10,7 +10,7 @@ properties, logback) are parsed directly. File-collectors run first; derivers
 from __future__ import annotations
 
 from sre_kb.collectors.base import CollectorProtocol, ScanContext
-from sre_kb.collectors.common import manifest_pcf, slo_catalog
+from sre_kb.collectors.common import criticality, manifest_pcf, slo_catalog
 from sre_kb.collectors.dotnet_steeltoe import annotations as dotnet_annotations
 from sre_kb.collectors.dotnet_steeltoe import build as dotnet_build
 from sre_kb.collectors.dotnet_steeltoe import resiliency as dotnet_resiliency
@@ -31,6 +31,7 @@ from sre_kb.models.facts import FactSet
 _FILE_COLLECTORS: list[CollectorProtocol] = [
     manifest_pcf.collect,
     slo_catalog.collect,
+    criticality.collect,
     build.collect,
     annotations.collect,
     config_props.collect,

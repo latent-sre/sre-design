@@ -1,0 +1,7 @@
+---
+applications:
+  - name: billing-service
+    instances: 1
+    memory: 512M
+    routes:
+      - route: billing-service.apps.internal

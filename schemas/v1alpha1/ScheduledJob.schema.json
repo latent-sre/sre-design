@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/ScheduledJob.schema.json",
+  "title": "ScheduledJob",
+  "description": "A recurring/background job (adopted from resiliency-skills' jobs schema, on our byte-grounded envelope). One artifact per detected job, cited to its scheduling site.",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "ScheduledJob" },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "jobType"],
+      "properties": {
+        "name": { "type": "string" },
+        "jobType": { "type": "string", "enum": ["cron", "batch", "worker", "scheduled"] },
+        "schedule": { "type": "string" },
+        "trigger": { "type": "string" },
+        "timeoutSeconds": { "type": "integer", "minimum": 0 },
+        "concurrencyPolicy": { "type": "string", "enum": ["allow", "forbid", "replace"] },
+        "expectedDuration": { "type": "string" }
+      }
+    }
+  }
+}

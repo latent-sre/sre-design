@@ -424,6 +424,21 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
             )
         )
 
+    # --- ScheduledJob (one per detected @Scheduled job; Tier-A, byte-grounded) ---
+    for j in fs.of("job.scheduled"):
+        a = j.attrs
+        spec = {"name": a["name"], "jobType": a["jobType"]}
+        if a.get("schedule"):
+            spec["schedule"] = a["schedule"]
+        if a.get("trigger"):
+            spec["trigger"] = a["trigger"]
+        if a.get("concurrency"):
+            spec["concurrencyPolicy"] = a["concurrency"]
+        docs.append(
+            _doc("ScheduledJob", a["name"], spec, [j.evidence], "verified",
+                 confidence(Signal.DIRECT), service)
+        )
+
     # --- ServiceCatalogEntry ---
     if app:
         docs.append(

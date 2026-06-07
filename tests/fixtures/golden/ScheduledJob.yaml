@@ -1,0 +1,30 @@
+apiVersion: sre.kb/v1alpha1
+kind: ScheduledJob
+metadata:
+  name: report-job-nightly-report
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  name: ReportJob.nightlyReport
+  jobType: cron
+  schedule: 0 0 2 * * *
+  trigger: com.acme.order.jobs.ReportJob#nightlyReport
+evidence:
+- repo: file://sample-jobs
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/java/com/acme/order/jobs/ReportJob.java
+  lines:
+    start: 8
+    end: 9
+  excerptHash: sha256:d0289eeab00dcc15636946f5ff617bc7d27e76b1387829ecdd6e13373e526696
+  detector: java_spring.jobs
+  source_tier: ast
+confidence: 0.9
+status: verified
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

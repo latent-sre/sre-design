@@ -105,7 +105,9 @@ caps the rest as `capped`, so a cry-wolf run can't flood a reviewer.
   aren't airtight.
 - **In-scope/per-file re-derivation**, the same documented boundary as the AST model: a "confirmed"
   gap is *plausible*, not *proven* — hence `needs-review`, never `verified`.
-- **Standalone path.** The gap-finder is its own CLI + pipeline, not yet wired into the main `run`.
+- ~~**Standalone path.**~~ Resolved: `sre-kb run` now auto-detects `.sre/gap-proposals.json` and
+  routes survivors through the shared validate/gate path (HYBRID-PLAN §9.3 item 1). The standalone
+  `sre-kb gap-finder` CLI remains for proposals-only runs.
 - **No graduation loop yet** (§7.9): promoting a recurring, human-confirmed gap category to a
   deterministic Tier-A signature (so it drops out of the LLM's frontier) is the next strategic step.
 - **`swallowed-failure` is the natural next probe** — and the cleanest instance of graduation: re-run

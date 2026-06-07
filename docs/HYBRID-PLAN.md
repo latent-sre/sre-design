@@ -238,7 +238,9 @@ trap `validation/challenge.py:9-13` warns about). Instead:
 | **5. Render-adapter breadth** ⬜ | Generalize `render/` to neutral-intent → adapter; add Wavefront/AppDynamics. | Independent; can run in parallel. |
 
 Phases 0→1→2 are the trust/security spine and are low-risk extensions of existing code; they land
-first. Phase 4 is the only heavy lift and the only new LLM-integration risk.
+first. Phase 4 was the only heavy lift and the only new LLM-integration risk — and the spike has
+since cleared that bar (§9). The remaining order has been revised post-spike from "expand Phase 4,
+then Phase 5" to **integrate before expand**; see **§9.3** for the current sequence.
 
 ### Lift verbatim from `resiliency-skills`
 
@@ -412,8 +414,10 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ## 8. Implementation status (2026-06-07)
 
-Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **172 tests
-passing, ruff-clean.**
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **178 tests
+passing, ruff-clean.** Every claim below was re-verified at file:line on 2026-06-07 (the deep
+re-audit in §9) — no drift found; the only corrections were *additions* for behaviors the code
+had but this section under-documented (folded in where they belong).
 
 ### Phase 0 — Fact contract & trust tiers ✅
 
@@ -441,6 +445,13 @@ Both weaknesses §6 assigns to Phase 1 are closed, and the §6 hardening list is
 - **redact + second gate** (`security/secret_scan.py`) — `redact_tree()` scrubs the staged tree
   before `enforce_secret_gate` verifies it.
 - **Fan-out cap** (`publish.max_artifacts`) — refuses a runaway/compromised PR tree.
+- **Dangerous-pattern safety lint** (`validation/safety.py`) — artifact specs are scanned for
+  shell-pipe-to-network, `rm -rf`, TLS/auth-disable, and dynamic-eval patterns; a hit forces the
+  artifact to `needs-review` in the orchestrator gate even when provenance is clean (a de-facto
+  gate-strength layer, surfaced by the §9 re-audit).
+- **Markdown-level injection defense** — the runbook renderer (`render/copilot.py:_inline`)
+  de-backticks/flattens every field, so untrusted text can't break out of a code span in the
+  generated markdown (beyond the guardrail sanitization above).
 - `needs-human-review` const — satisfied by our existing `verified | needs-review | rejected`
   status (§7.6 keeps ours over their const).
 
@@ -500,6 +511,11 @@ model (the founding invariant). The §7.3 adversarial-LLM corpus is the regressi
 
 > Verified live: on `sample-spring-pcf` the loop routed the `create-order-latency-burn-rate` Alert
 > `verified → needs-review` when its burn-rate expr didn't measure the latency SLI it cited (now fixed).
+>
+> Two follow-on fixes hardened that derivation (`synth/scaffold.py:burn_rate_expr`): a latency SLO now
+> burns on its histogram buckets (`*_bucket{le=<threshold>}`) rather than the request error ratio, and
+> the burn-rate is **scoped to the flow's own route** (`uri="…"`) so a per-flow SLO is no longer
+> measured service-wide. Covered by `tests/test_burn_rate_expr.py`.
 
 ### Phase 4 — Tier-B LLM gap-finder 🟡 (spike)
 
@@ -518,9 +534,100 @@ Grounded probes today: `missing-timeout` and `unguarded-critical-dependency` (re
 `circuit-breaker`/`fallback`/`timeout` fire), with **target-scoped** config probing (by resilience
 instance name) and a **noise budget** (`gap_finder.max_candidates`, severity-ranked). Deferred from
 §7.9/§7.10: probes for the remaining categories (`swallowed-failure` next — the cleanest graduation
-instance), the graduation-to-Tier-A loop, and integration into the main `run` pipeline (the spike is
-a standalone opt-in path).
+instance) and the graduation-to-Tier-A loop. Integration into the main `run` pipeline is **done**
+(§9.3 item 1): `run` auto-detects `.sre/gap-proposals.json` and routes survivors through the shared
+gate; the standalone `sre-kb gap-finder` CLI remains for proposals-only runs.
 
 ### Phase 5 ⬜
 
 Not started: render-adapter breadth (Wavefront / AppDynamics emitters beyond Splunk + Prometheus).
+
+---
+
+## 9. Reassessment & revised forward order (2026-06-07, post-spike)
+
+A re-audit once the Phase 4 spike had landed and merged to `main`, on two axes: (a) a source-level
+re-verification of every §8 claim, and (b) a strategic re-read of the plan now that the spike
+*exists* rather than being the open risk it was framed as.
+
+### 9.1 The plan's central bet has cleared its bar
+
+The whole plan was sequenced around one make-or-break experiment — the fenced Tier-B gap-finder
+(§6.3, §7.9). If the *non-circular contract* couldn't be made to work, "just extend
+`resiliency-skills`" was the rational alternative (the framing in `REASSESSMENT-2026-06.md`). The
+spike resolved it: its recall eval **surfaces a planted gap, refutes a false positive** (a timeout
+*is* present → the shared signature fires → the gap is dropped), and **drops a hallucinated citation**
+(anchor not found verbatim) — and the probe generalizes across Java *and* .NET. The architecture is
+now *demonstrated*, not argued; that strategic question is closed in the plan's favor.
+
+### 9.2 Deep-review verdict — §8 is trustworthy, and slightly understated
+
+Every Phase 0–4 claim in §8 was re-verified at file:line: **zero drift.** The audit also surfaced
+behaviors the code has but §8 hadn't recorded — now folded in: the dangerous-pattern **safety lint**
+(`validation/safety.py`), **markdown-level injection defense** in the runbook renderer, the
+honest-negative **`checked:` trail** on gap Facts, and the **`provenanceMode`** (`deterministic` |
+`llm-asserted`) signal on the envelope. None change status; they make the doc match the code.
+
+### 9.3 The revised order — *integrate before expand*
+
+Phases 0–3 and every §7 enhancement are done and tested (178 green). What remains is **finishing a
+proven architecture**, not de-risking an unproven one — which reorders the work. (This also finally
+takes §7.7's standing advice that Phase 5 is independent and should run in parallel, not last.)
+
+1. **Wire the gap-finder into `run`.** ✅ **Done.** `sre-kb run` now re-grounds any
+   `.sre/gap-proposals.json` and surfaces the survivors as `ResiliencyGap` artifacts through the
+   *same* validate/challenge/gate path — merged into `facts.jsonl` (so the §7.1 tier-conflict check
+   sees them) and landing `needs-review`, `source_tier=llm`, never auto-verified. A complete no-op
+   when no proposals file exists. (`pipeline/orchestrator.py`; `tests/test_run_gap_integration.py`.)
+2. **`swallowed-failure` refutation probe** (the 3rd probe). The plan's own "natural next," and the
+   cleanest **graduation exemplar**: re-run the deterministic swallow rule at the LLM's pointer and,
+   *if it fires*, promote the finding to Tier-A.
+3. **Graduation loop (§7.9).** Now buildable against the concrete instance from (2): a recurring,
+   human-confirmed gap category becomes a deterministic signature, so the gap-finder *ratchets the
+   engine's recall upward* instead of being a permanent crutch. The strategic core of Tier-B.
+4. **Phase 5 render-adapter breadth.** Independent of the trust spine, zero LLM-trust risk, immediate
+   user-visible value — run as a **parallel track**, not after Phase 4.
+5. **Infra hardening** (full scan/publish credential split; supply-chain SHA-pinning +
+   `--require-hashes`). Gate on intent to do **live (`--no-dry-run`) publishes** — it is the one open
+   item that becomes a real safety bug the moment someone ships against a real target.
+
+Net: (1) makes Tier-B real for users, (2)+(3) make it compound, (4) runs alongside, (5) lands before
+the first live publish. The §6 phase *table* records the original sequence; this subsection is the
+current one.
+
+### 9.4 Work note — priority 2 (`swallowed-failure` probe + graduation exemplar)
+
+Scoped here so it can be picked up independently (e.g. in parallel with priority 4, which it does
+**not** overlap — see the collision map below). Priority 1 (the `run` integration it builds on) is
+done.
+
+**The key design point — it's a *confirmation* probe, not a refutation probe.** The two existing
+probes (`_REFUTING_CONCERNS` in `collectors/llm/gap_finder.py`) ground an *absence*: a gap survives
+only if the refuting signature fires **nowhere** checked. `swallowed-failure` is the opposite — the
+deterministic swallow rule firing **at the LLM's pointer confirms the gap** (and is exactly what lets
+it graduate). So this needs a second probe class alongside `_REFUTING_CONCERNS`, e.g.
+`_CONFIRMING_CONCERNS`, with inverted survival logic.
+
+**Graduation behavior (the exemplar).** When the swallow rule fires at the located pointer, the
+finding is no longer LLM-asserted — the engine itself re-derived it. Stamp it `source_tier=ast`
+(Tier-A) so it can reach `verified` through the normal gate, rather than being forced to
+`needs-review` like an unconfirmed Tier-B gap. A pointer where the rule does **not** fire is dropped
+(the LLM can't assert a swallow the engine can't reproduce). This is the smallest concrete instance
+of the §7.9 graduation loop and the thing priority 3 will generalize.
+
+**Touchpoints (where the work lives):**
+- `collectors/llm/gap_finder.py` — add the confirming-probe branch; reuse `_locate` for the pointer.
+- `parsing/code_model.py` — the deterministic rule already exists: `_enclosing_swallow` (and the
+  `swallowed.failure` fact type). The work is running it *at a byte-offset pointer* (offset → AST
+  node), not re-implementing detection.
+- `pipeline/gap_finder.py` / `scaffold_gap` — allow a confirmed (Tier-A) swallow gap to carry the
+  promoted tier/status instead of the hard-coded `needs-review` / `confidence 0.5`.
+- Tests: extend the recall eval — a planted swallow in a shape the AST matcher missed → **promoted to
+  Tier-A/verified**; a pointer with no swallow → dropped. Add a fixture proposal of category
+  `swallowed-failure` to `tests/fixtures/sample-gap-finder/.sre/gap-proposals.json` or a sibling.
+
+**Collision map (for parallel work):** priority 2 touches `collectors/llm/`, `parsing/code_model.py`,
+and `pipeline/gap_finder.py`. Priority 4 (render adapters) touches `render/` and
+`synth/scaffold.py` — **fully disjoint**, safe to run concurrently. The only shared surface across
+all remaining tracks is the schema/registry (a new gap shape or kind), so coordinate there if both
+add artifact kinds at once; the Python modules don't overlap.

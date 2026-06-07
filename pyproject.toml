@@ -31,9 +31,9 @@ sre-kb = "sre_kb.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-# JSON Schemas ship inside the package so a wheel-installed engine resolves them at runtime.
-# (config/, prompts/, output_templates/ are still repo-root data for editable/dev use.)
-sre_kb = ["schemas/*.json", "schemas/*.yaml", "schemas/**/*.json"]
+# Schemas and the default config ship inside the package so a wheel-installed engine
+# resolves them at runtime.
+sre_kb = ["schemas/*.json", "schemas/*.yaml", "schemas/**/*.json", "data/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

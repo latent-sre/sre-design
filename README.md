@@ -19,7 +19,7 @@ The full design lives in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Status
 
-Working engine, tested offline (166 tests, ruff-clean) against bundled **Java/Spring**,
+Working engine, tested offline (172 tests, ruff-clean) against bundled **Java/Spring**,
 **.NET/Steeltoe**, and multi-endpoint fixtures — the same collectors emit the same KB for
 both languages (repo-neutrality). See [`docs/DESIGN.md`](docs/DESIGN.md) for the full
 design and a current implementation-status section.
@@ -32,6 +32,11 @@ Implemented:
 - **Trust tiers (provenance)** — every evidence item carries a `source_tier` (`ast`
   deterministic | `llm`), rolled up per artifact in the validation report. The foundation for
   fenced LLM (Tier-B) collectors that can only add `needs-review` candidates, never auto-verify.
+- **LLM gap-finder (Tier-B, spike)** — Copilot proposes resiliency gaps the AST missed
+  (e.g. a client with no timeout); the engine locates each, stamps `path:line:hash`
+  (`source_tier=llm`), and re-derives/refutes it via the shared `signatures` library — surviving
+  gaps land `ResiliencyGap` / `needs-review`, never auto-verified. `sre-kb gap-finder`; see
+  [`docs/PHASE-4-GAP-FINDER.md`](docs/PHASE-4-GAP-FINDER.md).
 - **Scan → scaffold → validate** (5 layers: schema, provenance hash, cross-ref, gating,
   and an adversarial challenge pass that grounds each claim against its cited evidence)
   for ~22 kinds incl. Flow, Alert (log-pattern + SLO burn-rate), Runbook, BlastRadius,
@@ -51,16 +56,14 @@ Implemented:
 
 ## What's next
 
-The roadmap is [`docs/HYBRID-PLAN.md`](docs/HYBRID-PLAN.md); §8 tracks status. Phase 0 (trust
-tiers) and Phase 1 (output + publish hardening) have landed. Next, in order:
+The roadmap is [`docs/HYBRID-PLAN.md`](docs/HYBRID-PLAN.md); §8 tracks status. Phases 0–3 (trust
+tiers, output + publish hardening, the status-aware trust spine, and the Copilot challenge loop),
+the §7.6 schema governance, and the **Phase 4 gap-finder spike** have landed. Next, in order:
 
-- **Status-aware trust spine** — cross-ref / readiness / gating require *verified* referents and
-  confine provenance paths, so Tier-B facts can't inflate a "verified" graph (Phase 2).
-- **Schema governance** — `additionalProperties: false` per kind, an `ownership` field, and a
-  golden-example-per-kind corpus in CI (§7.6).
-- **Fenced LLM (Tier-B) collectors** — a gap-finder that proposes pointers the engine
-  re-derives or refutes; anything it proposes lands `needs-review`, never auto-verified
-  (Phase 3–4, §7.9). This is also how new stacks (Node, Python) gain breadth.
+- **Gap-finder, beyond the spike** — refutation probes for the other §7.9 gap categories (only
+  `missing-timeout` today), target-scoped (not whole-file) config probing, a noise-budget
+  ranking/cap, and the graduation loop that promotes a recurring confirmed gap to a Tier-A
+  signature. This is also how new stacks (Node, Python) gain breadth.
 - **Render-adapter breadth** — AppDynamics / Wavefront emitters beyond Splunk + Prometheus (Phase 5).
 
 Known limitations (documented, not bugs): variable-topic egress (non-literal Kafka topics)
@@ -72,7 +75,7 @@ AST model.
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                                                   # the test suite (166 tests)
+pytest -q                                                   # the test suite (172 tests)
 sre-kb schema list                                          # the kind registry
 
 # scan -> scaffold -> validate -> render -> stage a PR tree (dry-run)

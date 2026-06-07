@@ -30,6 +30,12 @@ render:
 gap_finder:
   max_candidates: 25
 
+# Graduation loop (HYBRID-PLAN §9.3 #3): a gap category a reviewer confirms (`sre-kb confirm-gap`)
+# this many times, with zero false positives, becomes a promotion candidate — the engine then drafts
+# a deterministic signature for a human to review and merge (assisted, never auto-applied).
+graduation:
+  confirmation_threshold: 5
+
 # Publish defaults (forge selected at publish time; token comes from env).
 publish:
   forge: github

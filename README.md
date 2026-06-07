@@ -70,9 +70,10 @@ probing, and a noise budget. The spike cleared the plan's make-or-break bar, and
 into `sre-kb run`** (a `.sre/gap-proposals.json` is auto-detected and routed through the shared gate;
 §9.3 item 1). The remaining order is **integrate before expand** (§9.3):
 
-- **Graduation loop** — `swallowed-failure` is the first concrete confirmation probe that can
-  graduate to Tier-A; the next step is making that ratchet a reusable promotion workflow for
-  recurring human-confirmed gap categories.
+- **Graduation loop** — a reviewer records verdicts with `sre-kb confirm-gap`; once a gap category
+  recurs (threshold reached, zero false positives) `sre-kb graduation-candidates` drafts the
+  deterministic signature to review and merge, ratcheting the engine's recall upward (assisted, never
+  auto-applied).
 - **Render-adapter breadth** (Phase 5) — a tool-neutral alert-intent → adapter seam emits
   Prometheus, Splunk, Wavefront, AppDynamics, Grafana, and ThousandEyes from one intent (config
   `render.alert_tools`); dashboard panels render for Prometheus, Grafana, and Wavefront.

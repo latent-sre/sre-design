@@ -79,6 +79,23 @@ _CONFIRMING_SIGNATURE = {"undocumented-job": "scheduled"}
 _JUDGMENT_CATEGORIES = {"data-loss-path", "missing-idempotency", "unbounded-resource"}
 
 
+def gap_categories() -> set[str]:
+    """Every known gap category the gap-finder can emit (refutation + confirmation + judgment).
+    Used by the graduation loop to validate a reviewer's `confirm-gap` verdict."""
+    return set(_REFUTING_CONCERNS) | set(_CONFIRMING_CATEGORIES) | set(_JUDGMENT_CATEGORIES)
+
+
+def target_concerns(category: str) -> tuple[str, ...]:
+    """The deterministic concern(s) a confirmed `category` would graduate into a signature for — the
+    shared-signature concerns Tier-A keys off. Empty for `swallowed-failure` (graduates via the AST
+    swallow detector, not a regex) and for judgment categories (no deterministic rule grounds them)."""
+    if category in _REFUTING_CONCERNS:
+        return _REFUTING_CONCERNS[category]
+    if category in _CONFIRMING_SIGNATURE:
+        return (_CONFIRMING_SIGNATURE[category],)
+    return ()
+
+
 @dataclass(frozen=True)
 class Proposal:
     """One gap hypothesis from the LLM. `anchor` is excerpt TEXT, never a line number."""

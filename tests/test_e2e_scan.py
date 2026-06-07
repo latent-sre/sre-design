@@ -66,8 +66,15 @@ def test_burn_rate_alert_from_slo_catalog(result):
     assert burn["status"] == "verified"
     assert burn["spec"]["alertType"] == "burn-rate"
     assert "prometheus_fast" in burn["spec"]["expr"]
+    # Regression (latency-vs-availability bug): a latency SLO must burn on latency-bucket
+    # violations (threshold 800ms -> le="0.8"), never on error rate.
+    fast_expr = burn["spec"]["expr"]["prometheus_fast"]
+    assert "http_server_requests_seconds_bucket" in fast_expr
+    assert 'le="0.8"' in fast_expr
+    assert 'outcome!="SUCCESS"' not in fast_expr
     slo = docs[("SloSli", "create-order-latency")]
     assert slo["status"] == "verified"
+    assert slo["spec"]["objectives"][0]["sli"] == "latency"
     assert slo["spec"]["objectives"][0]["target"] == 99.5
     assert slo["spec"]["objectives"][0]["errorBudgetPct"] == 0.5
 

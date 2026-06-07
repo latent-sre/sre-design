@@ -45,7 +45,7 @@ network/synthetic).
 ## Implementation status (June 2026)
 
 The design below is the full intent; this section records what is **built and tested
-offline** today (131 tests, ruff-clean). The vertical slice and the items earlier marked
+offline** today (166 tests, ruff-clean). The vertical slice and the items earlier marked
 "deferred to P3/P4" are now implemented. The forward roadmap — trust tiers and fenced LLM
 (Tier-B) collectors — lives in [`HYBRID-PLAN.md`](HYBRID-PLAN.md) (§8 tracks phase status).
 
@@ -79,10 +79,16 @@ offline** today (131 tests, ruff-clean). The vertical slice and the items earlie
   **non-escapable** untrusted-input context fence, sanitized renderers, the publish-repo
   allowlist + fan-out cap above, dangerous-pattern output lint, and engine resource limits.
 
-Not yet built: the live `LLMChallenger` oracle (Phase 3) and the fenced Tier-B LLM
-gap-finder collectors (Phase 4); §7.6 schema governance; the full scan/publish credential
-split (deployment/infra); additional language collectors (Node/Python/Go) and observability
-backends beyond the Splunk/Prometheus emitters. See [`HYBRID-PLAN.md`](HYBRID-PLAN.md) §8.
+Built and exercised end-to-end: the **challenge loop (Phase 3)** — a deterministic grounding
+challenger runs inline, and judgment-call claims are emitted as a worklist that Copilot
+adjudicates (`challenge-worklist`), then `challenge-apply` re-gates monotonically
+(downgrade-only). The in-process `LLMChallenger` hook stays dormant by design: the oracle is
+Copilot via the worklist, so the engine never calls a model.
+
+Not yet built: the fenced Tier-B LLM gap-finder collectors (Phase 4); the full scan/publish
+credential split (deployment/infra) and supply-chain pinning; additional language collectors
+(Node/Python/Go) and observability backends beyond the Splunk/Prometheus emitters. See
+[`HYBRID-PLAN.md`](HYBRID-PLAN.md) §8.
 
 ---
 

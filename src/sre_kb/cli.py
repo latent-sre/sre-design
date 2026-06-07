@@ -1,9 +1,11 @@
 """`sre-kb` command-line interface.
 
-Phase 0 wires the full command surface. `schema` and `validate-kb` are functional;
-the pipeline stages (run/scan/validate/render/publish/diff) are phase-aware stubs that
-will be filled in with the P1 slice. The engine never calls an LLM — enrichment happens
-in VS Code via Copilot between `scan` and `validate`.
+All subcommands are implemented: `run`/`scan`/`render`/`publish` (the deterministic pipeline),
+`validate-kb`, `findings`, `estate`, `diff`, `challenge-worklist`/`challenge-apply`,
+`gap-finder`, `secret-scan`, and `schema`. There is no separate `validate` subcommand — validation is the
+default `--to-stage` of `run`. The engine never calls an LLM — enrichment happens in VS Code via
+Copilot between `scan` and the validate stage, and the LLM challenge oracle runs out-of-process
+(worklist → Copilot → `challenge-apply`).
 """
 
 from __future__ import annotations

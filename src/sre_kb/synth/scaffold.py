@@ -312,15 +312,59 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
             cross_refs=[{"kind": "Alert", "name": a_name, "relation": "covers"},
                         {"kind": "Flow", "name": for_flow, "relation": "covers"}]))
 
-    # --- Alert (SLO error-budget burn-rate, when a full objective exists) ---
-    if objective and slo_ref and flow:
+    # --- Alert (SLO burn-rate, when a full objective exists) ---
+    # The burn-rate signal must match the SLI the SLO names: a latency objective burns on the
+    # fraction of requests slower than its threshold (histogram buckets), not on error rate.
+    sli = (objective.attrs.get("sli") if objective else None) or "latency"
+    threshold_ms = objective.attrs.get("thresholdMs") if objective else None
+    # A latency objective needs a concrete threshold to derive a bucket-based expr; without one
+    # we cannot form a correct alert, so skip rather than burn on the wrong signal.
+    if objective and slo_ref and flow and (sli != "latency" or threshold_ms is not None):
         target = objective.attrs.get("target")
         budget_frac = round((100 - float(target)) / 100, 6) if target is not None else 0.01
-        metric = "http_server_requests_seconds_count"
+        fast, slow = round(14.4 * budget_frac, 6), round(6 * budget_frac, 6)
+        base = "http_server_requests_seconds"
+        if sli == "latency":
+            le = ("%f" % (float(threshold_ms) / 1000)).rstrip("0").rstrip(".")
+            pct = objective.attrs.get("percentile")
+            expr = {
+                # bad ratio = 1 - (requests faster than threshold / total) > burn threshold
+                "prometheus_fast": (
+                    f'(sum(rate({base}_count[1h])) - sum(rate({base}_bucket{{le="{le}"}}[1h]))) '
+                    f"/ sum(rate({base}_count[1h])) > {fast}"
+                ),
+                "prometheus_slow": (
+                    f'(sum(rate({base}_count[6h])) - sum(rate({base}_bucket{{le="{le}"}}[6h]))) '
+                    f"/ sum(rate({base}_count[6h])) > {slow}"
+                ),
+                "windows": "multi-window (1h fast @14.4x, 6h slow @6x)",
+            }
+            rationale = (
+                f"Multi-window burn-rate on the latency SLO ("
+                f"{(str(pct) + ' ') if pct else ''}<= {threshold_ms}ms, target {target}%, budget "
+                f"{round(budget_frac * 100, 3)}%): fraction of requests slower than {threshold_ms}ms "
+                f"on the {flow_name} flow."
+            )
+        else:
+            expr = {
+                "prometheus_fast": (
+                    f'sum(rate({base}_count{{outcome!="SUCCESS"}}[1h])) / sum(rate({base}_count[1h])) '
+                    f"> {fast}"
+                ),
+                "prometheus_slow": (
+                    f'sum(rate({base}_count{{outcome!="SUCCESS"}}[6h])) / sum(rate({base}_count[6h])) '
+                    f"> {slow}"
+                ),
+                "windows": "multi-window (1h fast @14.4x, 6h slow @6x)",
+            }
+            rationale = (
+                f"Multi-window error-budget burn-rate against SLO target {target}% "
+                f"(budget {round(budget_frac * 100, 3)}%) on the {flow_name} flow."
+            )
         docs.append(
             _doc(
                 "Alert",
-                f"{flow_name}-latency-burn-rate",
+                f"{flow_name}-{sli}-burn-rate",
                 {
                     "alertType": "burn-rate",
                     "sloRef": slo_ref,
@@ -328,21 +372,8 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                     "severity": "high",
                     "forFlow": flow_name,
                     "logFormatRef": None,
-                    "expr": {
-                        "prometheus_fast": (
-                            f'sum(rate({metric}{{outcome!="SUCCESS"}}[1h])) / sum(rate({metric}[1h])) '
-                            f"> {round(14.4 * budget_frac, 6)}"
-                        ),
-                        "prometheus_slow": (
-                            f'sum(rate({metric}{{outcome!="SUCCESS"}}[6h])) / sum(rate({metric}[6h])) '
-                            f"> {round(6 * budget_frac, 6)}"
-                        ),
-                        "windows": "multi-window (1h fast @14.4x, 6h slow @6x)",
-                    },
-                    "rationale": (
-                        f"Multi-window error-budget burn-rate against SLO target {target}% "
-                        f"(budget {round(budget_frac * 100, 3)}%) on the {flow_name} flow."
-                    ),
+                    "expr": expr,
+                    "rationale": rationale,
                 },
                 [objective.evidence] + ([slo.evidence] if slo else []),
                 "verified",

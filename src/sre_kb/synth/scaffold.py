@@ -32,6 +32,7 @@ def burn_rate_expr(
     budget_frac: float,
     uri: str | None,
     tools: tuple[str, ...] | None = None,
+    percentile: int | float | None = None,
 ) -> tuple[dict, str]:
     """Multi-window burn-rate expr that measures the SLO's OWN SLI, scoped to the flow's route.
 
@@ -40,7 +41,7 @@ def burn_rate_expr(
     fraction of requests slower than the threshold from the histogram buckets; else -> error
     fraction for availability/error-rate SLIs. Returns `(expr_dict, numerator_phrase)`.
     """
-    intent = BurnRateIntent(sli, threshold_ms, budget_frac, uri)
+    intent = BurnRateIntent(sli, threshold_ms, budget_frac, uri, percentile)
     return render_burn_rate(intent, tools), intent.numerator
 
 
@@ -355,10 +356,10 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
         target = objective.attrs.get("target")
         budget_frac = round((100 - float(target)) / 100, 6) if target is not None else 0.01
         uri = (flow.attrs.get("trigger") or {}).get("path")
-        expr, numerator = burn_rate_expr(sli, threshold_ms, budget_frac, uri, alert_tools)
+        pct = objective.attrs.get("percentile")
+        expr, numerator = burn_rate_expr(sli, threshold_ms, budget_frac, uri, alert_tools, pct)
         scope = f"route {uri}" if uri else f"the {flow_name} flow"
         if sli == "latency":
-            pct = objective.attrs.get("percentile")
             rationale = (
                 f"Multi-window burn-rate on the latency SLO ("
                 f"{(str(pct) + ' ') if pct else ''}<= {threshold_ms}ms, target {target}%, budget "

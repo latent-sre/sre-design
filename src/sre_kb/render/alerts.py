@@ -34,6 +34,17 @@ def _le(threshold_ms: float | int) -> str:
     return ("%f" % (float(threshold_ms) / 1000)).rstrip("0").rstrip(".")
 
 
+def _pctl(percentile: int | float | str | None, default: int) -> int | float:
+    """Normalize a percentile from 'p99' / '99' / 99 / 99.9 to a number (default when absent)."""
+    if percentile is None:
+        return default
+    try:
+        n = float(str(percentile).lstrip("pP"))
+    except ValueError:
+        return default
+    return int(n) if n.is_integer() else n
+
+
 def _sel(*selectors: str) -> str:
     """Join non-empty Prometheus label selectors into a `{...}` block ('' if none)."""
     parts = [s for s in selectors if s]
@@ -43,12 +54,15 @@ def _sel(*selectors: str) -> str:
 @dataclass(frozen=True)
 class BurnRateIntent:
     """A burn-rate alert's tool-neutral meaning. `sli == 'latency'` (with a threshold) measures the
-    fraction of requests slower than the threshold; anything else measures the error fraction."""
+    fraction of requests slower than the threshold; anything else measures the error fraction.
+    `percentile` is the SLO's latency percentile (e.g. 99), used by backends that express latency as
+    a percentile threshold rather than a histogram-bucket ratio."""
 
     sli: str
     threshold_ms: float | int | None
     budget_frac: float
     route: str | None
+    percentile: int | float | None = None
 
     @property
     def is_latency(self) -> bool:
@@ -108,9 +122,80 @@ def _splunk_log(intent: LogPatternIntent) -> dict:
     }
 
 
+# --- Wavefront adapter (WQL) ----------------------------------------------------------------------
+def _wf_ts(metric: str, *clauses: str) -> str:
+    flt = " and ".join(c for c in clauses if c)
+    return f'ts("{metric}", {flt})' if flt else f'ts("{metric}")'
+
+
+def _wavefront_burn(intent: BurnRateIntent) -> dict:
+    """Wavefront WQL. Availability burns as a moving-window error-fraction ratio (faithful to the
+    intent). Latency has no le-bucket series in Micrometer's Wavefront registry, so it is rendered
+    as a percentile threshold — a *different* mechanism, labelled as such, not a budget burn-rate."""
+    route = f'uri="{intent.route}"' if intent.route else ""
+    if intent.is_latency:
+        pct = _pctl(intent.percentile, 99)
+        phi = f"{pct / 100:g}"  # 99 -> "0.99"
+        series = _wf_ts("http.server.requests", route, f'phi="{phi}"')
+        return {
+            "wavefront": {
+                "query": f"{series} > {_le(intent.threshold_ms)}",
+                "mechanism": (
+                    f"static p{pct} latency threshold in seconds (requires Micrometer "
+                    f"publishPercentiles); Wavefront has no le-bucket series, so this is a "
+                    f"p{pct} <= {intent.threshold_ms}ms check, NOT a multi-window budget burn-rate"
+                ),
+            }
+        }
+    out: dict = {}
+    not_success = 'not outcome="SUCCESS"'
+    for key, window, mult in BURN_WINDOWS:
+        thr = round(mult * intent.budget_frac, 6)
+        err_series = _wf_ts("http.server.requests.count", route, not_success)
+        tot_series = _wf_ts("http.server.requests.count", route)
+        num = f"msum({window}, rate({err_series}))"
+        den = f"msum({window}, rate({tot_series}))"
+        out[f"wavefront_{key}"] = f"{num} / {den} > {thr}"
+    return out
+
+
+# --- AppDynamics adapter (Health Rule, not a query) -----------------------------------------------
+def _appdynamics_burn(intent: BurnRateIntent) -> dict:
+    """AppDynamics alerts via Health Rules (a metric path + a condition), not a query language, and
+    it has no error-budget burn-rate. So this emits a structured, clearly-templated Health Rule the
+    reviewer maps to their tier/BT — never a fabricated query string."""
+    scope = intent.route or "this flow"
+    if intent.is_latency:
+        pct = _pctl(intent.percentile, 95)
+        metric = f"{pct}th Percentile Response Time (ms)"
+        condition = f"> {intent.threshold_ms} ms"
+    else:
+        metric = "Error Rate"
+        condition = f"> {round(intent.budget_frac * 100, 3)}% (SLO error budget as a static threshold)"
+    return {
+        "appdynamics": {
+            "healthRule": {
+                "metricPath": (
+                    f"Business Transaction Performance|Business Transactions|"
+                    f"<tier>|<business-transaction>|{metric}"
+                ),
+                "condition": condition,
+                "evaluateOver": "the standard 5-minute window",
+            },
+            "mechanism": (
+                f"AppDynamics Health Rule (metric path + condition), not a query; replace "
+                f"<tier>/<business-transaction> with the BT serving {scope}. AppD has no "
+                f"multi-window error-budget burn-rate — this is a static/baseline threshold"
+            ),
+        }
+    }
+
+
 _BURN_ADAPTERS: dict[str, Callable[[BurnRateIntent], dict]] = {
     "prometheus": _prometheus_burn,
     "splunk": _splunk_burn,
+    "wavefront": _wavefront_burn,
+    "appdynamics": _appdynamics_burn,
 }
 _LOG_ADAPTERS: dict[str, Callable[[LogPatternIntent], dict]] = {
     "prometheus": _prometheus_log,

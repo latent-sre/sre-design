@@ -42,3 +42,42 @@ def test_log_pattern_tool_selection():
 def test_unknown_tool_is_ignored():
     expr = render_burn_rate(BurnRateIntent("availability", None, 0.01, None), tools=("nope",))
     assert expr == {"windows": expr["windows"]}
+
+
+# --- new backends: honest coverage (HYBRID-PLAN §9.3 #4) ------------------------------------------
+def test_wavefront_availability_is_a_wql_burn_rate_ratio():
+    expr = render_burn_rate(
+        BurnRateIntent("availability", None, 0.005, "/x"), tools=("wavefront",)
+    )
+    fast = expr["wavefront_fast"]
+    assert fast.startswith("msum(1h, rate(ts(")
+    assert 'not outcome="SUCCESS"' in fast and 'uri="/x"' in fast
+    assert fast.endswith("> 0.072")  # 14.4 * 0.005, same budget math as Prometheus
+
+
+def test_wavefront_latency_is_a_labelled_percentile_not_a_fake_burn_rate():
+    expr = render_burn_rate(
+        BurnRateIntent("latency", 800, 0.005, "/x", "p99"), tools=("wavefront",)
+    )
+    wf = expr["wavefront"]
+    assert wf["query"] == 'ts("http.server.requests", uri="/x" and phi="0.99") > 0.8'
+    # the mechanism is honestly labelled as NOT a budget burn-rate (it's a different mechanism)
+    assert "NOT a multi-window budget burn-rate" in wf["mechanism"]
+    assert "wavefront_fast" not in expr  # no fabricated le-bucket ratio for Wavefront
+
+
+def test_appdynamics_is_a_structured_health_rule_not_a_query():
+    expr = render_burn_rate(
+        BurnRateIntent("latency", 800, 0.005, "/api/v1/orders", "p95"), tools=("appdynamics",)
+    )
+    hr = expr["appdynamics"]["healthRule"]
+    assert hr["metricPath"].endswith("95th Percentile Response Time (ms)")
+    assert "<tier>" in hr["metricPath"] and "<business-transaction>" in hr["metricPath"]
+    assert hr["condition"] == "> 800 ms"
+    assert "not a query" in expr["appdynamics"]["mechanism"]
+
+
+def test_percentile_accepts_p_prefixed_or_bare():
+    bare = render_burn_rate(BurnRateIntent("latency", 800, 0.005, "/x", 99), tools=("wavefront",))
+    pfx = render_burn_rate(BurnRateIntent("latency", 800, 0.005, "/x", "p99"), tools=("wavefront",))
+    assert bare["wavefront"]["query"] == pfx["wavefront"]["query"]

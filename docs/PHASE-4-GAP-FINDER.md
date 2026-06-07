@@ -111,18 +111,32 @@ smallest concrete instance of the §7.9 **graduation loop**, and it consciously 
 boundary (an LLM-chosen location can now produce a hard Tier-A guardrail — sound because the engine's
 deterministic rule fired on hashed bytes; see HYBRID-PLAN §9.5 ④).
 
-A **noise budget** (`gap_finder.max_candidates`, default 25) ranks the *llm-tier* survivors by
-severity and caps the rest as `capped`; graduated Tier-A findings are engine-confirmed, not
-candidates, so they are never capped.
+**Judgment routing** (`_JUDGMENT_CATEGORIES`, §7.9) — the third path, for categories no
+deterministic probe can ground (`data-loss-path`, `missing-idempotency`, `unbounded-resource`):
+"is this a data-loss path / a non-idempotent retry?" is a reasoning call. The engine still grounds
+the *citation* (the anchor must locate verbatim) and surfaces them as `routed` Tier-B candidates —
+`source_tier=llm`, `rederivation: judgment`, **needs-review, never verified**, subject to the noise
+budget — for the human/Copilot oracle. A located judgment gap is `kept` but not `confirmed`; an
+unlocatable one is still dropped.
+
+A **noise budget** (`gap_finder.max_candidates`, default 25) ranks the *llm-tier* survivors
+(refutation survivors + routed judgment gaps) by severity and caps the rest as `capped`; graduated
+Tier-A findings are engine-confirmed, not candidates, so they are never capped.
+
+**Cross-stack.** The probes are language-neutral: `_locate`/`_enclosing_type` handle Java, C#, and
+Python, and the swallow detector now reads Python `try/except` (`code_model._py_enclosing_swallow`),
+so `swallowed-failure` confirms-and-graduates on a FastAPI handler just as it does on Java. (Python
+`missing-timeout` needs httpx client-call detection wired in — a follow-up.)
 
 ## Honest limitations (why it's still a spike)
 
 - **The LLM half has never run for real** — every test uses a hand-written proposals file, so recall
   and precision on real code are *unmeasured* (HYBRID-PLAN §9.5 ①/②).
-- **Four categories grounded** (`missing-timeout`, `unguarded-critical-dependency`,
-  `swallowed-failure`, `undocumented-job`). The rest (`data-loss-path`, `missing-idempotency`,
-  `unbounded-resource`) are recorded but not asserted (no probe ⇒ can't ground); the judgment-call
-  ones route to the Copilot oracle, not a signature.
+- **All seven §7.9 categories now have a home:** four are deterministically grounded
+  (`missing-timeout`, `unguarded-critical-dependency`, `swallowed-failure`, `undocumented-job`);
+  three are judgment-routed (`data-loss-path`, `missing-idempotency`, `unbounded-resource`) —
+  located but not re-derived, surfaced as `needs-review` for the oracle. The judgment ones are pure
+  LLM assertions modulo the citation, so they lean entirely on the noise budget + human review.
 - **Signatures are text-broad.** Re-derivation reuses the shared signature regexes, some of which
   match plain words (e.g. `fallback`), so a code *comment* mentioning a pattern can refute a real
   gap. Acceptable here (worst case: a false negative a human never sees) but a reason the probes

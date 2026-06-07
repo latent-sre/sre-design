@@ -191,6 +191,33 @@ def test_undocumented_job_dropped_when_not_scheduled():
     assert res.outcomes[0].result == "refuted"
 
 
+def test_judgment_category_is_routed_not_dropped():
+    # data-loss-path has no deterministic probe (§7.9 judgment call). It still grounds the citation
+    # and is surfaced as a routed Tier-B candidate — not dropped, never confirmed.
+    res = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("data-loss-path", _CHARGE, target="payments-api", severity="high"),
+    ])
+    [out] = res.outcomes
+    assert out.result == "routed"
+    assert res.kept() and not res.confirmed()
+    [fact] = res.facts
+    assert fact.evidence.source_tier == "llm" and fact.attrs["rederivation"] == "judgment"
+
+
+def test_judgment_gap_lands_needs_review_never_verified(tmp_path):
+    import json
+    props = tmp_path / "g.json"
+    props.write_text(json.dumps({"proposals": [
+        {"category": "missing-idempotency", "target": "payments-api", "severity": "high", "anchor": _CHARGE},
+    ]}), encoding="utf-8")
+    run = run_gap_finder(str(FIXTURE), proposals_path=str(props), service="checkout")
+    assert run.by_status == {"needs-review": 1}
+    [doc] = run.docs
+    assert doc["spec"]["sourceTier"] == "llm"
+    assert doc["spec"]["rederivation"] == "judgment"
+    assert validate_doc(doc) == []
+
+
 def test_no_proposals_file_is_a_quiet_no_op():
     # Self-gating: a target with no gap-proposals.json yields nothing (no crash, no noise).
     run = run_gap_finder(str(FIXTURE.parent / "sample-spring-pcf"), service="order")

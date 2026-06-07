@@ -271,10 +271,11 @@ def gap_finder_cmd(
     from sre_kb.pipeline.gap_finder import run_gap_finder
 
     run = run_gap_finder(target, proposals_path=proposals, service=service)
-    conf = run.result.confirmed()
+    kept, conf = run.result.kept(), run.result.confirmed()
+    routed = len(kept) - len(conf)
     typer.echo(
-        f"gap-finder: {len(run.result.outcomes)} proposal(s) -> {len(conf)} confirmed gap(s), "
-        f"{len(run.result.dropped())} dropped"
+        f"gap-finder: {len(run.result.outcomes)} proposal(s) -> {len(kept)} kept "
+        f"({len(conf)} confirmed + {routed} routed), {len(run.result.dropped())} dropped"
     )
     for o in run.result.outcomes:
         where = f" @ {o.path}:{o.lines[0]}-{o.lines[1]}" if o.lines else ""

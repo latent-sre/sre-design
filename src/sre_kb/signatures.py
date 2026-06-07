@@ -61,6 +61,7 @@ _SIGNATURES: dict[str, Signature] = {
                 r"\bTimeout(?:Async)?\s*\(",
                 r"\b(?:connect|read|response)Timeout\b",
                 r"resilience4j\.timelimiter",
+                r"\btimeout\s*=",  # Python httpx/requests kwarg; also Polly/Java fluent `Timeout =`
             ),
         ),
         Signature(

@@ -21,6 +21,7 @@ from sre_kb.config import load_config
 from sre_kb.models.facts import Fact
 from sre_kb.scoring.confidence import Signal, confidence
 from sre_kb.synth.emit import emit
+from sre_kb.tiers import AST
 from sre_kb.util import slug
 from sre_kb.validation.gating import final_status
 from sre_kb.validation.provenance import verify_evidence
@@ -28,9 +29,23 @@ from sre_kb.validation.structural import validate_doc
 
 
 def scaffold_gap(fact: Fact, service: str) -> dict:
-    """One re-grounded gap Fact -> a ResiliencyGap artifact, fenced to needs-review."""
+    """One re-grounded gap Fact -> a ResiliencyGap artifact.
+
+    Two tiers (§9.4): a refutation-probe gap is `source_tier=llm` and is fenced — `needs-review`,
+    sub-floor confidence, `llm-asserted`, never auto-verified. A confirmation-probe gap the engine
+    re-derived deterministically at the pointer is `source_tier=ast` (GRADUATED): it goes through
+    the normal gate as a Tier-A finding (can reach `verified`), exactly like any engine-extracted
+    fact — the LLM only widened *where* the deterministic rule ran.
+    """
     a = fact.attrs
+    tier = fact.evidence.source_tier
     name = slug(f"{a['target']}-{a['category']}")
+    if tier == AST:  # graduated: engine-derived, not LLM-asserted
+        status, conf, prov, unverified, cross = "verified", confidence(Signal.DIRECT), "deterministic", False, None
+    else:
+        status, conf, prov, unverified = "needs-review", confidence(Signal.WEAK), "llm-asserted", True
+        cross = ([{"kind": "ResiliencyPattern", "name": slug(a["target"]), "relation": "depends-on"}]
+                 if a.get("target") else None)
     return emit(
         "ResiliencyGap",
         name,
@@ -40,17 +55,16 @@ def scaffold_gap(fact: Fact, service: str) -> dict:
             "severity": a.get("severity", "medium"),
             "rationale": a.get("rationale"),
             "rederivation": a.get("rederivation", "confirmed"),
-            "sourceTier": fact.evidence.source_tier,
+            "sourceTier": tier,
             "checked": a.get("checked", []),
         },
         [fact.evidence],
-        "needs-review",            # contract: an LLM-proposed gap can never auto-verify
-        confidence(Signal.WEAK),    # 0.5 — below the verified floor even if status were raised
+        status,
+        conf,
         service,
-        cross_refs=([{"kind": "ResiliencyPattern", "name": slug(a["target"]), "relation": "depends-on"}]
-                    if a.get("target") else None),
-        provenance="llm-asserted",
-        unverified_against_live=True,  # an *absence* isn't checkable offline (§7.10 honest negative)
+        cross_refs=cross,
+        provenance=prov,
+        unverified_against_live=unverified,
     )
 
 

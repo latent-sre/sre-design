@@ -31,7 +31,7 @@ from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
 from sre_kb.parsing import parse
 from sre_kb.signatures import fires
-from sre_kb.tiers import LLM
+from sre_kb.tiers import AST, LLM
 
 # Conventional location of the LLM's output inside the (untrusted) target repo.
 PROPOSALS_REL = ".sre/gap-proposals.json"
@@ -60,6 +60,14 @@ _REFUTING_CONCERNS = {
 }
 _INSTANCE_ANNOTATIONS = ("@CircuitBreaker", "@TimeLimiter", "@Retry", "@Bulkhead", "@RateLimiter")
 _SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
+
+# CONFIRMATION-probe categories (opposite polarity to _REFUTING_CONCERNS, §9.4): a gap survives
+# only if the deterministic rule FIRES at the LLM's pointer — at which point the engine has
+# re-derived the fact itself, so it GRADUATES to Tier-A (source_tier=ast) and can reach `verified`.
+# For `swallowed-failure` the rule is the AST swallow detector (`Call.swallow`, code_model). It runs
+# on every call, but the collectors only emit swallow *facts* for messaging egress — so the recall
+# the gap-finder adds is surfacing engine-detectable swallows at the call sites collectors ignore.
+_CONFIRMING_CATEGORIES = {"swallowed-failure"}
 
 
 @dataclass(frozen=True)
@@ -212,6 +220,22 @@ def _rederive(ctx: ScanContext, rel: str, start: int, end: int, category: str, t
     return "confirmed", tuple(checked), f"no refuting signature {list(refuters)} fires in {len(checked)} checked location(s)"
 
 
+def _confirm_swallow(ctx: ScanContext, rel: str, start: int, end: int):
+    """Confirmation probe: run the deterministic swallow detector at the cited pointer. Returns the
+    `Swallow` (catch span + log call) if a logged-and-swallowed failure sits at the pointer, else
+    None. Detection already exists per-Call in the AST model; we just read it at the located range
+    — for ANY call type, which is the recall the messaging-only collectors miss (§9.4)."""
+    parsed = _enclosing_type(ctx, rel, start, end)
+    if parsed is None:
+        return None
+    typedecl, method, _ = parsed
+    for m in ([method] if method else typedecl.methods):
+        for c in m.calls:
+            if start <= c.line <= end and c.swallow is not None:
+                return c.swallow
+    return None
+
+
 # --------------------------------------------------------------------------- collect
 
 def collect_from_proposals(
@@ -229,9 +253,33 @@ def collect_from_proposals(
             res.outcomes.append(Outcome(p, "unlocatable", note="anchor not found verbatim in the source"))
             continue
         rel, s, e = loc
+
+        # Confirmation probe (§9.4): the rule firing at the pointer confirms the gap AND graduates
+        # it to Tier-A — the engine re-derived it, so it is no longer LLM-asserted. Never noise-capped
+        # (it is a confirmed engine finding, not a candidate). A pointer where the rule doesn't fire
+        # is dropped (the LLM can't assert a swallow the engine can't reproduce).
+        if p.category in _CONFIRMING_CATEGORIES:
+            sw = _confirm_swallow(ctx, rel, s, e)
+            if sw is None:
+                res.outcomes.append(Outcome(p, "refuted", rel, (s, e), (rel,),
+                                            "no logged-and-swallowed failure at the cited pointer"))
+                continue
+            target = p.target or Path(rel).stem
+            res.facts.append(Fact(
+                "resiliency.gap",
+                {"category": p.category, "target": target, "severity": p.severity,
+                 "rationale": p.rationale, "rederivation": "confirmed", "checked": [rel],
+                 "note": f"swallow rule fired at the pointer (catch logs '{sw.log_method}', no rethrow)"},
+                ctx.evidence(rel, sw.start, sw.end, "gap_finder.swallowed-failure", source_tier=AST),
+                Symbol(f"{rel}:{sw.start}-{sw.end}", "gap"),
+            ))
+            res.outcomes.append(Outcome(p, "confirmed", rel, (sw.start, sw.end), (rel,),
+                                        "graduated to Tier-A — engine re-derived the swallow at the pointer"))
+            continue
+
         if p.category not in _REFUTING_CONCERNS:
             res.outcomes.append(Outcome(p, "unconfirmable", rel, (s, e),
-                                        note=f"no deterministic refutation probe for category '{p.category}'"))
+                                        note=f"no deterministic probe for category '{p.category}'"))
             continue
         verdict, checked, note = _rederive(ctx, rel, s, e, p.category, p.target)
         if verdict != "confirmed":

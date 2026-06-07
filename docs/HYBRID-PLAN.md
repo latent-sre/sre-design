@@ -883,10 +883,11 @@ reviews. Completion is tracked in the §8 table; the rationale lives here.
 - **R7 — `grafana` + `thousandeyes` alert adapters.** Backend parity (4/6 → 6/6) via the existing
   neutral-intent → adapter seam: lift their template *structure*, feed our deterministically generated
   query (never their LLM-supplied `signal.query`). See §9.6 lift action #2.
-- **R8 — supply-chain hardening.** `--require-hashes` lockfile + Renovate digest-pin of Actions + an
-  independent `detect-secrets` second gate + an offline wheel for air-gapped PCF (schemas + config now
-  ship as package data, so the engine wheel is self-contained — the offline-wheel precondition is met).
-  See §9.6 #3 / §9.3 #5. Gate before any live (`--no-dry-run`) publish.
+- **R8 — supply-chain hardening.** ✅ **offline wheel landed** — `make offline-wheel` /
+  `scripts/build-offline.sh` builds a self-contained wheelhouse (engine + every runtime dep; schemas +
+  config ship as package data). Still open: `--require-hashes` lockfile + Renovate digest-pin of
+  Actions + an independent `detect-secrets` second gate. See §9.6 #3 / §9.3 #5. Gate before any live
+  (`--no-dry-run`) publish.
 - **N4 — central vocabulary + severity reconciliation.** A single `taxonomy.yaml` the schemas draw
   their enums from, with a consistency test, to kill enum drift (our `critical/high/medium/low` vs
   their `sev1/sev2/sev3`). Deliberately not adopted yet — revisit if enum drift bites.

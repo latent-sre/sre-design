@@ -21,6 +21,22 @@ def test_secret_scan_detects_common_secrets():
     assert any(f["rule"] == "github-token" for f in scan_text("GITHUB_TOKEN=ghp_" + "a" * 36, "e.env"))
 
 
+def test_secret_scan_detects_entropy_and_value_shape():
+    token = "Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8Ii9Jj0Kk"
+    assert any(f["rule"] == "high-entropy" for f in scan_text(f"opaque: {token}", "a.yml"))
+    assert any(
+        f["rule"] == "value-shape"
+        for f in scan_text("db_password: s3cretValueWithLength", "app.yml")
+    )
+
+
+def test_secret_scan_decodes_utf16_text(tmp_path):
+    key = "AKIA" + "W" * 16
+    path = tmp_path / "creds.yml"
+    path.write_text(f"id: {key}\n", encoding="utf-16")
+    assert any(f["rule"] == "aws-access-key-id" for f in enforce_secret_gate(tmp_path, allow=True))
+
+
 def test_secret_scan_clean_text():
     assert scan_text("just logs and ordinary code here", "a.txt") == []
 

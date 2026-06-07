@@ -111,11 +111,10 @@ def assemble_pr(
         merge_tree(stage / "tree", base)
 
     tree = layout.root / "pr"
-    # Defense-in-depth: redact any secret in the tree, THEN the gate verifies nothing slipped
-    # through. Both run even on --dry-run, so the staged tree is safe to inspect/publish.
-    from sre_kb.security import enforce_secret_gate, redact_tree
+    # Fail closed before publish: generated output containing a real secret must be surfaced for
+    # human review, not silently scrubbed into an apparently clean tree.
+    from sre_kb.security import enforce_secret_gate
 
-    redact_tree(tree)
     enforce_secret_gate(tree, allow=allow_secrets)
     if dry_run:
         return tree, f"dry-run: staged PR tree at {tree} (would target {sre_repo})"

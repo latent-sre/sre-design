@@ -62,6 +62,31 @@ def test_fan_out_cap_blocks_runaway_tree(tmp_path):
         assemble_pr(layout, docs, None, dry_run=True, max_artifacts=2)
 
 
+def test_publish_blocks_secret_before_redaction(tmp_path):
+    from sre_kb.publish import assemble_pr
+    from sre_kb.security import SecretLeakError
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(tmp_path, "secret")
+    layout.ensure()
+    docs = [{"kind": "Flow", "metadata": {"name": "f", "service": "svc"}, "spec": {}, "status": "verified"}]
+    kb_file = layout.kb / "verified" / "Flow" / "f.yaml"
+    kb_file.parent.mkdir(parents=True)
+    kb_file.write_text("token: ghp_" + "a" * 36 + "\n", encoding="utf-8")
+    proj = layout.root / "projections"
+    (proj / ".github").mkdir(parents=True)
+    (proj / ".github" / "copilot-instructions.md").write_text("ok\n", encoding="utf-8")
+    (proj / "runbooks").mkdir()
+    (proj / "catalog-info.yaml").write_text("apiVersion: backstage.io/v1alpha1\n", encoding="utf-8")
+
+    with pytest.raises(SecretLeakError):
+        assemble_pr(layout, docs, None, dry_run=True)
+
+    assert "ghp_" in (layout.root / "pr" / "catalog" / "svc" / "kb" / "verified" / "Flow" / "f.yaml").read_text(
+        encoding="utf-8"
+    )
+
+
 def test_publish_reassembly_preserves_human_edit(tmp_path):
     first = run_pipeline(str(FIXTURE), work_root=str(tmp_path), run_id="preserve", to_stage="publish")
     base = first.pr / "catalog" / "order-service"

@@ -25,6 +25,22 @@ def test_secret_scan_clean_text():
     assert scan_text("just logs and ordinary code here", "a.txt") == []
 
 
+def test_secret_scan_catches_secret_in_utf16_file(tmp_path):
+    """N1 regression: a secret in a non-UTF-8 file (UTF-16, as many Windows configs are) must not
+    fail open. The old NUL-byte heuristic skipped UTF-16 entirely, so the secret was neither scanned
+    nor redacted; multi-encoding decode closes that hole."""
+    from sre_kb.security import redact_tree
+
+    leak = tmp_path / "appsettings.json"
+    leak.write_text('{"AwsKey": "AKIAIOSFODNN7EXAMPLE"}\n', encoding="utf-16")  # BOM + interleaved NULs
+
+    found = enforce_secret_gate(tmp_path, allow=True)
+    assert any(x["rule"] == "aws-access-key-id" for x in found)  # detected despite UTF-16
+    assert redact_tree(tmp_path) >= 1                            # and redacted in place
+    assert "AKIA" not in leak.read_text(encoding="utf-16")       # secret gone, file still valid UTF-16
+    assert enforce_secret_gate(tmp_path) == []                   # second gate now clean
+
+
 def test_secret_gate_blocks_and_can_override(tmp_path):
     (tmp_path / "leak.env").write_text("GITHUB_TOKEN=ghp_" + "b" * 36)
     with pytest.raises(SecretLeakError):

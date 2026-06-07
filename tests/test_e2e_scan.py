@@ -82,6 +82,15 @@ def test_burn_rate_alert_from_slo_catalog(result):
     assert slo["spec"]["objectives"][0]["errorBudgetPct"] == 0.5
 
 
+def test_burn_rate_alert_renders_configured_backends(result):
+    # render.alert_tools defaults to all four; the multi-backend adapter seam emits each, with the
+    # new backends honestly represented (Wavefront percentile threshold; AppDynamics health rule).
+    expr = _load(result.root)[("Alert", "create-order-latency-burn-rate")]["spec"]["expr"]
+    assert "phi=" in expr["wavefront"]["query"]  # latency -> labelled percentile, not a fake ratio
+    assert "NOT a multi-window budget burn-rate" in expr["wavefront"]["mechanism"]
+    assert "<business-transaction>" in expr["appdynamics"]["healthRule"]["metricPath"]
+
+
 def test_blast_radius_flags_data_loss(result):
     brs = [d for (k, _), d in _load(result.root).items() if k == "BlastRadius"]
     assert any((d["spec"].get("stateful") or {}).get("dataLossRisk") for d in brs)

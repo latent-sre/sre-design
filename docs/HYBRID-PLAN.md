@@ -235,7 +235,7 @@ trap `validation/challenge.py:9-13` warns about). Instead:
 | **2. Make the trust spine status-aware** ✅ | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). | Or Tier-B facts will silently inflate "verified" graphs. |
 | **3. Challenge loop (Copilot oracle)** ✅ | Judgment-call claims → worklist; Copilot adjudicates; `challenge-apply` re-gates monotonically. In-process `LLMChallenger` superseded by the worklist (engine stays model-free). | Prerequisite for Tier-B — deterministic grounding is circular for LLM judgment claims. |
 | **4. LLM collectors: gap-finders + pointer-generators** 🟡 (gap-finder spike) | `collectors/llm/`. The LLM reads the engine's facts + the cited code and proposes **(a) gaps the engine missed on code we already cover** (the recall payoff — §7.9) and **(b) pointers for stacks no AST grammar reaches** (breadth). The engine re-derives or *refutes* each (§6.3, §7.9); nothing it proposes can auto-`verify`. | Recall on covered estates **and** breadth, both safely fenced. |
-| **5. Render-adapter breadth** ⬜ | Generalize `render/` to neutral-intent → adapter; add Wavefront/AppDynamics. | Independent; can run in parallel. |
+| **5. Render-adapter breadth** 🟡 | Generalize `render/` to neutral-intent → adapter; add Wavefront/AppDynamics. | Independent; can run in parallel. *(Seam + 4 alert backends landed; see §8.)* |
 
 Phases 0→1→2 are the trust/security spine and are low-risk extensions of existing code; they land
 first. Phase 4 was the only heavy lift and the only new LLM-integration risk — and the spike has
@@ -538,9 +538,30 @@ instance) and the graduation-to-Tier-A loop. Integration into the main `run` pip
 (§9.3 item 1): `run` auto-detects `.sre/gap-proposals.json` and routes survivors through the shared
 gate; the standalone `sre-kb gap-finder` CLI remains for proposals-only runs.
 
-### Phase 5 ⬜
+### Phase 5 🟡 (render-adapter breadth, started)
 
-Not started: render-adapter breadth (Wavefront / AppDynamics emitters beyond Splunk + Prometheus).
+The neutral-intent → adapter seam is in (`render/alerts.py`): an `Alert`'s `spec.expr` is built from a
+tool-neutral `BurnRateIntent`/`LogPatternIntent` and rendered through per-backend adapters, selected
+by config (`render.alert_tools`). Adding a backend is a new adapter, not a change to extraction /
+scaffold / gating. Backends today:
+
+- **Prometheus** (PromQL) and **Splunk** (SPL) — byte-grounded dialects, output unchanged from before
+  the refactor (pinned by `test_burn_rate_expr.py` + `test_e2e_scan.py`).
+- **Wavefront** (WQL) — availability burns as a faithful moving-window error-fraction ratio
+  (`msum`/`rate`/`ts`); latency renders as a labelled p-threshold (Micrometer's Wavefront registry has
+  no `le`-bucket series), explicitly *not* a budget burn-rate.
+- **AppDynamics** — a structured **Health Rule** fragment (metric path + condition), since AppD alerts
+  via health rules, not a query language; the tier/BT is templated for the reviewer to map.
+
+"Honest coverage": an adapter emits a backend only where it maps faithfully to the intent, and labels
+the mechanism wherever it differs from a multi-window burn-rate (`tests/test_alert_adapters.py`).
+
+The four backends above cover the team's current monitoring stack (Prometheus + Splunk + Wavefront +
+AppDynamics); the seam makes any further backend a drop-in adapter if the stack changes.
+
+Deferred: dashboard/diagram render adapters (only alert exprs are adapter-routed today); and verifying
+the Wavefront/AppDynamics metric names against a live tenant (they carry `unverifiedAgainstLive` like
+all metric alerts).
 
 ---
 
@@ -579,14 +600,16 @@ takes §7.7's standing advice that Phase 5 is independent and should run in para
    *same* validate/challenge/gate path — merged into `facts.jsonl` (so the §7.1 tier-conflict check
    sees them) and landing `needs-review`, `source_tier=llm`, never auto-verified. A complete no-op
    when no proposals file exists. (`pipeline/orchestrator.py`; `tests/test_run_gap_integration.py`.)
-2. **`swallowed-failure` refutation probe** (the 3rd probe). The plan's own "natural next," and the
-   cleanest **graduation exemplar**: re-run the deterministic swallow rule at the LLM's pointer and,
-   *if it fires*, promote the finding to Tier-A.
+2. **`swallowed-failure` confirmation probe** (the 3rd probe). ✅ **Done** (PR #14): the first
+   *confirmation*-class probe — the deterministic swallow rule firing at the LLM's pointer *confirms*
+   the gap and **graduates it to Tier-A** (`source_tier=ast`, verified-eligible). The cleanest
+   graduation exemplar; see §9.4 status and §9.5 ④ for the trust-boundary note.
 3. **Graduation loop (§7.9).** Now buildable against the concrete instance from (2): a recurring,
    human-confirmed gap category becomes a deterministic signature, so the gap-finder *ratchets the
    engine's recall upward* instead of being a permanent crutch. The strategic core of Tier-B.
-4. **Phase 5 render-adapter breadth.** Independent of the trust spine, zero LLM-trust risk, immediate
-   user-visible value — run as a **parallel track**, not after Phase 4.
+4. **Phase 5 render-adapter breadth.** 🟡 **Started** (parallel track). The neutral-intent → adapter
+   seam plus Prometheus/Splunk/Wavefront/AppDynamics alert backends have landed (§8 Phase 5); next are
+   dashboard adapters and more backends. Independent of the trust spine, zero LLM-trust risk.
 5. **Infra hardening** (full scan/publish credential split; supply-chain SHA-pinning +
    `--require-hashes`). Gate on intent to do **live (`--no-dry-run`) publishes** — it is the one open
    item that becomes a real safety bug the moment someone ships against a real target.

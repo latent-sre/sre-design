@@ -69,6 +69,17 @@ _SIGNATURES: dict[str, Signature] = {
             call_tokens=("Retry", "WaitAndRetry"),
             patterns=_p(r"@Retry\b", r"\bWaitAndRetry\w*\s*\(", r"\bRetry(?:Async)?\s*\("),
         ),
+        Signature(
+            "scheduled",  # a recurring/background job — Spring @Scheduled, Quartz, or Python schedulers
+            annotations=("@Scheduled",),
+            call_tokens=("RecurringJob", "ScheduleJob"),
+            patterns=_p(
+                r"@Scheduled\b", r"@DisallowConcurrentExecution\b",          # Java/Spring/Quartz
+                r"@(?:shared_task|periodic_task|task)\b", r"@app\.on_event\b",  # Celery / FastAPI
+                r"@\w*scheduler\.scheduled_job\b", r"\bBackgroundScheduler\b",  # APScheduler
+                r"@repeat_every\b",                                          # fastapi-utils
+            ),
+        ),
     )
 }
 

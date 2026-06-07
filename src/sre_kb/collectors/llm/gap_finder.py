@@ -64,10 +64,11 @@ _SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
 # CONFIRMATION-probe categories (opposite polarity to _REFUTING_CONCERNS, §9.4): a gap survives
 # only if the deterministic rule FIRES at the LLM's pointer — at which point the engine has
 # re-derived the fact itself, so it GRADUATES to Tier-A (source_tier=ast) and can reach `verified`.
-# For `swallowed-failure` the rule is the AST swallow detector (`Call.swallow`, code_model). It runs
-# on every call, but the collectors only emit swallow *facts* for messaging egress — so the recall
-# the gap-finder adds is surfacing engine-detectable swallows at the call sites collectors ignore.
-_CONFIRMING_CATEGORIES = {"swallowed-failure"}
+# Two flavours: `swallowed-failure` reads the AST swallow detector (`Call.swallow`); the rest fire a
+# shared signature at the pointer's enclosing type. Both surface things the collectors don't emit
+# facts for today (swallows outside messaging egress; scheduled jobs at all), which is the recall.
+_CONFIRMING_CATEGORIES = {"swallowed-failure", "undocumented-job"}
+_CONFIRMING_SIGNATURE = {"undocumented-job": "scheduled"}
 
 
 @dataclass(frozen=True)
@@ -236,6 +237,25 @@ def _confirm_swallow(ctx: ScanContext, rel: str, start: int, end: int):
     return None
 
 
+def _confirm(ctx: ScanContext, rel: str, start: int, end: int, category: str):
+    """Dispatch a confirmation probe. Returns ((evid_start, evid_end), note) if the deterministic
+    rule fires at the pointer (→ graduate to Tier-A), or (None, why) if it doesn't (→ drop)."""
+    if category == "swallowed-failure":
+        sw = _confirm_swallow(ctx, rel, start, end)
+        if sw is None:
+            return None, "no logged-and-swallowed failure at the cited pointer"
+        return (sw.start, sw.end), f"swallow rule fired at the pointer (catch logs '{sw.log_method}', no rethrow)"
+    # Signature-based confirmation (e.g. undocumented-job → the `scheduled` signature).
+    concern = _CONFIRMING_SIGNATURE[category]
+    parsed = _enclosing_type(ctx, rel, start, end)
+    if parsed is None:
+        return None, "could not parse an enclosing type at the cited location"
+    _, _, type_text = parsed
+    if fires(concern, type_text):
+        return (start, end), f"the {concern} signature fires at the pointer — engine-confirmed"
+    return None, f"the {concern} signature does not fire at the pointer"
+
+
 # --------------------------------------------------------------------------- collect
 
 def collect_from_proposals(
@@ -259,22 +279,20 @@ def collect_from_proposals(
         # (it is a confirmed engine finding, not a candidate). A pointer where the rule doesn't fire
         # is dropped (the LLM can't assert a swallow the engine can't reproduce).
         if p.category in _CONFIRMING_CATEGORIES:
-            sw = _confirm_swallow(ctx, rel, s, e)
-            if sw is None:
-                res.outcomes.append(Outcome(p, "refuted", rel, (s, e), (rel,),
-                                            "no logged-and-swallowed failure at the cited pointer"))
+            span, note = _confirm(ctx, rel, s, e, p.category)
+            if span is None:
+                res.outcomes.append(Outcome(p, "refuted", rel, (s, e), (rel,), note))
                 continue
             target = p.target or Path(rel).stem
             res.facts.append(Fact(
                 "resiliency.gap",
                 {"category": p.category, "target": target, "severity": p.severity,
-                 "rationale": p.rationale, "rederivation": "confirmed", "checked": [rel],
-                 "note": f"swallow rule fired at the pointer (catch logs '{sw.log_method}', no rethrow)"},
-                ctx.evidence(rel, sw.start, sw.end, "gap_finder.swallowed-failure", source_tier=AST),
-                Symbol(f"{rel}:{sw.start}-{sw.end}", "gap"),
+                 "rationale": p.rationale, "rederivation": "confirmed", "checked": [rel], "note": note},
+                ctx.evidence(rel, span[0], span[1], f"gap_finder.{p.category}", source_tier=AST),
+                Symbol(f"{rel}:{span[0]}-{span[1]}", "gap"),
             ))
-            res.outcomes.append(Outcome(p, "confirmed", rel, (sw.start, sw.end), (rel,),
-                                        "graduated to Tier-A — engine re-derived the swallow at the pointer"))
+            res.outcomes.append(Outcome(p, "confirmed", rel, span, (rel,),
+                                        "graduated to Tier-A — engine re-derived the gap at the pointer"))
             continue
 
         if p.category not in _REFUTING_CONCERNS:

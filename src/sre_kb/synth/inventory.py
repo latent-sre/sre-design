@@ -31,11 +31,14 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
     # --- TechStack ---
     if framework or app:
         deps = [f.attrs["name"] for f in fs.of("tech.dependency")]
+        # Language/runtime come from a `tech.runtime` fact when a collector emits one (e.g. Python);
+        # the JVM stacks don't, so they keep the historical java/jvm/maven defaults.
+        rt = fs.first("tech.runtime")
         spec = {
-            "languages": ["java"],
+            "languages": [rt.attrs["language"]] if rt else ["java"],
             "frameworks": [framework.attrs] if framework else [],
-            "runtime": "jvm",
-            "buildTool": "maven" if ctx.files("pom.xml") else "gradle",
+            "runtime": rt.attrs.get("runtime") if rt else "jvm",
+            "buildTool": rt.attrs.get("buildTool") if rt else ("maven" if ctx.files("pom.xml") else "gradle"),
             "notableLibraries": deps[:20],
         }
         if app:

@@ -100,11 +100,13 @@ firing **at the LLM's pointer** *confirms* the gap, and because the engine re-de
 | Category | Confirmed when, at the pointer… | Tier |
 |---|---|---|
 | `swallowed-failure` | the AST swallow detector (`Call.swallow`) fires | **ast → can reach `verified`** |
+| `undocumented-job` | the shared `scheduled` signature fires (`@Scheduled`, Quartz, Celery/APScheduler, `@repeat_every`) | **ast → can reach `verified`** |
 
-The recall this adds: the swallow detector already runs on *every* call, but the collectors emit
-`swallowed.failure` **facts** only for Kafka egress — so the gap-finder surfaces engine-detectable
-swallows at the call sites the collectors ignore (a DB write, an HTTP call). A pointer where the rule
-doesn't fire is dropped — the LLM can't assert a swallow the engine can't reproduce. This is the
+The recall this adds: the relevant detector already exists, but the collectors don't emit a fact for
+it at the proposed site — swallows are emitted only for Kafka egress, and there is no `ScheduledJob`
+collector at all — so the gap-finder surfaces engine-detectable findings at the call sites the
+collectors ignore (a DB write, an HTTP call, a cron job with no Flow/runbook). A pointer where the
+rule doesn't fire is dropped — the LLM can't assert what the engine can't reproduce. This is the
 smallest concrete instance of the §7.9 **graduation loop**, and it consciously widens the trust
 boundary (an LLM-chosen location can now produce a hard Tier-A guardrail — sound because the engine's
 deterministic rule fired on hashed bytes; see HYBRID-PLAN §9.5 ④).
@@ -117,9 +119,10 @@ candidates, so they are never capped.
 
 - **The LLM half has never run for real** — every test uses a hand-written proposals file, so recall
   and precision on real code are *unmeasured* (HYBRID-PLAN §9.5 ①/②).
-- **Three categories grounded** (`missing-timeout`, `unguarded-critical-dependency`,
-  `swallowed-failure`). The rest (`data-loss-path`, `missing-idempotency`, `undocumented-job`,
-  `unbounded-resource`) are recorded but not asserted (no probe ⇒ can't ground).
+- **Four categories grounded** (`missing-timeout`, `unguarded-critical-dependency`,
+  `swallowed-failure`, `undocumented-job`). The rest (`data-loss-path`, `missing-idempotency`,
+  `unbounded-resource`) are recorded but not asserted (no probe ⇒ can't ground); the judgment-call
+  ones route to the Copilot oracle, not a signature.
 - **Signatures are text-broad.** Re-derivation reuses the shared signature regexes, some of which
   match plain words (e.g. `fallback`), so a code *comment* mentioning a pattern can refute a real
   gap. Acceptable here (worst case: a false negative a human never sees) but a reason the probes

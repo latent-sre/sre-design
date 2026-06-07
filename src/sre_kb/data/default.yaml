@@ -36,6 +36,11 @@ gap_finder:
 graduation:
   confirmation_threshold: 5
 
+# Service discovery fan-out cap (DEEP-COMPARISON R8): `sre-kb plan` / `run-plan` refuse to scan a repo
+# with more than this many discovered services before producing any artifacts. ~ (null) = no cap.
+scan:
+  max_services: 50
+
 # Publish defaults (forge selected at publish time; token comes from env).
 publish:
   forge: github

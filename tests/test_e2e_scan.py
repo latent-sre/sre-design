@@ -72,6 +72,9 @@ def test_burn_rate_alert_from_slo_catalog(result):
     assert "http_server_requests_seconds_bucket" in fast_expr
     assert 'le="0.8"' in fast_expr
     assert 'outcome!="SUCCESS"' not in fast_expr
+    # Route-scoped to the flow's own uri, not measured service-wide.
+    uri = docs[("Flow", "create-order")]["spec"]["trigger"]["path"]
+    assert f'uri="{uri}"' in fast_expr
     slo = docs[("SloSli", "create-order-latency")]
     assert slo["status"] == "verified"
     assert slo["spec"]["objectives"][0]["sli"] == "latency"

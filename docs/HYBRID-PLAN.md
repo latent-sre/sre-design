@@ -745,9 +745,11 @@ takes §7.7's standing advice that Phase 5 is independent and should run in para
 3. **Graduation loop (§7.9).** Now buildable against the concrete instance from (2): a recurring,
    human-confirmed gap category becomes a deterministic signature, so the gap-finder *ratchets the
    engine's recall upward* instead of being a permanent crutch. The strategic core of Tier-B.
-4. **Phase 5 render-adapter breadth.** 🟡 **Started** (parallel track). The neutral-intent → adapter
+4. **Phase 5 render-adapter breadth.** ✅ **Done** (parallel track). The neutral-intent → adapter
    seam plus Prometheus/Splunk/Wavefront/AppDynamics + Grafana/ThousandEyes alert backends have landed
-   (6/6; §8 Phase 5); next are dashboard adapters. Independent of the trust spine, zero LLM-trust risk.
+   (6/6; §8 Phase 5), and dashboard panels render for Prometheus/Grafana/Wavefront (splunk/appd panels
+   carry the metric but no RED query — no faithful dialect). Independent of the trust spine, zero
+   LLM-trust risk.
 5. **Infra hardening** (full scan/publish credential split; supply-chain SHA-pinning +
    `--require-hashes`). Gate on intent to do **live (`--no-dry-run`) publishes** — it is the one open
    item that becomes a real safety bug the moment someone ships against a real target.

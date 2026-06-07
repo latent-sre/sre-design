@@ -31,10 +31,29 @@ def test_red_panels_are_deterministic_prometheus_queries():
     assert all(p["signal"]["source"] == "prometheus" for p in panels)
 
 
-def test_unknown_source_emits_no_fabricated_query():
-    panels = red_panels("/x", source="grafana")
+def test_source_without_red_dialect_emits_no_fabricated_query():
+    panels = red_panels("/x", source="splunk")  # logs backend: no faithful RED dashboard query
     assert all("query" not in p["signal"] for p in panels)  # honest: no dialect we can't generate
     assert all(p["signal"]["metric"] for p in panels)        # still names the metric
+
+
+def test_grafana_panels_reuse_prometheus_queries():
+    g = {p["title"]: p for p in red_panels("/api/v1/orders", percentile="p99", source="grafana")}
+    prom = {p["title"]: p for p in red_panels("/api/v1/orders", percentile="p99")}
+    assert g["Request rate"]["signal"]["query"] == prom["Request rate"]["signal"]["query"]
+    assert g["Latency p99"]["signal"]["query"].startswith("histogram_quantile(0.99,")
+    assert all(p["signal"]["source"] == "grafana" for p in g.values())
+
+
+def test_wavefront_panels_are_wql():
+    w = {p["title"]: p for p in red_panels("/x", percentile="p99", source="wavefront")}
+    assert w["Request rate"]["signal"]["query"] == 'rate(ts("http.server.requests.count", uri="/x"))'
+    assert w["Error fraction"]["signal"]["query"] == (
+        'rate(ts("http.server.requests.count", uri="/x" and not outcome="SUCCESS")) '
+        '/ rate(ts("http.server.requests.count", uri="/x"))'
+    )
+    assert w["Latency p99"]["signal"]["query"] == 'ts("http.server.requests", uri="/x" and phi="0.99")'
+    assert all(p["signal"]["source"] == "wavefront" for p in w.values())
 
 
 @pytest.fixture(scope="module")

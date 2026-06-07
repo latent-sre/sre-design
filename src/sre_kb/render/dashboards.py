@@ -1,10 +1,10 @@
 """Dashboard panel generation (HYBRID-PLAN Phase 5 / §9.6 — the adopted `Dashboard` kind).
 
 Mirrors the alert-adapter seam (`render/alerts.py`): a tool-neutral set of panels rendered into a
-backend's query dialect. Today the engine generates the standard RED panels (rate / errors /
-duration) for a flow's route, Prometheus-sourced — the one backend we can derive dashboard queries
-for deterministically. Other sources (Grafana/Wavefront dashboards) plug in the same way as the
-alert backends did, and are the next Phase-5 increment.
+backend's query dialect. The engine generates the standard RED panels (rate / errors / duration)
+for a flow's route, with deterministic queries for Prometheus, Grafana (over a Prometheus
+datasource), and Wavefront (WQL); splunk/appdynamics panels carry the metric but no query, since
+those backends have no faithful RED dashboard dialect.
 """
 
 from __future__ import annotations
@@ -30,12 +30,14 @@ def red_panels(route: str | None, *, percentile=None, source: str = "prometheus"
     """The RED method (Rate, Errors, Duration) as dashboard panels for `route`.
 
     Returns tool-neutral panel dicts whose `signal` carries the backend `source` + a generated
-    `query`. Prometheus only today; an unknown source yields panels with the metric but no query
-    (honest: we don't fabricate a dialect we can't generate).
+    `query` for Prometheus, Grafana (Prometheus datasource), and Wavefront (WQL); a source without a
+    faithful RED dialect yields panels with the metric but no query (honest: no fabricated dialect).
     """
     uri = f'uri="{route}"' if route else ""
     phi = _pctl(percentile, 0.99)
-    if source == "prometheus":
+    rate_q = err_q = dur_q = None
+    if source in ("prometheus", "grafana"):
+        # Grafana dashboards query a Prometheus datasource, so reuse the deterministic PromQL.
         tot_sel = _sel(uri)
         err_sel = _sel(uri, 'outcome!="SUCCESS"')
         dur_q = f"histogram_quantile({phi:g}, sum(rate({_BURN_METRIC}_bucket{tot_sel}[5m])) by (le))"
@@ -44,8 +46,25 @@ def red_panels(route: str | None, *, percentile=None, source: str = "prometheus"
             f"sum(rate({_BURN_METRIC}_count{err_sel}[5m])) "
             f"/ sum(rate({_BURN_METRIC}_count{tot_sel}[5m]))"
         )
-    else:
-        dur_q = rate_q = err_q = None
+    elif source == "wavefront":
+        flt = f'uri="{route}"' if route else ""
+
+        def _ts(metric: str, extra: str = "") -> str:
+            clauses = " and ".join(c for c in (flt, extra) if c)
+            return f'ts("{metric}", {clauses})' if clauses else f'ts("{metric}")'
+
+        tot = _ts("http.server.requests.count")
+        errs = _ts("http.server.requests.count", 'not outcome="SUCCESS"')
+        rate_q = f"rate({tot})"
+        err_q = f"rate({errs}) / rate({tot})"
+        dur_q = _ts("http.server.requests", f'phi="{phi:g}"')
+    # splunk/appdynamics have no faithful RED dashboard query dialect -> panels carry no query
+
+    dur_desc = (
+        "request-duration percentile from the histogram (RED: Duration)"
+        if source in ("prometheus", "grafana")
+        else "request-duration percentile series (RED: Duration)"
+    )
 
     def _panel(title: str, ptype: str, unit: str, metric: str, query: str | None, desc: str) -> dict:
         signal = {"source": source, "metric": metric, "description": desc}
@@ -59,5 +78,5 @@ def red_panels(route: str | None, *, percentile=None, source: str = "prometheus"
         _panel("Error fraction", "timeseries", "percentunit", f"{_BURN_METRIC}_count", err_q,
                "fraction of non-SUCCESS responses (RED: Errors)"),
         _panel(f"Latency p{int(phi * 100)}", "timeseries", "s", f"{_BURN_METRIC}_bucket", dur_q,
-               "request-duration percentile from the histogram (RED: Duration)"),
+               dur_desc),
     ]

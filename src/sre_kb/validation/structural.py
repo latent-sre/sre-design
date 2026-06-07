@@ -51,10 +51,12 @@ def _validator_from_path(schema_path: Path) -> Draft202012Validator:
     return Draft202012Validator(schema)
 
 
+@cache
 def _envelope_validator_from(schema_root: Path) -> Draft202012Validator:
     return _validator_from_path(schema_root / "_envelope.schema.json")
 
 
+@cache
 def _kind_validator_from(schema_root: Path, kind: str) -> Draft202012Validator | None:
     schema_path = schema_root / "v1alpha1" / f"{kind}.schema.json"
     if not schema_path.exists():

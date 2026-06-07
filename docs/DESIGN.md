@@ -427,9 +427,11 @@ dangling refs) becomes part of the PR body.
 hash), **not raw code**, so secret *values* are never copied into the KB or PR — the design
 avoids embedding source bytes in the first place.
 
-**Active enforcement (built):** a **redact** pass scrubs any secret in the staged PR tree,
-then a **publish-time secret-scan gate** over the whole tree hard-fails on a match — both
-run even on `--dry-run`, so the staged tree is always safe to inspect or publish. Still a
+**Active enforcement (built):** a **publish-time secret-scan gate** over the whole staged PR
+tree **fails closed** on any match — a real secret is surfaced for human review, not silently
+scrubbed — and it runs even on `--dry-run`, so the staged tree is always vetted before it can
+be inspected or published. The explicit `--allow-secrets` override redacts (`redact_tree`)
+regex-detectable secrets rather than publishing them raw. Still a
 future item: a `SecurityPosture` collector that records secret *locations/types* (never
 values) discovered in the target, masking any excerpt before render.
 
@@ -458,8 +460,9 @@ loaded by other engineers' Copilot). Poison in → trusted out, at incident time
   no monitoring change auto-applied; SRE-side CI treats the incoming KB as untrusted (infra).
 - **Generated skills as a backdoor / RCE** → ✓ consumer skills instruction-only (no
   executable `scripts/`), least-privilege `tools`.
-- **Secret / recon-data exfil via the PR** → ✓ redact pass + ✓ publish-time secret-scan
-  gate (see *Secret safety*); document the Copilot enterprise data-boundary dependency.
+- **Secret / recon-data exfil via the PR** → ✓ fail-closed publish-time secret-scan gate
+  (redaction on the `--allow-secrets` override; see *Secret safety*); document the Copilot
+  enterprise data-boundary dependency.
 - **Tool / prompt supply chain** → ✓ **sandboxed/autoescaped Jinja**; CODEOWNERS on
   `prompts/`+`schemas/` and pinned+hashed deps are infra (deferred).
 - **False confidence → self-inflicted outage** → ✓ blast radius labeled "best-effort

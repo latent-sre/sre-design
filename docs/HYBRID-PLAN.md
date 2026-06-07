@@ -475,8 +475,9 @@ Both weaknesses §6 assigns to Phase 1 are closed, and the §6 hardening list is
   confined to an allowlist; empty list = block-all by default (§4 publish path).
 - **Token out of `git` argv** — tokenless remote + auth via env config (`GIT_CONFIG_*` /
   `http.extraheader`).
-- **redact + second gate** (`security/secret_scan.py`) — `redact_tree()` scrubs the staged tree
-  before `enforce_secret_gate` verifies it.
+- **fail-closed secret gate** (`security/secret_scan.py`) — `enforce_secret_gate()` scans the staged
+  tree and raises on any match (surfaced for review, not silently scrubbed); `redact_tree()` runs
+  only under the explicit `--allow-secrets` override.
 - **Fan-out cap** (`publish.max_artifacts`) — refuses a runaway/compromised PR tree.
 - **Dangerous-pattern safety lint** (`validation/safety.py`) — artifact specs are scanned for
   shell-pipe-to-network, `rm -rf`, TLS/auth-disable, and dynamic-eval patterns; a hit forces the

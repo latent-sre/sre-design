@@ -100,6 +100,17 @@ sre-kb run --target tests/fixtures/sample-dotnet-steeltoe --run net --to-stage v
 sre-kb estate --target tests/fixtures/sample-spring-pcf --target tests/fixtures/sample-billing-pcf
 ```
 
+### Offline / air-gapped install
+
+`make offline-wheel` (or `scripts/build-offline.sh`) builds a self-contained wheelhouse — the engine
+wheel plus every runtime dependency — under `dist/wheels/`. Schemas and the default config ship inside
+the wheel as package data, so a disconnected runner (e.g. PCF) installs with no index:
+
+```bash
+make offline-wheel
+pip install --no-index --find-links dist/wheels sre-kb
+```
+
 ### Dev container
 
 VS Code / Codespaces can also open this repo in the included dev container. It uses Python 3.12 and

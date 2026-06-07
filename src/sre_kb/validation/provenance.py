@@ -25,8 +25,16 @@ def _verify_one(ev: dict, root: Path, i: int) -> list[str]:
     lines = ev.get("lines") or {}
     start, end = lines.get("start"), lines.get("end")
     want = ev.get("excerptHash")
-    fpath = root / path if path else None
-    if not fpath or not fpath.exists():
+    if not path:
+        return [f"evidence[{i}]: path not found: {path}"]
+    # Path confinement: the cited file must resolve INSIDE the repo root. Engine output is
+    # always in-root, but an edited or LLM-sourced artifact could cite `../` or an absolute
+    # path to smuggle in (and hash-match) bytes from outside the scanned repo.
+    base = root.resolve()
+    fpath = (base / path).resolve()
+    if not fpath.is_relative_to(base):
+        return [f"evidence[{i}]: path escapes repo root: {path}"]
+    if not fpath.exists():
         return [f"evidence[{i}]: path not found: {path}"]
     content = fpath.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
     if not (isinstance(start, int) and isinstance(end, int)) or start < 1 or end > len(content):

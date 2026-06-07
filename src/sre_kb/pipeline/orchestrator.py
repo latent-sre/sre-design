@@ -25,7 +25,7 @@ from sre_kb.validation.challenge import (
     build_worklist,
     challenge_doc,
 )
-from sre_kb.validation.crossref import check_crossrefs
+from sre_kb.validation.crossref import resolve_statuses
 from sre_kb.validation.gating import final_status
 from sre_kb.validation.provenance import verify_evidence
 from sre_kb.validation.report import write_report
@@ -94,21 +94,21 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     if to_stage == "scaffold":
         return RunResult(run_id, layout.root, len(fs.facts), len(docs), {})
 
-    crossref_problems = check_crossrefs(docs)
     challenger = GroundingChallenger()
-    by_status: dict[str, int] = {}
-    records = []
+    # Phase 1: per-doc validation -> a PRELIMINARY status (everything except crossref). Crossref
+    # is held back because making it status-aware needs the other docs' statuses first.
+    prelim: dict[str, str] = {}
+    pieces: dict[str, dict] = {}
     for d in docs:
         key = f"{d['kind']}/{d['metadata']['name']}"
         struct = validate_doc(d)
         prov = verify_evidence(d, target_path)
-        xref = crossref_problems.get(key, [])
         safety = lint_doc(d)
         status = final_status(
             d,
             structural_ok=not struct,
             provenance_ok=not prov,
-            crossref_ok=not xref,
+            crossref_ok=True,  # deferred to the fixpoint below
             min_confidence=gate.get("verified_min_confidence", 0.7),
             require_verified_provenance=gate.get("require_verified_provenance", True),
         )
@@ -116,6 +116,27 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
             status = "needs-review"
         verdicts = challenge_doc(d, ctx.read_lines, challenger)  # adversarial grounding pass
         status, challenge_notes = apply_challenge_gating(status, verdicts)
+        prelim[key] = status
+        pieces[key] = {"struct": struct, "prov": prov, "safety": safety,
+                       "verdicts": verdicts, "challengeNotes": challenge_notes}
+
+    # Phase 2: status-aware crossref to a fixpoint. A verified artifact citing an unverified
+    # (or dangling) referent over a trust-bearing relation is downgraded to needs-review;
+    # downgrades cascade until stable (see crossref.resolve_statuses).
+    status_of = {(d["kind"], d["metadata"]["name"]):
+                 prelim[f"{d['kind']}/{d['metadata']['name']}"] for d in docs}
+    crossref_problems = resolve_statuses(docs, status_of)
+    for d in docs:
+        prelim[f"{d['kind']}/{d['metadata']['name']}"] = status_of[(d["kind"], d["metadata"]["name"])]
+
+    # Phase 3: finalize — write each doc at its settled status and record it.
+    by_status: dict[str, int] = {}
+    records = []
+    for d in docs:
+        key = f"{d['kind']}/{d['metadata']['name']}"
+        status = prelim[key]
+        p = pieces[key]
+        xref = crossref_problems.get(key, [])
         d["status"] = status
         if status == "rejected":
             out = layout.reports / "rejected" / d["kind"]
@@ -125,9 +146,9 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         _dump_yaml(out / f"{d['metadata']['name']}.yaml", d)
         by_status[status] = by_status.get(status, 0) + 1
         records.append(
-            {"artifact": key, "status": status, "structural": struct, "provenance": prov,
-             "crossref": xref, "safety": safety, "challenger": challenger.id,
-             "challenge": [v.__dict__ for v in verdicts], "challengeNotes": challenge_notes}
+            {"artifact": key, "status": status, "structural": p["struct"], "provenance": p["prov"],
+             "crossref": xref, "safety": p["safety"], "challenger": challenger.id,
+             "challenge": [v.__dict__ for v in p["verdicts"]], "challengeNotes": p["challengeNotes"]}
         )
 
     report = {

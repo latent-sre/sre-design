@@ -137,11 +137,16 @@ These were verified at the source and **fixed with regression tests** in the sam
 - **Publish path** (`publish/forge/github.py:98`): the token is embedded in the remote URL and
   passed as a `git` argv (visible to `ps`); `open_pr` has no target-repo allowlist (relies
   wholly on the ambient token's scope).
-- **Gates not status-aware**: `crossref.py` resolves a reference if *any* artifact with that
+- ~~**Gates not status-aware**: `crossref.py` resolves a reference if *any* artifact with that
   name exists, regardless of whether it is `verified`/`rejected`; `readiness` counts artifacts
-  by kind, not status — a "verified" graph can cite unverified artifacts and grade "A".
-- **`provenance.py:28`** has no path-confinement (`root / path` with no `is_relative_to` check) —
-  harmless for engine output (always in-root) but bites edited / future LLM-sourced artifacts.
+  by kind, not status — a "verified" graph can cite unverified artifacts and grade "A".~~
+  **Fixed (Phase 2).** `crossref` now downgrades (to a fixpoint) any verified artifact whose
+  *trust-bearing* (`depends-on`/`implements`) referent is unverified or dangling; `readiness`
+  credits an artifact-backed PRR control only when that artifact is `verified`, and surfaces
+  drafts as gaps. See `docs/PHASE-2-TRUST-SPINE.md`.
+- ~~**`provenance.py:28`** has no path-confinement (`root / path` with no `is_relative_to`
+  check) — harmless for engine output (always in-root) but bites edited / future LLM-sourced
+  artifacts.~~ **Fixed (Phase 2):** the cited file must resolve inside the repo root.
 - **`DESIGN.md` is internally stale**: its header says the challenge pass and secret gate are
   built (they are — verified), while its body still says "P3 / deferred". Trust the code.
 
@@ -233,7 +238,7 @@ trap `validation/challenge.py:9-13` warns about). Instead:
 |---|---|---|
 | **0. Fact contract & trust tiers** | Add `source_tier: ast\|llm` to `Fact`/`Evidence`; a `CollectorProtocol` both tiers satisfy. No behavior change. | Foundation. |
 | **1. Adopt `resiliency-skills`' hardening wholesale** | Architectural scan/publish split (no-credential scan role; scoped publish credential), sandboxed/`json.dumps` renderers, `redact` + second gate, fan-out cap, `needs-human-review` const. | This *is* `sre-design`'s own deferred roadmap. Closes the textual-fence and publish-path weaknesses **before** any LLM breadth is added. |
-| **2. Make the trust spine status-aware** | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). | Or Tier-B facts will silently inflate "verified" graphs. |
+| **2. Make the trust spine status-aware** ✅ | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). **Done** — `docs/PHASE-2-TRUST-SPINE.md`. | Or Tier-B facts will silently inflate "verified" graphs. |
 | **3. Wire `LLMChallenger` to a live oracle** | Real adjudication for judgment-call claims. | Prerequisite for Tier-B, not polish — deterministic grounding is circular for LLM claims. |
 | **4. LLM collectors as pointer-generators** | `collectors/llm/`; clone `sre-flow-analysis` into the granular skill set; engine re-confirms each pointer (§ contract). | The breadth payoff, now safely fenced. |
 | **5. Render-adapter breadth** | Generalize `render/` to neutral-intent → adapter; add Wavefront/AppDynamics. | Independent; can run in parallel. |

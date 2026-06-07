@@ -47,6 +47,10 @@ Implemented:
 
 ## What's next
 
+- **Status-aware trust spine (Phase 2, done)** — crossref now downgrades any verified artifact
+  whose `depends-on`/`implements` referent is unverified (to a fixpoint); readiness credits only
+  verified controls; provenance confines cited paths to the repo root. See
+  [`docs/PHASE-2-TRUST-SPINE.md`](docs/PHASE-2-TRUST-SPINE.md).
 - **LLM gap-finder (Phase 4, landed as a spike)** — the first Tier-B (LLM) collector: Copilot
   proposes resiliency gaps the AST missed (e.g. a client with no timeout) as byte anchors; the
   engine locates, stamps `path:line:hash`, re-derives, and lands them `needs-review` (never

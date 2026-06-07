@@ -594,3 +594,40 @@ takes §7.7's standing advice that Phase 5 is independent and should run in para
 Net: (1) makes Tier-B real for users, (2)+(3) make it compound, (4) runs alongside, (5) lands before
 the first live publish. The §6 phase *table* records the original sequence; this subsection is the
 current one.
+
+### 9.4 Work note — priority 2 (`swallowed-failure` probe + graduation exemplar)
+
+Scoped here so it can be picked up independently (e.g. in parallel with priority 4, which it does
+**not** overlap — see the collision map below). Priority 1 (the `run` integration it builds on) is
+done.
+
+**The key design point — it's a *confirmation* probe, not a refutation probe.** The two existing
+probes (`_REFUTING_CONCERNS` in `collectors/llm/gap_finder.py`) ground an *absence*: a gap survives
+only if the refuting signature fires **nowhere** checked. `swallowed-failure` is the opposite — the
+deterministic swallow rule firing **at the LLM's pointer confirms the gap** (and is exactly what lets
+it graduate). So this needs a second probe class alongside `_REFUTING_CONCERNS`, e.g.
+`_CONFIRMING_CONCERNS`, with inverted survival logic.
+
+**Graduation behavior (the exemplar).** When the swallow rule fires at the located pointer, the
+finding is no longer LLM-asserted — the engine itself re-derived it. Stamp it `source_tier=ast`
+(Tier-A) so it can reach `verified` through the normal gate, rather than being forced to
+`needs-review` like an unconfirmed Tier-B gap. A pointer where the rule does **not** fire is dropped
+(the LLM can't assert a swallow the engine can't reproduce). This is the smallest concrete instance
+of the §7.9 graduation loop and the thing priority 3 will generalize.
+
+**Touchpoints (where the work lives):**
+- `collectors/llm/gap_finder.py` — add the confirming-probe branch; reuse `_locate` for the pointer.
+- `parsing/code_model.py` — the deterministic rule already exists: `_enclosing_swallow` (and the
+  `swallowed.failure` fact type). The work is running it *at a byte-offset pointer* (offset → AST
+  node), not re-implementing detection.
+- `pipeline/gap_finder.py` / `scaffold_gap` — allow a confirmed (Tier-A) swallow gap to carry the
+  promoted tier/status instead of the hard-coded `needs-review` / `confidence 0.5`.
+- Tests: extend the recall eval — a planted swallow in a shape the AST matcher missed → **promoted to
+  Tier-A/verified**; a pointer with no swallow → dropped. Add a fixture proposal of category
+  `swallowed-failure` to `tests/fixtures/sample-gap-finder/.sre/gap-proposals.json` or a sibling.
+
+**Collision map (for parallel work):** priority 2 touches `collectors/llm/`, `parsing/code_model.py`,
+and `pipeline/gap_finder.py`. Priority 4 (render adapters) touches `render/` and
+`synth/scaffold.py` — **fully disjoint**, safe to run concurrently. The only shared surface across
+all remaining tracks is the schema/registry (a new gap shape or kind), so coordinate there if both
+add artifact kinds at once; the Python modules don't overlap.

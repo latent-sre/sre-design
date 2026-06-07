@@ -10,9 +10,11 @@ def test_latency_burns_on_buckets_scoped_by_route():
     assert 'http_server_requests_seconds_bucket{uri="/api/v1/orders",le="0.8"}' in fast
     assert 'http_server_requests_seconds_count{uri="/api/v1/orders"}' in fast
     assert 'outcome!="SUCCESS"' not in fast
-    assert fast.endswith("> 0.072")  # 14.4 * 0.005
-    assert expr["prometheus_slow"].endswith("> 0.03")  # 6 * 0.005
-    assert "[6h]" in expr["prometheus_slow"]
+    # multi-window/multi-burn-rate: the 1h long window AND a 5m short confirmation window
+    assert " and " in fast and "[1h]" in fast and "[5m]" in fast
+    assert "> 0.072)" in fast  # 14.4 * 0.005, applied to both windows
+    slow = expr["prometheus_slow"]
+    assert "[6h]" in slow and "[30m]" in slow and "> 0.03)" in slow  # 6 * 0.005
     assert numerator == "fraction of requests slower than 0.8s"
 
 
@@ -22,6 +24,8 @@ def test_availability_burns_on_error_ratio_scoped_by_route():
     assert 'http_server_requests_seconds_count{uri="/api/v1/orders",outcome!="SUCCESS"}' in fast
     assert 'http_server_requests_seconds_count{uri="/api/v1/orders"}' in fast
     assert "bucket" not in fast
+    # multi-window/multi-burn-rate: the 1h long window AND a 5m short confirmation window
+    assert " and " in fast and "[1h]" in fast and "[5m]" in fast
     assert numerator == 'error fraction (outcome!="SUCCESS")'
 
 

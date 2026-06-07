@@ -51,9 +51,11 @@ def test_wavefront_availability_is_a_wql_burn_rate_ratio():
         BurnRateIntent("availability", None, 0.005, "/x"), tools=("wavefront",)
     )
     fast = expr["wavefront_fast"]
-    assert fast.startswith("msum(1h, rate(ts(")
+    assert fast.startswith("(msum(1h, rate(ts(")
     assert 'not outcome="SUCCESS"' in fast and 'uri="/x"' in fast
-    assert fast.endswith("> 0.072")  # 14.4 * 0.005, same budget math as Prometheus
+    # multi-window/multi-burn-rate: the 1h long window AND a 5m short confirmation window
+    assert " and " in fast and "msum(5m," in fast
+    assert "> 0.072)" in fast  # 14.4 * 0.005, same budget math as Prometheus
 
 
 def test_wavefront_latency_is_a_labelled_percentile_not_a_fake_burn_rate():

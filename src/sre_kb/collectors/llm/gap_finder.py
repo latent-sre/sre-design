@@ -24,6 +24,7 @@ places the engine `checked`, and lands `needs-review` downstream — nothing her
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -199,6 +200,15 @@ def _scope_names(method, target: str | None) -> set[str]:
     return {n for n in names if n}
 
 
+def _name_in_text(name: str, text: str) -> bool:
+    """Whole-token match for a resilience *instance* name in config text. `payments` matches
+    `…instances.payments.timeout…` but NOT `payments-api`, a *different* instance it is merely a
+    prefix of — instance names are delimited by non-`[\\w-]` (path separators, quotes, whitespace),
+    so a prefix substring must not scope-match a longer token (HYBRID-PLAN §9.5 ⑤). Without this a
+    timeout block for `payments-api` would wrongly refute a real gap on `payments`."""
+    return re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", text, re.I) is not None
+
+
 def _rederive(ctx: ScanContext, rel: str, start: int, end: int, category: str, target: str | None):
     """Deterministic refutation probe for `category` at the cited bytes, using the shared
     `signatures` library. Any refuting concern firing in scope drops the gap. Returns
@@ -222,9 +232,8 @@ def _rederive(ctx: ScanContext, rel: str, start: int, end: int, category: str, t
     names = _scope_names(method, target)
     for cpath, ctext in _config_texts(ctx):
         checked.append(cpath)
-        low = ctext.lower()
-        if names and not any(n in low for n in names):
-            continue  # this config doesn't mention our instance — out of scope
+        if names and not any(_name_in_text(n, ctext) for n in names):
+            continue  # this config doesn't name this instance (whole-token) — out of scope
         for concern in refuters:
             if fires(concern, ctext):
                 return ("refuted", tuple(checked),

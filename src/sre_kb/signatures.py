@@ -50,7 +50,14 @@ _SIGNATURES: dict[str, Signature] = {
             "fallback",
             annotations=("@Recover",),
             call_tokens=("Fallback",),
-            patterns=_p(r"fallbackMethod\s*=", r"@Recover\b", r"\.Fallback(?:Async)?\s*\(", r"fallback"),
+            # Match a fallback *mechanism*, never the bare word: a bare `fallback` substring fired on
+            # the word in a comment / string / identifier (e.g. `fallbackUrl`), which — as a refuter
+            # for `unguarded-critical-dependency` — silently dropped real gaps (HYBRID-PLAN §9.5 ⑤).
+            patterns=_p(
+                r"\bfallback(?:Method|Factory)?\s*=",   # resilience4j fallbackMethod=; Spring Cloud Feign fallback=/fallbackFactory=
+                r"@Recover\b",                          # Spring Retry recovery method
+                r"\.(?:with)?Fallback(?:Async)?\s*\(",  # Polly .Fallback(/.FallbackAsync(; resilience4j-vavr .withFallback(
+            ),
         ),
         Signature(
             "timeout",

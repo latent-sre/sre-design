@@ -25,6 +25,21 @@ def test_timeout_and_retry_signatures() -> None:
     assert fires("retry", '@Retry(name="inv")')
 
 
+def test_fallback_signature_matches_mechanisms_not_the_bare_word() -> None:
+    """§9.5 ⑤: as a refuter for `unguarded-critical-dependency`, the fallback signature must fire on
+    a real fallback *mechanism*, never the bare word in a comment/identifier — a false fire there
+    silently drops a real gap."""
+    assert fires("fallback", '@CircuitBreaker(name="p", fallbackMethod = "charge")')  # resilience4j
+    assert fires("fallback", "@Recover")                                              # Spring Retry
+    assert fires("fallback", "Policy.Handle<Exception>().FallbackAsync(ct => alt)")   # Polly
+    assert fires("fallback", "Decorators.ofSupplier(s).withFallback(t -> alt)")       # resilience4j-vavr
+    assert fires("fallback", '@FeignClient(name = "p", fallback = PFallback.class)')  # Spring Cloud Feign
+    # These used to false-refute a real gap (the bare-substring bug):
+    assert not fires("fallback", "// TODO: add a fallback path here")                 # comment prose
+    assert not fires("fallback", 'String fallbackUrl = props.get("url");')            # identifier
+    assert not fires("fallback", 'log.warn("no fallback configured");')               # string literal
+
+
 def test_unknown_concern_never_fires() -> None:
     assert not fires("not-a-concern", "@CircuitBreaker")
     assert "circuit-breaker" in concerns()

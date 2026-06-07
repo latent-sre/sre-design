@@ -117,6 +117,15 @@ def test_config_probe_is_target_scoped():
     assert out.result == "confirmed"
 
 
+def test_config_scope_matches_whole_instance_token_not_prefix():
+    # §9.5 ⑤: a substring scope let `payments` match a *different* `payments-api` config block, so a
+    # timeout there wrongly refuted a real gap on `payments`. The whole-token check must not.
+    cfg = "resilience4j.timelimiter.instances.payments-api.timeoutDuration: 2s\n"
+    assert gap_finder._name_in_text("payments-api", cfg) is True       # the real instance scopes in
+    assert gap_finder._name_in_text("payments", cfg) is False          # a prefix of a *different* one must not
+    assert gap_finder._name_in_text("payments", "instances.payments.timeoutDuration: 2s") is True
+
+
 def test_noise_budget_caps_lower_severity_first():
     res = gap_finder.collect_from_proposals(_ctx(), [
         Proposal("unguarded-critical-dependency", _NOTIFY, target="notifications", severity="medium"),

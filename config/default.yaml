@@ -18,6 +18,11 @@ gating:
 collectors:
   enabled: [common, java_spring]
 
+# Tier-B LLM gap-finder (HYBRID-PLAN §7.9). Noise budget: keep at most this many confirmed gaps
+# per run, highest-severity first, so a cry-wolf run can't flood a reviewer. ~ (null) = no cap.
+gap_finder:
+  max_candidates: 25
+
 # Publish defaults (forge selected at publish time; token comes from env).
 publish:
   forge: github

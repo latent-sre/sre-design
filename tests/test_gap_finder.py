@@ -18,6 +18,7 @@ from pathlib import Path
 
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.collectors.llm import gap_finder
+from sre_kb.collectors.llm.gap_finder import Proposal
 from sre_kb.pipeline.gap_finder import run_gap_finder
 from sre_kb.tiers import LLM, artifact_tier
 from sre_kb.validation.provenance import verify_evidence
@@ -83,6 +84,44 @@ def test_nothing_the_llm_proposes_auto_verifies():
     assert doc["spec"]["target"] == "payments-api"
 
 
+_NOTIFY = 'restTemplate.postForObject(baseUrl + "/notify", new Event(orderId), Void.class);'
+_CHARGE = 'return restTemplate.postForObject(baseUrl + "/charge", new Charge(orderId, amountCents), Receipt.class);'
+
+
+# --------------------------------------------------------------- second probe + noise budget
+
+def test_unguarded_critical_dependency_probe():
+    # NotificationsClient has no breaker/fallback/timeout (and no config) -> confirmed.
+    # PaymentsClient.charge carries @CircuitBreaker + a fallback -> the probe refutes it.
+    res = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("unguarded-critical-dependency", _NOTIFY, target="notifications", severity="high"),
+        Proposal("unguarded-critical-dependency", _CHARGE, target="payments-api", severity="high"),
+    ])
+    by_target = {o.proposal.target: o.result for o in res.outcomes}
+    assert by_target["notifications"] == "confirmed"
+    assert by_target["payments-api"] == "refuted"
+
+
+def test_config_probe_is_target_scoped():
+    # application.yml has a circuit-breaker block for `payments`/`shipping` but NOT `notifications`.
+    # A whole-file probe would wrongly refute the notifications gap; the target-scoped probe must not.
+    [out] = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("unguarded-critical-dependency", _NOTIFY, target="notifications", severity="high"),
+    ]).outcomes
+    assert out.result == "confirmed"
+
+
+def test_noise_budget_caps_lower_severity_first():
+    res = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("unguarded-critical-dependency", _NOTIFY, target="notifications", severity="medium"),
+        Proposal("missing-timeout", _CHARGE, target="payments-api", severity="high"),
+    ], max_candidates=1)
+    assert len(res.facts) == 1
+    [kept] = res.confirmed()
+    assert kept.proposal.target == "payments-api"           # high severity kept
+    assert any(o.result == "capped" for o in res.outcomes)  # medium dropped by the budget
+
+
 def test_no_proposals_file_is_a_quiet_no_op():
     # Self-gating: a target with no gap-proposals.json yields nothing (no crash, no noise).
     run = run_gap_finder(str(FIXTURE.parent / "sample-spring-pcf"), service="order")
@@ -97,11 +136,11 @@ def test_refutation_probe_generalizes_to_the_real_dotnet_gap():
     missing timeout (Polly breaker, no timeout) and refutes the Spring client with @TimeLimiter."""
     dotnet = Path(__file__).parent / "fixtures" / "sample-dotnet-steeltoe"
     ctx = ScanContext(root=dotnet, repo="file://net", commit=LOCAL_COMMIT)
-    verdict, _, _ = gap_finder._rederive(ctx, "src/Clients/InventoryClient.cs", 22, 22, "missing-timeout")
+    verdict, _, _ = gap_finder._rederive(ctx, "src/Clients/InventoryClient.cs", 22, 22, "missing-timeout", "inventory")
     assert verdict == "confirmed"
 
     spring = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
     sctx = ScanContext(root=spring, repo="file://spring", commit=LOCAL_COMMIT)
     rel = "src/main/java/com/acme/order/client/InventoryClient.java"
-    sverdict, _, _ = gap_finder._rederive(sctx, rel, 26, 26, "missing-timeout")
+    sverdict, _, _ = gap_finder._rederive(sctx, rel, 26, 26, "missing-timeout", "inventory")
     assert sverdict == "refuted"

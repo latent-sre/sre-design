@@ -514,10 +514,12 @@ to a `ResiliencyGap` artifact (new kind, golden-corpus + `additionalProperties:f
 and asserts the engine surfaces the first and drops the other two. Prompt: the vendored
 `assess-resiliency` skill (`.github/skills/sre-gap-finder/`). CLI: `sre-kb gap-finder`.
 
-Deferred from §7.9/§7.10: refutation probes for the other gap categories (only `missing-timeout`
-today), target-scoped (not whole-file) config probing, the noise-budget ranking/cap, the
-graduation-to-Tier-A loop, and integration into the main `run` pipeline (the spike is a standalone
-opt-in path).
+Grounded probes today: `missing-timeout` and `unguarded-critical-dependency` (refuted when
+`circuit-breaker`/`fallback`/`timeout` fire), with **target-scoped** config probing (by resilience
+instance name) and a **noise budget** (`gap_finder.max_candidates`, severity-ranked). Deferred from
+§7.9/§7.10: probes for the remaining categories (`swallowed-failure` next — the cleanest graduation
+instance), the graduation-to-Tier-A loop, and integration into the main `run` pipeline (the spike is
+a standalone opt-in path).
 
 ### Phase 5 ⬜
 

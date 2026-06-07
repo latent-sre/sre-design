@@ -634,7 +634,17 @@ no LLM involved. This is exactly the graduation target §7.9 describes (a recurr
 deterministic rule). Timeout-duration completeness is deferred (a `@TimeLimiter` has a library
 default; the Tier-B `missing-timeout` probe covers timeout *absence*). Inert on a fully-configured
 service. `tests/test_resiliency_params.py` (4 tests, incl. config-layering resolution).
-**253 tests green.**
+
+### Engine-owned clobber-protection on publish (Round-3 R4)
+
+A re-publish must never silently revert an operator's edit to a generated file. `publish/manifest.py`
+records the hash of every file the engine writes in `.sre/manifest.yaml` in the target repo; the
+GitHub forge runs a manifest-backed **3-way merge** against the cloned target instead of a blind
+overwrite (the old `_sync_tree` is gone): unchanged files refresh in place, an operator-edited file is
+preserved with the fresh draft routed to `.proposed/<path>`, and orphaned outputs are pruned (unless
+operator-edited). The cloned target is the only place the operator's current files exist in our
+PR-based model (adopted from resiliency-skills' in-tree `assemble`). `tests/test_publish_manifest.py`
+(6 unit + 1 end-to-end through the forge). **259 tests green.**
 
 ---
 

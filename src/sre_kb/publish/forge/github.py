@@ -12,7 +12,6 @@ import base64
 import json
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 import urllib.request
@@ -21,6 +20,7 @@ from pathlib import Path
 from typing import Callable
 
 from sre_kb.publish.forge.base import ForgePublishError
+from sre_kb.publish.manifest import merge_tree
 
 _GIT_USER = ["-c", "user.email=sre-kb@users.noreply.github.com", "-c", "user.name=sre-kb"]
 
@@ -93,18 +93,6 @@ def _default_post(url: str, payload: dict, token: str) -> dict:
         return json.loads(r.read().decode())
 
 
-def _sync_tree(tree: Path, work: Path) -> None:
-    work.mkdir(parents=True, exist_ok=True)
-    for item in tree.iterdir():
-        if item.name == ".git":
-            continue
-        dest = work / item.name
-        if item.is_dir():
-            shutil.copytree(item, dest, dirs_exist_ok=True)
-        else:
-            shutil.copy2(item, dest)
-
-
 class GitHubForge:
     name = "github"
 
@@ -140,7 +128,10 @@ class GitHubForge:
             self._run(["git", "clone", "--depth", "1", remote, str(work)])
             base = (self._run(["git", "-C", str(work), "rev-parse", "--abbrev-ref", "HEAD"]).strip() or "main")
             self._run(["git", "-C", str(work), "checkout", "-b", branch])
-            _sync_tree(tree, work)
+            # Clobber-protected 3-way merge against the target's current files (R4): an operator's
+            # edit to a generated file is preserved (the fresh draft is routed to .proposed/),
+            # orphaned outputs are pruned, all tracked in .sre/manifest.yaml.
+            merge_tree(tree, work)
             self._run(["git", "-C", str(work), "add", "-A"])
             if not self._run(["git", "-C", str(work), "status", "--porcelain"]).strip():
                 raise ForgePublishError("nothing to publish: the KB already matches the target branch")

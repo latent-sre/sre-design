@@ -80,7 +80,10 @@ def lint() -> list[str]:
         if not (10 <= len(desc) <= 1024):
             problems.append(f"{d.name}: description must be 10..1024 chars (got {len(desc)})")
     pipeline = _pipeline_skills()
-    if PIPELINE.is_file():  # cross-check only once a pipeline exists
+    if not PIPELINE.is_file():
+        if names:  # the manifest is canonical and required once any skill exists
+            problems.append("skills/pipeline.yaml is missing — the canonical skill manifest is required")
+    else:
         for missing in sorted(names - pipeline):
             problems.append(f"{missing}: in skills/ but not in pipeline.yaml")
         for extra in sorted(pipeline - names):

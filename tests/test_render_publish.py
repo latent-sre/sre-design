@@ -58,6 +58,14 @@ def test_pr_tree_structure(result):
     assert not (base / ".sre").exists()
 
 
+def test_pr_title_is_single_line():
+    from sre_kb.publish.pr_builder import _pr_title
+
+    t = _pr_title("order-service\nInjected: malicious second line\n- rm -rf /")
+    assert "\n" not in t
+    assert t.startswith("SRE KB: order-service")
+
+
 def test_review_flags_needs_review(result):
     review = (result.pr / "catalog" / "order-service" / "REVIEW.md").read_text()
     assert "Alert/order-created-publish-failures" in review

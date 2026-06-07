@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -34,6 +35,12 @@ def _review_md(docs: list[dict], report: dict | None) -> str:
     if not any_nr:
         lines.append("- (all verified)")
     return "\n".join(lines) + "\n"
+
+
+def _pr_title(service: str) -> str:
+    """Single-line, length-bounded PR/commit title — an unconstrained service name can't inject a
+    newline into the commit subject or forge a misleading second line."""
+    return "SRE KB: " + re.sub(r"\s+", " ", service).strip()[:100]
 
 
 def _claim_file(produced: dict[str, Path], src: Path, rel: Path) -> None:
@@ -211,6 +218,6 @@ def assemble_pr(
     if dry_run:
         return tree, f"dry-run: staged PR tree at {tree} (would target {sre_repo})"
     ref = get_forge(forge, allowed_repos=allowed_repos).open_pr(
-        tree, sre_repo=sre_repo, branch=branch, title=f"SRE KB: {service}", body=_review_md(docs, report)
+        tree, sre_repo=sre_repo, branch=branch, title=_pr_title(service), body=_review_md(docs, report)
     )
     return tree, ref

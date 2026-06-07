@@ -73,7 +73,9 @@ class MergeResult:
 
 def _staged_files(staged: Path) -> list[str]:
     return sorted(
-        str(p.relative_to(staged)).replace("\\", "/") for p in staged.rglob("*") if p.is_file()
+        str(p.relative_to(staged)).replace("\\", "/")
+        for p in staged.rglob("*")
+        if p.is_file() and not p.is_symlink()
     )
 
 

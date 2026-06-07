@@ -32,6 +32,7 @@ from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
 from sre_kb.parsing import parse
 from sre_kb.signatures import fires
+from sre_kb.taxonomy import severity_rank
 from sre_kb.tiers import AST, LLM
 
 # Conventional location of the LLM's output inside the (untrusted) target repo.
@@ -60,7 +61,6 @@ _REFUTING_CONCERNS = {
     "unguarded-critical-dependency": ("circuit-breaker", "fallback", "timeout"),
 }
 _INSTANCE_ANNOTATIONS = ("@CircuitBreaker", "@TimeLimiter", "@Retry", "@Bulkhead", "@RateLimiter")
-_SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
 
 # CONFIRMATION-probe categories (opposite polarity to _REFUTING_CONCERNS, §9.4): a gap survives
 # only if the deterministic rule FIRES at the LLM's pointer — at which point the engine has
@@ -366,7 +366,7 @@ def collect_from_proposals(
         survivors.append((Outcome(p, "confirmed", rel, (s, e), checked, note), fact))
 
     # Noise budget: highest severity first (stable within a severity), cap the rest.
-    survivors.sort(key=lambda of: _SEVERITY_RANK.get(of[0].proposal.severity, 3))
+    survivors.sort(key=lambda of: severity_rank(of[0].proposal.severity))
     for i, (outcome, fact) in enumerate(survivors):
         if max_candidates is not None and i >= max_candidates:
             outcome.result = "capped"

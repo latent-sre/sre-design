@@ -19,6 +19,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from sre_kb.taxonomy import vocab
+
 _BURN_METRIC = "http_server_requests_seconds"  # Micrometer/Prometheus HTTP server timer base name
 
 # Standard multi-window burn-rate pair: (expr-key suffix, window, budget multiplier).
@@ -37,7 +39,7 @@ DEFAULT_ALERT_TOOLS: tuple[str, ...] = ("prometheus", "splunk")
 # regardless of what the scaffolder/LLM declared — paging severity must not ride a judgment call.
 # Lower rank = higher severity; the floor can only RAISE severity, never lower a declared one. The
 # tier itself must be byte-grounded (Tier-A) to apply — an LLM-proposed tier stays advisory.
-SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+SEVERITY_RANK = {s: i for i, s in enumerate(vocab("severity"))}  # canonical scale from taxonomy (N4)
 TIER_SEVERITY_FLOOR = {"tier0": "critical", "tier1": "high", "tier2": "medium", "tier3": "low"}
 
 

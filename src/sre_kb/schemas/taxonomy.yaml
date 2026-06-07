@@ -1,0 +1,51 @@
+# Central controlled vocabularies — the single source of truth for the enums that recur across the
+# kind schemas and the engine, so they can't drift (HYBRID-PLAN §9.7 N4: "central vocabulary +
+# severity reconciliation"). tests/test_taxonomy.py keeps every schema enum and code constant
+# conformant to what's declared here; a value is added/renamed/reordered HERE, once.
+apiVersion: sre.kb/v1alpha1
+kind: Taxonomy
+
+vocabularies:
+  # Severity, most-severe first — the canonical scale. `unknown` is a sentinel for an unscored value,
+  # not a level (see severity_shapes). The deterministic criticality/severity floor owns `critical`;
+  # an LLM gap proposal only ranges high..low.
+  severity: [critical, high, medium, low]
+  status: [verified, needs-review, rejected]
+  source_tier: [ast, llm]
+  ownership: [app, platform, shared]
+  criticality_tier: [tier0, tier1, tier2, tier3, unknown]
+  data_classification: [public, internal, confidential, pii, pci, unknown]
+
+# Severity reconciliation: map external / alternative severity schemes onto the canonical scale, so an
+# imported finding or a render adapter can never introduce a competing vocabulary. Keys are matched
+# case-insensitively (resiliency-skills sev1..sev4, PagerDuty P1..P4, generic blocker/major/minor,
+# numeric 1..4).
+severity_aliases:
+  sev1: critical
+  sev2: high
+  sev3: medium
+  sev4: low
+  p1: critical
+  p2: high
+  p3: medium
+  p4: low
+  s1: critical
+  s2: high
+  s3: medium
+  s4: low
+  blocker: critical
+  major: high
+  minor: medium
+  trivial: low
+  "1": critical
+  "2": high
+  "3": medium
+  "4": low
+
+# Sanctioned shapes for severity-family enums across the schemas — every legitimate variant of the
+# canonical scale is recorded here (as a set; order-agnostic), so the consistency test can flag any
+# *new* severity-ish enum that isn't one of these as drift.
+severity_shapes:
+  - [critical, high, medium, low]           # the canonical scale (e.g. BlastRadius.severityHint)
+  - [critical, high, medium, low, unknown]  # + unscored sentinel (Criticality.businessCriticality)
+  - [high, medium, low]                     # gap-proposal subset (ResiliencyGap.severity)

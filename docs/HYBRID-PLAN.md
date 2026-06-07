@@ -10,6 +10,13 @@ and a phased plan to combine their strengths.
 > verified at a named file/line or by executing the code — not taken from a README. Where a
 > finding turned out to encode *tested intent* rather than a bug, that is called out.
 
+> **Status authority (consolidated 2026-06-07).** This doc is the **single source of truth** for the
+> plan + live status: **§8** is the implementation-status tracker, **§9** the rolling reassessment.
+> The other docs are scoped and subordinate — `DESIGN.md` (architecture), `PHASE-4-GAP-FINDER.md`
+> (the gap-finder spike), and the **dated review snapshots** (`REASSESSMENT-2026-06.md`,
+> `REASSESSMENT-2026-06-07-round3.md`, `RESILIENCY-SKILLS-REVIEW-2026-06.md`) whose actionable
+> findings are folded into §8/§9. **When a review and §8 disagree, §8 wins.**
+
 ---
 
 ## 1. The headline: fat engine vs. fat skills — and a shared lineage
@@ -416,10 +423,34 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ## 8. Implementation status (2026-06-07)
 
-Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **233 tests
-passing, ruff-clean.** Every claim below was re-verified at file:line on 2026-06-07 (the deep
-re-audit in §9) — no drift found; the only corrections were *additions* for behaviors the code
-had but this section under-documented (folded in where they belong).
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **261 tests
+passing, ruff-clean** (re-verified at `main` `1dec77d`). Every claim below was re-verified at
+file:line — no drift; corrections were *additions* for behaviors the code had but this section
+under-documented (folded in where they belong).
+
+**Consolidated status — phases, Round-3 (R*), and competitive-review (N*) items.** Single table so
+the three review docs don't each carry their own tracker (they're now historical snapshots; see the
+status-authority note at the top):
+
+| Track | Item | Status | Landed |
+|---|---|---|---|
+| Phases 0–3 | trust tiers · hardening · status-aware spine · challenge loop | ✅ | |
+| Phase 4 | Tier-B gap-finder, wired into `run` | ✅ | |
+| Phase 5 | render-adapter breadth | 🟡 4/6 backends (prom/splunk/wavefront/appd) | |
+| §7.1–7.6 | tier-conflict findings · tier-aware guardrails · adversarial corpus · shared signatures · trust surfacing · schema governance | ✅ | |
+| R1–R3 | `Criticality` kind · severity floor · `sre-criticality` skill | ✅ | #24 |
+| R5 | Tier-A parameter-completeness gaps | ✅ | #24 |
+| R4 | publish clobber-protection manifest | ✅ | #25 |
+| N1 | secret-scan non-UTF-8 fail-open (**bug**) | ✅ | #26 |
+| N2 | multi-window/multi-burn-rate alerts (long **and** short window) | ✅ | #26 |
+| N3 | `bulkhead` / `rate-limit` / `idempotency` signatures | ✅ | #26 |
+| R6 | observability-coverage Tier-B skill + refutation probe | ⬜ | |
+| R7 | grafana + thousandeyes adapters | ⬜ | |
+| R8 | supply-chain (`--require-hashes` + Renovate digest-pin + `detect-secrets`) | ⬜ | |
+| N4 | central `taxonomy.yaml` + severity-vocab reconciliation | ⬜ | |
+| infra | full scan/publish credential split (§9.3 #5) | ⬜ | gate before live publish |
+
+The per-phase detail below remains the authoritative narrative for each ✅.
 
 ### Phase 0 — Fact contract & trust tiers ✅
 
@@ -644,7 +675,7 @@ overwrite (the old `_sync_tree` is gone): unchanged files refresh in place, an o
 preserved with the fresh draft routed to `.proposed/<path>`, and orphaned outputs are pruned (unless
 operator-edited). The cloned target is the only place the operator's current files exist in our
 PR-based model (adopted from resiliency-skills' in-tree `assemble`). `tests/test_publish_manifest.py`
-(6 unit + 1 end-to-end through the forge). **259 tests green.**
+(6 unit + 1 end-to-end through the forge). **261 tests green** (after #25 R4 + #26 review fixes).
 
 ---
 

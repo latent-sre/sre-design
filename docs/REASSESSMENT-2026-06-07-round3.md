@@ -1,5 +1,9 @@
 # Round-3 deep review — `sre-design` ↔ `resiliency-skills` (2026-06-07)
 
+> **Historical review snapshot (2026-06-07).** Live status is **[`HYBRID-PLAN.md`](HYBRID-PLAN.md)
+> §8** — the single source of truth; this review's actionable items (R1–R8) are folded there and
+> marked. Retained for the reasoning/method. R1–R5 have since landed (#24/#25).
+
 A fresh three-pass competitive re-review of **both repos at their current `main`**, commissioned
 because "the plans are getting stale." Method mirrors the prior rounds: read/run from source, verify
 every claim at `file:line` or by executing, three depth passes under all three lenses

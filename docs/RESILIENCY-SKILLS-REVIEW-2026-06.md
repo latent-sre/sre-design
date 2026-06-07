@@ -1,5 +1,10 @@
 # Review: `latent-sre/resiliency-skills` → `sre-design` (June 2026)
 
+> **Historical review snapshot (2026-06-07).** Live status is **[`HYBRID-PLAN.md`](HYBRID-PLAN.md)
+> §8** — the single source of truth; this review's actionable items (N1–N5, P0–P2) are folded there
+> and marked. Retained for the reasoning/method. Its net-new findings **N1–N3 have since landed**
+> (#26: secret-scan non-UTF-8 fix, multi-window burn-rate, bulkhead/rate-limit/idempotency signatures).
+
 In-depth, three-pass review (master SDE · SRE · architect) of the **latest `resiliency-skills`
 `main`** against **our `main`**, with lift-and-shift / refactor recommendations, a Tier-B skill
 expansion plan, and LLM-enhancement ideas.

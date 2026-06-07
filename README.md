@@ -68,8 +68,8 @@ shared gate; §9.3 item 1). The remaining order is **integrate before expand** (
   instance of promoting a recurring confirmed gap to a deterministic Tier-A signature. This is also
   how new stacks (Node, Python) gain breadth.
 - **Render-adapter breadth** (Phase 5, started) — a tool-neutral alert-intent → adapter seam now
-  emits Prometheus, Splunk, Wavefront, and AppDynamics from one intent (config `render.alert_tools`);
-  next are dashboard adapters and more backends.
+  emits Prometheus, Splunk, Wavefront, and AppDynamics from one intent (config `render.alert_tools`),
+  covering the current monitoring stack; next are dashboard adapters.
 
 Known limitations (documented, not bugs): variable-topic egress (non-literal Kafka topics)
 and cross-file call-graph beyond a single handler body are out of scope for the per-file

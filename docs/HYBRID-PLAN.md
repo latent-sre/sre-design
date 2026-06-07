@@ -556,9 +556,12 @@ scaffold / gating. Backends today:
 "Honest coverage": an adapter emits a backend only where it maps faithfully to the intent, and labels
 the mechanism wherever it differs from a multi-window burn-rate (`tests/test_alert_adapters.py`).
 
-Deferred: dashboard/diagram render adapters (only alert exprs are adapter-routed today); additional
-backends (Datadog, New Relic); and verifying the Wavefront/AppDynamics metric names against a live
-tenant (they carry `unverifiedAgainstLive` like all metric alerts).
+The four backends above cover the team's current monitoring stack (Prometheus + Splunk + Wavefront +
+AppDynamics); the seam makes any further backend a drop-in adapter if the stack changes.
+
+Deferred: dashboard/diagram render adapters (only alert exprs are adapter-routed today); and verifying
+the Wavefront/AppDynamics metric names against a live tenant (they carry `unverifiedAgainstLive` like
+all metric alerts).
 
 ---
 

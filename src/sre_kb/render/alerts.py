@@ -22,8 +22,12 @@ from dataclasses import dataclass
 _BURN_METRIC = "http_server_requests_seconds"  # Micrometer/Prometheus HTTP server timer base name
 
 # Standard multi-window burn-rate pair: (expr-key suffix, window, budget multiplier).
-BURN_WINDOWS = (("fast", "1h", 14.4), ("slow", "6h", 6.0))
-_WINDOWS_LABEL = "multi-window (1h fast @14.4x, 6h slow @6x)"
+# Multi-window/multi-burn-rate (Google SRE): each burn rate fires only when its long window AND a
+# short confirmation window both exceed the budget multiple. The short window keeps the alert firing
+# only while the burn is *current* (fast reset, fewer false pages) instead of for the whole long
+# window after a brief spike. (key, long_window, short_window, budget-multiplier) per rate.
+BURN_WINDOWS = (("fast", "1h", "5m", 14.4), ("slow", "6h", "30m", 6.0))
+_WINDOWS_LABEL = "multi-window/multi-burn-rate (fast: 1h&5m @14.4x, slow: 6h&30m @6x)"
 
 # Backends rendered when config doesn't narrow them (config: `render.alert_tools`).
 DEFAULT_ALERT_TOOLS: tuple[str, ...] = ("prometheus", "splunk")
@@ -105,21 +109,27 @@ class LogPatternIntent:
 # --- Prometheus adapter ---------------------------------------------------------------------------
 def _prometheus_burn(intent: BurnRateIntent) -> dict:
     uri_sel = f'uri="{intent.route}"' if intent.route else ""
-    out = {}
-    for key, window, mult in BURN_WINDOWS:
-        thr = round(mult * intent.budget_frac, 6)
+
+    def _cond(window: str, thr: float) -> str:
+        """The burn ratio over `window` exceeding `thr` (latency: slow-request fraction from the
+        histogram buckets; else: error fraction)."""
         if intent.is_latency:
             tot = _sel(uri_sel)
             within = _sel(uri_sel, f'le="{_le(intent.threshold_ms)}"')
             total = f"sum(rate({_BURN_METRIC}_count{tot}[{window}]))"
             within_term = f"sum(rate({_BURN_METRIC}_bucket{within}[{window}]))"
-            out[f"prometheus_{key}"] = f"({total} - {within_term}) / {total} > {thr}"
-        else:
-            errs = _sel(uri_sel, 'outcome!="SUCCESS"')
-            tot = _sel(uri_sel)
-            errors = f"sum(rate({_BURN_METRIC}_count{errs}[{window}]))"
-            total = f"sum(rate({_BURN_METRIC}_count{tot}[{window}]))"
-            out[f"prometheus_{key}"] = f"{errors} / {total} > {thr}"
+            return f"({total} - {within_term}) / {total} > {thr}"
+        errs = _sel(uri_sel, 'outcome!="SUCCESS"')
+        tot = _sel(uri_sel)
+        errors = f"sum(rate({_BURN_METRIC}_count{errs}[{window}]))"
+        total = f"sum(rate({_BURN_METRIC}_count{tot}[{window}]))"
+        return f"{errors} / {total} > {thr}"
+
+    out = {}
+    for key, long_w, short_w, mult in BURN_WINDOWS:
+        thr = round(mult * intent.budget_frac, 6)
+        # Page only while the burn is current: the long window AND the short confirmation window.
+        out[f"prometheus_{key}"] = f"({_cond(long_w, thr)}) and ({_cond(short_w, thr)})"
     return out
 
 
@@ -166,13 +176,16 @@ def _wavefront_burn(intent: BurnRateIntent) -> dict:
         }
     out: dict = {}
     not_success = 'not outcome="SUCCESS"'
-    for key, window, mult in BURN_WINDOWS:
+    err_series = _wf_ts("http.server.requests.count", route, not_success)
+    tot_series = _wf_ts("http.server.requests.count", route)
+
+    def _ratio(window: str, thr: float) -> str:
+        return f"msum({window}, rate({err_series})) / msum({window}, rate({tot_series})) > {thr}"
+
+    for key, long_w, short_w, mult in BURN_WINDOWS:
         thr = round(mult * intent.budget_frac, 6)
-        err_series = _wf_ts("http.server.requests.count", route, not_success)
-        tot_series = _wf_ts("http.server.requests.count", route)
-        num = f"msum({window}, rate({err_series}))"
-        den = f"msum({window}, rate({tot_series}))"
-        out[f"wavefront_{key}"] = f"{num} / {den} > {thr}"
+        # Same multi-window confirmation as Prometheus: the long window AND the short window.
+        out[f"wavefront_{key}"] = f"({_ratio(long_w, thr)}) and ({_ratio(short_w, thr)})"
     return out
 
 

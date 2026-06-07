@@ -78,6 +78,41 @@ _SIGNATURES: dict[str, Signature] = {
             patterns=_p(r"@Retry\b", r"\bWaitAndRetry\w*\s*\(", r"\bRetry(?:Async)?\s*\("),
         ),
         Signature(
+            "bulkhead",  # concurrency isolation — resilience4j @Bulkhead/ThreadPoolBulkhead, Polly Bulkhead
+            annotations=("@Bulkhead",),
+            call_tokens=("Bulkhead",),
+            patterns=_p(
+                r"@Bulkhead\b",
+                r"\bThreadPoolBulkhead\b",
+                r"\bBulkhead(?:Async)?\s*\(",          # Polly: Bulkhead(/BulkheadAsync(
+                r"\.Bulkhead(?:Async)?\b",             # Polly fluent
+                r"resilience4j\.(?:thread-pool-)?bulkhead",
+            ),
+        ),
+        Signature(
+            "rate-limit",  # request rate limiting — resilience4j @RateLimiter, Polly/ASP.NET limiters
+            annotations=("@RateLimiter",),
+            call_tokens=("RateLimit", "RateLimiter"),
+            patterns=_p(
+                r"@RateLimiter\b",
+                r"resilience4j\.ratelimiter",
+                r"\bRateLimiter\s*\(",                 # Bucket4j/Guava RateLimiter(...)
+                r"\.RateLimit(?:Async)?\b",            # Polly fluent .RateLimit(
+                r"\bAddRateLimiter\b",                 # ASP.NET Core rate-limiting middleware
+            ),
+        ),
+        Signature(
+            "idempotency",  # replay/de-dup safety on a write or consumer (heuristic — names, not one annotation)
+            annotations=("@Idempotent",),
+            call_tokens=("Idempoten",),
+            patterns=_p(
+                r"\bidempotenc(?:y|e)[-_]?key\b",      # Idempotency-Key header / idempotencyKey field
+                r"@Idempotent\b",
+                r"\bIdempotencyKey\b",
+                r"\bdedupe[-_]?key\b",
+            ),
+        ),
+        Signature(
             "scheduled",  # a recurring/background job — Spring @Scheduled, Quartz, or Python schedulers
             annotations=("@Scheduled",),
             call_tokens=("RecurringJob", "ScheduleJob"),

@@ -40,6 +40,25 @@ def test_fallback_signature_matches_mechanisms_not_the_bare_word() -> None:
     assert not fires("fallback", 'log.warn("no fallback configured");')               # string literal
 
 
+def test_bulkhead_rate_limit_idempotency_signatures() -> None:
+    """N3: the resilience vocabulary now matches resiliency-skills' taxonomy (bulkhead, rate-limit,
+    idempotency) — fire on the mechanism across stacks, silent on prose/identifiers."""
+    assert fires("bulkhead", '@Bulkhead(name="inv", type = Bulkhead.Type.THREADPOOL)')      # resilience4j
+    assert fires("bulkhead", "Policy.BulkheadAsync(maxParallelization: 8);")                # Polly
+    assert fires("bulkhead", "resilience4j.thread-pool-bulkhead.instances.inv.coreThreadPoolSize: 4")
+    assert fires("rate-limit", '@RateLimiter(name="inv")')                                  # resilience4j
+    assert fires("rate-limit", "resilience4j.ratelimiter.instances.inv.limitForPeriod: 10")
+    assert fires("rate-limit", "builder.Services.AddRateLimiter(o => { });")                # ASP.NET Core
+    assert fires("idempotency", 'headers.set("Idempotency-Key", key);')
+    assert fires("idempotency", "@Idempotent public void apply(Command c) {")
+    # silent on prose / unrelated identifiers (a false fire here would mislead a re-derivation probe)
+    assert not fires("bulkhead", "public Inventory reserve(String sku) { return lookup(sku); }")
+    assert not fires("rate-limit", "// consider adding a rate limit here later")
+    assert not fires("idempotency", 'log.info("processing order " + id);')
+    for c in ("bulkhead", "rate-limit", "idempotency"):
+        assert c in concerns()
+
+
 def test_unknown_concern_never_fires() -> None:
     assert not fires("not-a-concern", "@CircuitBreaker")
     assert "circuit-breaker" in concerns()

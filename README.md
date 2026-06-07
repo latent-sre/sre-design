@@ -47,6 +47,12 @@ Implemented:
 
 ## What's next
 
+- **LLM gap-finder (Phase 4, landed as a spike)** — the first Tier-B (LLM) collector: Copilot
+  proposes resiliency gaps the AST missed (e.g. a client with no timeout) as byte anchors; the
+  engine locates, stamps `path:line:hash`, re-derives, and lands them `needs-review` (never
+  auto-verified). `sre-kb gap-finder --target <repo>`; see
+  [`docs/PHASE-4-GAP-FINDER.md`](docs/PHASE-4-GAP-FINDER.md).
+
 Additive work, not architectural — the AST foundation makes the first two straightforward:
 
 - **More language collectors** — Node/Express, Python/FastAPI: a tree-sitter grammar plus a

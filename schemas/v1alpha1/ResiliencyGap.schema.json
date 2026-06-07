@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/ResiliencyGap.schema.json",
+  "title": "ResiliencyGap",
+  "description": "A resiliency gap an LLM pointer-generator (Tier B) proposed and the engine re-grounded. Always needs-review: nothing the LLM proposes can auto-verify.",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "ResiliencyGap" },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pattern", "severity", "sourceTier", "rederivation"],
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "enum": ["retry", "circuit-breaker", "timeout", "bulkhead", "fallback", "rate-limit", "idempotency", "load-shed", "backpressure"]
+        },
+        "target": { "type": ["string", "null"] },
+        "severity": { "type": "string", "enum": ["high", "medium", "low"] },
+        "rationale": { "type": ["string", "null"] },
+        "rederivation": { "type": "string", "enum": ["confirmed"] },
+        "sourceTier": { "type": "string", "enum": ["llm"] }
+      }
+    }
+  }
+}

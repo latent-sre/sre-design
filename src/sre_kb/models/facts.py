@@ -26,6 +26,10 @@ class Fact:
     attrs: dict
     evidence: Evidence
     symbol: Symbol | None = None
+    # Trust tier (HYBRID-PLAN Phase 0). 'ast' = deterministic AST/config collector (default,
+    # high-trust, can reach verified). 'llm' = an LLM pointer-generator proposed it and the
+    # engine re-grounded it (lower-trust, can never auto-verify). The seam both tiers ride.
+    source_tier: str = "ast"
 
 
 @dataclass

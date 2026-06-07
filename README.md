@@ -60,11 +60,10 @@ The roadmap is [`docs/HYBRID-PLAN.md`](docs/HYBRID-PLAN.md); §8 tracks status a
 reassessment. Phases 0–3 (trust tiers, output + publish hardening, the status-aware trust spine, and
 the Copilot challenge loop), the §7.6 schema governance, and the **Phase 4 gap-finder spike** (now
 two grounded probes — `missing-timeout` + `unguarded-critical-dependency` — with target-scoped config
-probing and a noise budget) have landed. The spike cleared the plan's make-or-break bar, so the
-remaining order is **integrate before expand** (§9.3):
+probing and a noise budget) have landed. The spike cleared the plan's make-or-break bar, and it is
+now **wired into `sre-kb run`** (a `.sre/gap-proposals.json` is auto-detected and routed through the
+shared gate; §9.3 item 1). The remaining order is **integrate before expand** (§9.3):
 
-- **Wire the gap-finder into `run`** — it's a standalone CLI today, so the shipped pipeline doesn't
-  yet surface Tier-B; integrating it is the highest impact-to-risk step.
 - **`swallowed-failure` probe + the graduation loop** — the 3rd refutation probe and the cleanest
   instance of promoting a recurring confirmed gap to a deterministic Tier-A signature. This is also
   how new stacks (Node, Python) gain breadth.

@@ -16,7 +16,9 @@ import yaml
 
 from sre_kb.collectors import scan as run_collectors
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
+from sre_kb.collectors.llm import gap_finder
 from sre_kb.config import load_config
+from sre_kb.pipeline.gap_finder import scaffold_gap
 from sre_kb.reporting.findings import detect_tier_conflicts
 from sre_kb.scoring.readiness import readiness_spec
 from sre_kb.synth import scaffold
@@ -69,6 +71,18 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     ctx = ScanContext(root=target_path, repo=f"file://{target_path.name}", commit=LOCAL_COMMIT)
     fs = run_collectors(ctx)
 
+    # Tier-B (HYBRID-PLAN §7.9/§9.3): if Copilot left gap proposals (`.sre/gap-proposals.json`),
+    # re-ground them and merge the survivors as Tier-B facts — a complete no-op when the file is
+    # absent. Merging them into `fs` here means they land in `facts.jsonl` and are seen by the
+    # §7.1 tier-conflict check; the matching `ResiliencyGap` docs are appended after scaffold and
+    # flow through the SAME validate/challenge/gate path. The contract (needs-review, never
+    # auto-verify) holds because `scaffold_gap` fixes the status + sub-floor confidence, which the
+    # shared gate only ever preserves or lowers.
+    gap_cap = (cfg.get("gap_finder") or {}).get("max_candidates")
+    gap_facts = gap_finder.collect(ctx, max_candidates=gap_cap).facts
+    if gap_facts:
+        fs.add(*gap_facts)
+
     with (layout.facts / "facts.jsonl").open("w", encoding="utf-8") as fh:
         for f in fs.facts:
             fh.write(
@@ -86,6 +100,10 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         return RunResult(run_id, layout.root, len(fs.facts), 0, {})
 
     docs = scaffold(fs, ctx)
+    if gap_facts:  # Tier-B gap artifacts join the candidate set, namespaced to the same service
+        app = fs.first("pcf.app")
+        service = (app.attrs.get("name") if app else None) or "service"
+        docs += [scaffold_gap(f, service) for f in gap_facts]
     ctx_dir = layout.candidates / "context"
     ctx_dir.mkdir(exist_ok=True)
     for d in docs:

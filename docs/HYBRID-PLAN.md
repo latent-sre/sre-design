@@ -534,8 +534,9 @@ Grounded probes today: `missing-timeout` and `unguarded-critical-dependency` (re
 `circuit-breaker`/`fallback`/`timeout` fire), with **target-scoped** config probing (by resilience
 instance name) and a **noise budget** (`gap_finder.max_candidates`, severity-ranked). Deferred from
 §7.9/§7.10: probes for the remaining categories (`swallowed-failure` next — the cleanest graduation
-instance), the graduation-to-Tier-A loop, and integration into the main `run` pipeline (the spike is
-a standalone opt-in path).
+instance) and the graduation-to-Tier-A loop. Integration into the main `run` pipeline is **done**
+(§9.3 item 1): `run` auto-detects `.sre/gap-proposals.json` and routes survivors through the shared
+gate; the standalone `sre-kb gap-finder` CLI remains for proposals-only runs.
 
 ### Phase 5 ⬜
 
@@ -573,9 +574,11 @@ Phases 0–3 and every §7 enhancement are done and tested (178 green). What rem
 proven architecture**, not de-risking an unproven one — which reorders the work. (This also finally
 takes §7.7's standing advice that Phase 5 is independent and should run in parallel, not last.)
 
-1. **Wire the gap-finder into `run`.** It is a standalone CLI/pipeline today (§8 Phase 4), so the
-   shipped `sre-kb run` never surfaces Tier-B at all. Small, no new trust risk; turns the spike into
-   a feature. *Highest impact-to-risk ratio of anything remaining.*
+1. **Wire the gap-finder into `run`.** ✅ **Done.** `sre-kb run` now re-grounds any
+   `.sre/gap-proposals.json` and surfaces the survivors as `ResiliencyGap` artifacts through the
+   *same* validate/challenge/gate path — merged into `facts.jsonl` (so the §7.1 tier-conflict check
+   sees them) and landing `needs-review`, `source_tier=llm`, never auto-verified. A complete no-op
+   when no proposals file exists. (`pipeline/orchestrator.py`; `tests/test_run_gap_integration.py`.)
 2. **`swallowed-failure` refutation probe** (the 3rd probe). The plan's own "natural next," and the
    cleanest **graduation exemplar**: re-run the deterministic swallow rule at the LLM's pointer and,
    *if it fires*, promote the finding to Tier-A.

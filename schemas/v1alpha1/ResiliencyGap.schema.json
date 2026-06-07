@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/ResiliencyGap.schema.json",
   "title": "ResiliencyGap",
-  "description": "A resiliency gap an LLM pointer-generator (Tier B) proposed and the engine re-grounded with the shared signature library (HYBRID-PLAN §7.9). Always needs-review: nothing the LLM proposes can auto-verify.",
+  "description": "A resiliency gap an LLM pointer-generator (Tier B) proposed and the engine re-grounded with the shared signature library (HYBRID-PLAN §7.9). Refutation-probe gaps are sourceTier=llm/needs-review. A confirmation-probe gap the engine re-derived deterministically at the pointer graduates to sourceTier=ast and may reach verified (§9.4).",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {
@@ -20,7 +20,7 @@
         "severity": { "type": "string", "enum": ["high", "medium", "low"] },
         "rationale": { "type": ["string", "null"] },
         "rederivation": { "type": "string", "enum": ["confirmed"] },
-        "sourceTier": { "type": "string", "enum": ["llm"] },
+        "sourceTier": { "type": "string", "enum": ["llm", "ast"] },
         "checked": {
           "type": "array",
           "items": { "type": "string" },

@@ -122,6 +122,51 @@ def test_noise_budget_caps_lower_severity_first():
     assert any(o.result == "capped" for o in res.outcomes)  # medium dropped by the budget
 
 
+_LEDGER = "ledgerRepository.save(new Entry(orderId, amountCents));"
+
+
+# --------------------------------------------------------------- confirmation probe + graduation
+
+def test_swallowed_failure_confirms_and_graduates_to_tier_a():
+    # A swallowed DB write the collectors don't emit (they only emit swallow facts for Kafka).
+    # The confirmation probe re-derives it deterministically -> graduates to Tier-A (source_tier=ast).
+    res = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("swallowed-failure", _LEDGER, target="ledger", severity="high"),
+    ])
+    [out] = res.outcomes
+    assert out.result == "confirmed"
+    [fact] = res.facts
+    assert fact.evidence.source_tier == "ast"          # graduated, not llm
+    assert fact.evidence.detector == "gap_finder.swallowed-failure"
+
+
+def test_swallowed_failure_dropped_when_rule_does_not_fire():
+    # NotificationsClient's call is NOT in a try/catch -> the swallow rule doesn't fire -> dropped.
+    # The LLM can't assert a swallow the engine can't reproduce.
+    res = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("swallowed-failure", _NOTIFY, target="notifications", severity="high"),
+    ])
+    assert res.facts == []
+    assert res.outcomes[0].result == "refuted"
+
+
+def test_graduated_swallow_reaches_verified_through_the_gate(tmp_path):
+    import json
+    props = tmp_path / "gap-proposals.json"
+    props.write_text(json.dumps({"proposals": [
+        {"category": "swallowed-failure", "target": "ledger", "severity": "high", "anchor": _LEDGER},
+    ]}), encoding="utf-8")
+    run = run_gap_finder(str(FIXTURE), proposals_path=str(props), service="checkout")
+    assert run.by_status == {"verified": 1}            # graduated Tier-A finding clears the gate
+    [doc] = run.docs
+    assert doc["spec"]["sourceTier"] == "ast"
+    assert doc["spec"]["category"] == "swallowed-failure"
+    assert doc["provenanceMode"] == "deterministic"
+    assert "unverifiedAgainstLive" not in doc          # a byte-grounded presence, not an absence
+    assert validate_doc(doc) == []
+    assert verify_evidence(doc, FIXTURE) == []         # cites the real swallowing catch block
+
+
 def test_no_proposals_file_is_a_quiet_no_op():
     # Self-gating: a target with no gap-proposals.json yields nothing (no crash, no noise).
     run = run_gap_finder(str(FIXTURE.parent / "sample-spring-pcf"), service="order")

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/Criticality.schema.json",
+  "title": "Criticality",
+  "description": "Service criticality + data classification (adopted from resiliency-skills' criticality schema, on our byte-grounded envelope). Drives the deterministic alert severity floor and blast-radius weighting. `tier`/`businessCriticality` are declared (catalog/human) and grounded to the declaring file; `dataClassification` can be re-derived deterministically from PII/PCI signatures in code (HYBRID-PLAN Round-3 R1).",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "Criticality" },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tier", "source"],
+      "properties": {
+        "tier": { "type": "string", "enum": ["tier0", "tier1", "tier2", "tier3", "unknown"] },
+        "businessCriticality": { "type": "string", "enum": ["critical", "high", "medium", "low", "unknown"] },
+        "dataClassification": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["public", "internal", "confidential", "pii", "pci", "unknown"] }
+        },
+        "source": { "type": "string", "enum": ["catalog", "human-input", "inferred"] }
+      }
+    }
+  }
+}

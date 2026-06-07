@@ -595,6 +595,32 @@ jobs **Tier-A** coverage and pairs with the gap-finder's Tier-B `undocumented-jo
 flags jobs *no* collector reaches — so as this collector grows, that probe's recall shrinks (the
 §7.9 graduation dynamic). `schemas/v1alpha1/ScheduledJob.schema.json`; `tests/test_jobs.py`.
 
+### Adopted kind — `Criticality` + the deterministic severity floor (Round-3 R1–R3)
+
+The reliability model behind `resiliency-skills`' breadth that the §9.6 audit had not mined (see
+[`REASSESSMENT-2026-06-07-round3.md`](REASSESSMENT-2026-06-07-round3.md)). Their `criticality`
+schema + `TIER_SEVERITY_FLOOR` → a grounded **criticality reliability spine** on our envelope:
+
+- **R1 — `Criticality` kind + collector** (`collectors/common/criticality.py`,
+  `schemas/v1alpha1/Criticality.schema.json`). `tier`/`businessCriticality` are read from an
+  authoritative repo-local declaration (`.sre/criticality.yaml`) and cited to its own line (Tier-A,
+  verified); `dataClassification` (pii/pci) is **re-derived deterministically** from PII/PCI
+  signatures in code (byte-grounded). Self-gating: no declaration and no PII/PCI signal → no
+  artifact, so the spine is inert on a plain repo.
+- **R2 — deterministic alert severity floor** (`render/alerts.py:effective_severity` +
+  `TIER_SEVERITY_FLOOR`). A service's criticality tier raises alert severity to a floor (tier0 →
+  `critical`) and can never lower a declared severity. Paging severity no longer rides a judgment
+  call — but **only a byte-grounded (Tier-A) tier feeds the floor**; an LLM-proposed tier stays
+  advisory (§7.2). Wired into both Alert scaffolders.
+- **R3 — Tier-B `sre-criticality` skill** (`.github/skills/sre-criticality/`, vendoring their
+  `assess-criticality-and-data`). The prompt half: Copilot proposes a tier/dataClassification to
+  `.sre/criticality-proposal.yaml`; the engine re-derives dataClassification via the same signatures
+  and lands the proposed tier `needs-review`, `source_tier=llm` — never feeding the floor. The
+  non-circular contract applied to criticality.
+
+`tests/test_criticality.py` (13 tests: the floor is up-only; a grounded tier0 floors the burn-rate
+Alert to `critical`; a *proposed* tier0 stays `needs-review` and does **not**). **249 tests green.**
+
 ---
 
 ## 9. Reassessment & revised forward order (2026-06-07, post-spike)

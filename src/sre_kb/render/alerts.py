@@ -28,6 +28,23 @@ _WINDOWS_LABEL = "multi-window (1h fast @14.4x, 6h slow @6x)"
 # Backends rendered when config doesn't narrow them (config: `render.alert_tools`).
 DEFAULT_ALERT_TOOLS: tuple[str, ...] = ("prometheus", "splunk")
 
+# Deterministic severity floor by service criticality tier (HYBRID-PLAN Round-3 R2, idea adopted
+# from resiliency-skills' TIER_SEVERITY_FLOOR). A tier-0 service's alerts page at `critical`
+# regardless of what the scaffolder/LLM declared — paging severity must not ride a judgment call.
+# Lower rank = higher severity; the floor can only RAISE severity, never lower a declared one. The
+# tier itself must be byte-grounded (Tier-A) to apply — an LLM-proposed tier stays advisory.
+SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+TIER_SEVERITY_FLOOR = {"tier0": "critical", "tier1": "high", "tier2": "medium", "tier3": "low"}
+
+
+def effective_severity(declared: str, tier: str | None) -> str:
+    """Raise `declared` to the floor implied by `tier` (never lower it). Unknown/None tier or an
+    unrankable declared severity is a no-op — so an unscored service keeps its declared severity."""
+    floor = TIER_SEVERITY_FLOOR.get(tier or "")
+    if floor is None:
+        return declared
+    return declared if SEVERITY_RANK.get(declared, 1) <= SEVERITY_RANK[floor] else floor
+
 
 def _le(threshold_ms: float | int) -> str:
     """A latency threshold in ms -> a Prometheus histogram `le` label in seconds (800 -> '0.8')."""

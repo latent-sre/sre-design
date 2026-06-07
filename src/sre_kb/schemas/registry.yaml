@@ -1,7 +1,7 @@
 # Kind registry — the extensibility backbone.
 # Maps each apiVersion/kind to its schema, the collector(s) that produce its facts,
 # the prompt domain that drives Copilot synthesis, the validator, and its phase.
-# Adding a kind = a schema file + a prompt + (optional) collector + one row here.
+# Adding a kind = a schema file + a prompt + (optional) collector + (optional) renderer + one row here.
 apiVersion: sre.kb/v1alpha1
 
 envelope:
@@ -14,6 +14,7 @@ kinds:
     collectors: [java_spring.flow_builder]
     prompt: flow
     phase: P1
+    renderer: diagram   # -> projections/diagrams/<name>.mmd (Mermaid sequence)
   ResiliencyPattern:
     schema: schemas/v1alpha1/ResiliencyPattern.schema.json
     collectors: [java_spring.resiliency]
@@ -39,6 +40,7 @@ kinds:
     collectors: []   # derived from Flow + Alert + BlastRadius
     prompt: runbook
     phase: P1
+    renderer: runbook   # -> projections/runbooks/<name>.md
   BlastRadius:
     schema: schemas/v1alpha1/BlastRadius.schema.json
     collectors: [flow.callgraph]   # minimal single-service in P1

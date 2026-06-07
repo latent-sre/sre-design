@@ -559,7 +559,13 @@ the mechanism wherever it differs from a multi-window burn-rate (`tests/test_ale
 The four backends above cover the team's current monitoring stack (Prometheus + Splunk + Wavefront +
 AppDynamics); the seam makes any further backend a drop-in adapter if the stack changes.
 
-Deferred: dashboard/diagram render adapters (only alert exprs are adapter-routed today); and verifying
+**`Dashboard` kind adopted** (from resiliency-skills' `dashboard` schema, on our envelope): the
+scaffolder emits a per-service `Dashboard` with the standard RED panels (rate/errors/duration) as
+deterministically generated Prometheus queries scoped to the flow's route, `needs-review` +
+`unverifiedAgainstLive` (`render/dashboards.py`; `schemas/v1alpha1/Dashboard.schema.json`;
+`tests/test_dashboards.py`). Per-backend dashboard rendering (Grafana/Wavefront) is the next step.
+
+Deferred: per-backend dashboard rendering beyond Prometheus and diagram render adapters; and verifying
 the Wavefront/AppDynamics metric names against a live tenant (they carry `unverifiedAgainstLive` like
 all metric alerts).
 

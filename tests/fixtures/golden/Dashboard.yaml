@@ -1,0 +1,59 @@
+apiVersion: sre.kb/v1alpha1
+kind: Dashboard
+metadata:
+  name: order-service-overview
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  title: order-service — service overview (RED)
+  renderTarget: prometheus
+  panels:
+  - title: Request rate
+    type: timeseries
+    unit: req/s
+    signal:
+      source: prometheus
+      metric: http_server_requests_seconds_count
+      description: 'throughput (RED: Rate)'
+      query: sum(rate(http_server_requests_seconds_count{uri="/api/v1/orders"}[5m]))
+  - title: Error fraction
+    type: timeseries
+    unit: percentunit
+    signal:
+      source: prometheus
+      metric: http_server_requests_seconds_count
+      description: 'fraction of non-SUCCESS responses (RED: Errors)'
+      query: sum(rate(http_server_requests_seconds_count{uri="/api/v1/orders",outcome!="SUCCESS"}[5m]))
+        / sum(rate(http_server_requests_seconds_count{uri="/api/v1/orders"}[5m]))
+  - title: Latency p99
+    type: timeseries
+    unit: s
+    signal:
+      source: prometheus
+      metric: http_server_requests_seconds_bucket
+      description: 'request-duration percentile from the histogram (RED: Duration)'
+      query: histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{uri="/api/v1/orders"}[5m]))
+        by (le))
+evidence:
+- repo: file://sample-spring-pcf
+  commit: '0000000000000000000000000000000000000000'
+  path: sre-slo.yml
+  lines:
+    start: 3
+    end: 3
+  excerptHash: sha256:8e2cf1ddaedbe66fd0ceabcc95e2ecc6107722f0bad527554980a51b899ed650
+  detector: common.slo_catalog
+  source_tier: ast
+confidence: 0.6
+status: needs-review
+provenanceMode: deterministic
+crossRefs:
+- kind: Flow
+  name: create-order
+  relation: covers
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1
+unverifiedAgainstLive: true

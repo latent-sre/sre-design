@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/Dashboard.schema.json",
+  "title": "Dashboard",
+  "description": "A monitoring dashboard (adopted from resiliency-skills' dashboard schema, on our byte-grounded envelope). Panels carry a tool-neutral signal with a generated per-source query.",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "Dashboard" },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "panels"],
+      "properties": {
+        "title": { "type": "string" },
+        "renderTarget": {
+          "type": "string",
+          "enum": ["prometheus", "splunk", "wavefront", "appdynamics", "grafana"]
+        },
+        "panels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["title", "type", "signal"],
+            "properties": {
+              "title": { "type": "string" },
+              "type": {
+                "type": "string",
+                "enum": ["timeseries", "stat", "gauge", "table", "heatmap"]
+              },
+              "unit": { "type": "string" },
+              "signal": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["source"],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": ["prometheus", "splunk", "wavefront", "appdynamics", "grafana"]
+                  },
+                  "metric": { "type": "string" },
+                  "query": { "type": "string" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

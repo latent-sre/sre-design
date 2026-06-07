@@ -2,6 +2,30 @@
 
 Date: 2026-06-07
 
+> **Update — reconciled with `main` after PRs #28 and #30 (both merged).** This review was written
+> against an earlier `origin/main` and excluded `HYBRID-PLAN.md`, so parts of its backlog are now
+> stale:
+>
+> **Landed in #28** (publish hardening): **R1** no-clobber assembly — engine-owned in
+> `publish/manifest.py` (`.proposed/` routing, `_claim_*` collision detection, orphan pruning); #28
+> made the forge the sole merge authority. **R2** fail-closed secret gate (scan-then-block; redaction
+> only on `--allow-secrets`; entropy/value-shape; expanded provider classes). **R3** generated-repo
+> hardening (vendored schemas + validate CI + CODEOWNERS sentinel + PR template + `.sre/version`, at
+> the published repo **root**). **R4** read-only `sre-target-scan` agent. The "Publish assembly" /
+> "Missing no-clobber" rows below **under-credited R1** — the no-clobber lives in
+> `publish/forge/github.py`, not `pr_builder.py`.
+>
+> **Landed in #30** (render breadth): **R10** Grafana + ThousandEyes render paths — 6/6 alert backends
+> (Grafana reuses the deterministic Prometheus PromQL over a datasource; ThousandEyes is an
+> honestly-labelled synthetic rule) plus Grafana/Wavefront dashboard panels, with `REPLACE_ME__`
+> sentinels and parse tests.
+>
+> Also: schemas **and** config now ship as package data (self-contained wheel), meeting R9's
+> offline-wheel precondition. **Still open:** R5 (declarative registry), R6/R7 (Tier-B skill pipeline +
+> first skills), R8 (service discovery / fan-out / resume), R9 hash-pinned locks + R11 independent
+> second gate (both gate a live `--no-dry-run` publish). See `HYBRID-PLAN.md` §9.3 / §9.7 for the
+> reconciled forward order.
+
 ## Evidence boundary
 
 Reviewed refs:

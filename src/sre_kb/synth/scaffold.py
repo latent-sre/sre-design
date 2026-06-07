@@ -10,6 +10,7 @@ from sre_kb.render.alerts import (
     LogPatternIntent,
     render_burn_rate,
     render_log_pattern,
+    rendered_targets,
 )
 from sre_kb.scoring.confidence import Signal, confidence
 from sre_kb.scoring.readiness import readiness_spec
@@ -306,6 +307,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
         impacted = _flows_touching(slug(channel))
         for_flow = impacted[0] if impacted else flow_name
         search = sw.attrs["message"].split("{")[0].strip()
+        lp_expr = render_log_pattern(LogPatternIntent(search=search, service=service), alert_tools)
         docs.append(_doc("Alert", a_name, {
             "alertType": "threshold",
             "sloRef": None,
@@ -313,14 +315,16 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
             "severity": "high",
             "forFlow": for_flow,
             "logFormatRef": obs_name,
-            "expr": render_log_pattern(
-                LogPatternIntent(search=search, service=service), alert_tools
-            ),
+            "expr": lp_expr,
             "rationale": (
                 "Publish failure is logged and swallowed (data-loss risk); no metric exists, so "
                 "alert on the log line. Add a counter + burn-rate alert once an SLO is defined "
                 "(needs-review)."
             ),
+            # Tool-neutral intent (adopted from resiliency-skills AlertIntent), on our envelope.
+            "class": "cause",
+            "signal": {"type": "log", "description": f'swallowed-failure log line "{search}"'},
+            "renderTargets": rendered_targets(lp_expr),
         }, [sw.evidence] + ([obs.evidence] if obs else []), "needs-review", confidence(Signal.INFERRED),
             service, cross_refs=[{"kind": "Flow", "name": for_flow, "relation": "alerts-on"}]))
         docs.append(_doc("Runbook", a_name, {
@@ -383,6 +387,24 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                     "logFormatRef": None,
                     "expr": expr,
                     "rationale": rationale,
+                    # Tool-neutral intent (adopted from resiliency-skills AlertIntent), on our envelope.
+                    "class": "symptom",
+                    "signal": {
+                        "type": "metric",
+                        "route": uri,
+                        "metric": "http_server_requests_seconds",
+                        "description": numerator,
+                    },
+                    "burnRate": {
+                        "sloRef": slo_ref,
+                        "sli": "latency" if sli == "latency" else "availability",
+                        "shortWindow": "1h",
+                        "longWindow": "6h",
+                        "shortFactor": round(14.4 * budget_frac, 6),
+                        "longFactor": round(6 * budget_frac, 6),
+                        "budgetFraction": budget_frac,
+                    },
+                    "renderTargets": rendered_targets(expr),
                 },
                 [objective.evidence] + ([slo.evidence] if slo else []),
                 "verified",

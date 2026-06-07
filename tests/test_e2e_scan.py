@@ -91,6 +91,19 @@ def test_burn_rate_alert_renders_configured_backends(result):
     assert "<business-transaction>" in expr["appdynamics"]["healthRule"]["metricPath"]
 
 
+def test_burn_rate_alert_carries_adopted_intent(result):
+    # Tool-neutral AlertIntent spec adopted from resiliency-skills, on our envelope.
+    spec = _load(result.root)[("Alert", "create-order-latency-burn-rate")]["spec"]
+    assert spec["class"] == "symptom"
+    assert spec["signal"]["type"] == "metric" and spec["signal"]["route"]
+    br = spec["burnRate"]
+    assert br["sli"] == "latency" and br["sloRef"] == "create-order-latency"
+    assert br["shortWindow"] == "1h" and br["longWindow"] == "6h"
+    # renderTargets honestly reflects only the backends that actually rendered (Splunk has no
+    # burn-rate, so it's excluded).
+    assert "prometheus" in spec["renderTargets"] and "splunk" not in spec["renderTargets"]
+
+
 def test_blast_radius_flags_data_loss(result):
     brs = [d for (k, _), d in _load(result.root).items() if k == "BlastRadius"]
     assert any((d["spec"].get("stateful") or {}).get("dataLossRisk") for d in brs)

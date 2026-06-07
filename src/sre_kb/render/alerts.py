@@ -224,3 +224,24 @@ def render_log_pattern(intent: LogPatternIntent, tools: tuple[str, ...] | None =
         if t in _LOG_ADAPTERS:
             expr.update(_LOG_ADAPTERS[t](intent))
     return expr
+
+
+# Map each `expr` key back to its backend, so an artifact can honestly report which backends it
+# actually rendered for (AlertIntent.renderTargets) — a key with a None value (e.g. log-pattern has
+# no Prometheus metric) does not count as rendered.
+_KEY_BACKEND = {
+    "prometheus_fast": "prometheus", "prometheus_slow": "prometheus", "prometheus": "prometheus",
+    "splunk": "splunk",
+    "wavefront": "wavefront", "wavefront_fast": "wavefront", "wavefront_slow": "wavefront",
+    "appdynamics": "appdynamics",
+}
+
+
+def rendered_targets(expr: dict) -> list[str]:
+    """The backends an `expr` dict was actually rendered for, in stable order."""
+    out: list[str] = []
+    for key, val in expr.items():
+        backend = _KEY_BACKEND.get(key)
+        if backend and val is not None and backend not in out:
+            out.append(backend)
+    return out

@@ -19,6 +19,13 @@ spec:
   rationale: Publish failure is logged and swallowed (data-loss risk); no metric exists,
     so alert on the log line. Add a counter + burn-rate alert once an SLO is defined
     (needs-review).
+  class: cause
+  signal:
+    type: log
+    description: swallowed-failure log line "failed to publish order.created event for
+      order"
+  renderTargets:
+  - splunk
 evidence:
 - repo: file://sample-spring-pcf
   commit: '0000000000000000000000000000000000000000'

@@ -1,7 +1,8 @@
 """Configuration loading: packaged defaults + optional file overlay + env overrides.
 
-Resolves repo paths (schemas, registry, prompts) relative to the package root so the
-CLI works regardless of the current working directory.
+Schemas/registry ship as package data, so they resolve relative to the installed package and
+work in a wheel install (not just an editable checkout). config/default.yaml is still resolved
+from the repo root (dev/editable); packaging it is a follow-up.
 """
 
 from __future__ import annotations
@@ -27,8 +28,9 @@ def load_config() -> dict:
 
 
 def schemas_dir() -> Path:
-    return repo_root() / "schemas"
+    """Bundled JSON Schemas, shipped as package data so they resolve in a wheel install too."""
+    return Path(__file__).resolve().parent / "schemas"
 
 
 def registry_path() -> Path:
-    return repo_root() / "schemas" / "registry.yaml"
+    return schemas_dir() / "registry.yaml"

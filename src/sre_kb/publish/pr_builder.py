@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from sre_kb import __version__
-from sre_kb.config import load_config
+from sre_kb.config import load_config, schemas_dir
 from sre_kb.publish.forge import ForgePublishError, get_forge
 from sre_kb.render.project import load_kb, render_projections, service_name
 from sre_kb.tiers import tier_label
@@ -49,10 +49,6 @@ def _claim_tree(produced: dict[str, Path], src_root: Path, dest_rel: Path) -> No
     for src in sorted(src_root.rglob("*")):
         if src.is_file():
             _claim_file(produced, src, dest_rel / src.relative_to(src_root))
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
 
 
 def _write_file(path: Path, content: str) -> None:
@@ -124,7 +120,7 @@ def _stage_repo_root_hardening(pr_root: Path) -> None:
     and the PR template only at the root (or root ``.github/``), never under ``catalog/<service>/`` —
     so these must sit beside the catalog, not inside it. The vendored schemas + pinned engine version
     let the generated CI validate the KB hermetically."""
-    _copy_tree(_repo_root() / "schemas", pr_root / ".sre" / "schemas")
+    _copy_tree(schemas_dir(), pr_root / ".sre" / "schemas")
     _write_file(pr_root / ".sre" / "version", f"sre-kb=={__version__}\n")
     _write_file(pr_root / ".github" / "CODEOWNERS", "* REPLACE_ME__owning_team\n")
     _write_file(pr_root / ".github" / "workflows" / "validate-sre-kb.yml", _generated_validate_workflow())

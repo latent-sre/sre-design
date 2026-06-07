@@ -11,6 +11,7 @@ import yaml
 from typer.testing import CliRunner
 
 from sre_kb.cli import app
+from sre_kb.config import schemas_dir
 from sre_kb.models.envelope import Artifact, Evidence, Lines, Metadata
 
 runner = CliRunner()
@@ -33,13 +34,13 @@ def test_validate_kb_passes_on_good_tree() -> None:
 
 def test_validate_kb_honors_custom_schema_dir(tmp_path: Path) -> None:
     # the default schema dir passes the good tree ...
-    ok = runner.invoke(app, ["validate-kb", "--schema-dir", "schemas", str(FIXTURES / "kb-good")])
+    ok = runner.invoke(app, ["validate-kb", "--schema-dir", str(schemas_dir()), str(FIXTURES / "kb-good")])
     assert ok.exit_code == 0, ok.stdout
     assert "0 failed" in ok.stdout
     # ... and a *stricter* custom schema dir is actually used: the same good tree now fails, proving
     # --schema-dir is honored rather than silently ignored (a same-dir assertion can't catch that).
     custom = tmp_path / "schemas"
-    shutil.copytree(Path("schemas"), custom)
+    shutil.copytree(schemas_dir(), custom)
     envelope = custom / "_envelope.schema.json"
     schema = json.loads(envelope.read_text())
     schema["required"] = sorted({*schema.get("required", []), "__definitely_absent__"})

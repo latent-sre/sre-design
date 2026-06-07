@@ -619,7 +619,22 @@ schema + `TIER_SEVERITY_FLOOR` → a grounded **criticality reliability spine** 
   non-circular contract applied to criticality.
 
 `tests/test_criticality.py` (13 tests: the floor is up-only; a grounded tier0 floors the burn-rate
-Alert to `critical`; a *proposed* tier0 stays `needs-review` and does **not**). **249 tests green.**
+Alert to `critical`; a *proposed* tier0 stays `needs-review` and does **not**).
+
+### Adopted recall — parameter-completeness gaps (Round-3 R5)
+
+The deterministic dual of the Tier-B absence gaps (§7.9): a resilience pattern can be *present* yet
+under-specified. `collectors/java_spring/resiliency_params.py` reads each `@CircuitBreaker`/`@Retry`
+annotation plus the *resolved* resilience4j config (instance → `base-config` → implicit
+`configs.default`) and emits a **Tier-A** `resiliency.gap` when a load-bearing param is unconfigured:
+`circuit-breaker-without-thresholds` (no `failure-rate-threshold`) and `retry-without-backoff` (no
+`wait-duration`/backoff — retry-storm risk). These flow through the same `scaffold_gap` gate as the
+Tier-B gaps but carry `source_tier=ast` / `rederivation=param-completeness`, so they can **verify** —
+no LLM involved. This is exactly the graduation target §7.9 describes (a recurring category becomes a
+deterministic rule). Timeout-duration completeness is deferred (a `@TimeLimiter` has a library
+default; the Tier-B `missing-timeout` probe covers timeout *absence*). Inert on a fully-configured
+service. `tests/test_resiliency_params.py` (4 tests, incl. config-layering resolution).
+**253 tests green.**
 
 ---
 

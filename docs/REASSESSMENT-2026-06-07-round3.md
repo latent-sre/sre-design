@@ -225,12 +225,14 @@ corpus, per §7.9). That genuinely raises recall; a blanket skill dump would not
 the highest-leverage, most on-thesis work — it also satisfies the Tier-B-skills ask cleanly. R4/R5 are
 independent SRE hardening. R7/R8 are low-risk parallel lifts already half-tracked.
 
-> **Status (2026-06-07): R1–R3 landed.** The criticality reliability spine is implemented and tested
-> (`Criticality` kind + `common.criticality` collector; deterministic `effective_severity` floor,
-> grounded-tier-only; the Tier-B `sre-criticality` skill + `.sre/criticality-proposal.yaml` path).
-> 13 new tests, 249 green, lint clean. Tracked in HYBRID-PLAN §8 ("Adopted kind — `Criticality`").
-> R4 (clobber manifest), R5 (param-completeness gaps), R7 (grafana/thousandeyes), R8 (supply-chain)
-> remain open.
+> **Status (2026-06-07): R1–R3 + R5 landed.** The criticality reliability spine is implemented and
+> tested (`Criticality` kind + `common.criticality` collector; deterministic `effective_severity`
+> floor, grounded-tier-only; the Tier-B `sre-criticality` skill + `.sre/criticality-proposal.yaml`
+> path). R5 added the Tier-A parameter-completeness gaps (`circuit-breaker-without-thresholds`,
+> `retry-without-backoff`) via `collectors/java_spring/resiliency_params.py`, routed through the same
+> `scaffold_gap` gate. 253 green, lint clean. Tracked in HYBRID-PLAN §8. R4 (clobber manifest),
+> R7 (grafana/thousandeyes), R8 (supply-chain) remain open; R5's timeout-duration completeness is
+> deferred (a `@TimeLimiter` has a library default; Tier-B `missing-timeout` covers timeout absence).
 
 ---
 

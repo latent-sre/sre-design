@@ -16,6 +16,7 @@ import yaml
 
 from sre_kb.collectors import scan as run_collectors
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
+from sre_kb.collectors.java_spring import resiliency_params
 from sre_kb.collectors.llm import gap_finder
 from sre_kb.config import load_config
 from sre_kb.pipeline.gap_finder import scaffold_gap
@@ -80,7 +81,10 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     # auto-verify) holds because `scaffold_gap` fixes the status + sub-floor confidence, which the
     # shared gate only ever preserves or lowers.
     gap_cap = (cfg.get("gap_finder") or {}).get("max_candidates")
-    gap_facts = gap_finder.collect(ctx, max_candidates=gap_cap).facts
+    # Tier-A deterministic parameter-completeness gaps (R5) + Tier-B re-grounded proposals (§7.9).
+    # Both are `resiliency.gap` facts surfaced as ResiliencyGap artifacts via scaffold_gap below; the
+    # Tier-A ones carry source_tier=ast and can verify, the Tier-B ones stay needs-review.
+    gap_facts = resiliency_params.collect(ctx) + gap_finder.collect(ctx, max_candidates=gap_cap).facts
     if gap_facts:
         fs.add(*gap_facts)
 
@@ -101,7 +105,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         return RunResult(run_id, layout.root, len(fs.facts), 0, {})
 
     docs = scaffold(fs, ctx)
-    if gap_facts:  # Tier-B gap artifacts join the candidate set, namespaced to the same service
+    if gap_facts:  # Tier-A (R5) + Tier-B gap artifacts join the candidate set, same service
         app = fs.first("pcf.app")
         service = (app.attrs.get("name") if app else None) or "service"
         docs += [scaffold_gap(f, service) for f in gap_facts]

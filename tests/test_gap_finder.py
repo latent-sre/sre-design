@@ -1,15 +1,9 @@
-"""Recall eval for the LLM gap-finder (HYBRID-PLAN §7.9 — the dual of §7.3's precision eval).
+"""Recall eval for the LLM gap-finder (HYBRID-PLAN §7.9).
 
-A sample with a *known planted gap* (a payments client call with no timeout) plus two traps in
-the simulated LLM output: a FALSE gap on a call that already has a timeout, and a HALLUCINATED gap
-whose quoted excerpt doesn't exist. The contract under test:
-
-  recall        the planted gap IS surfaced;
-  non-circular  the engine REFUTES the false gap (shared signature fires) and DROPS the
-                hallucinated one (no verbatim anchor) — the LLM can neither assert a gap that
-                isn't there nor fabricate a citation;
-  grounded      the surfaced gap carries a real, hash-checkable path:line:excerptHash, source_tier=llm;
-  no auto-verify every LLM-proposed gap lands needs-review, never verified.
+The checked-in fixture carries a real assistant proposal file with four planted gaps. Separate
+control proposals exercise the non-circular contract: the engine refutes a false timeout gap and
+drops an unlocatable anchor, so the model can neither assert a gap that is not there nor fabricate
+a citation.
 """
 
 from __future__ import annotations
@@ -33,26 +27,38 @@ def _ctx() -> ScanContext:
 
 # --------------------------------------------------------------- collector-level recall
 
-def test_recall_surfaces_planted_gap_and_drops_the_traps():
+def test_recall_surfaces_checked_in_gap_proposals():
     res = gap_finder.collect(_ctx())
 
-    # RECALL: exactly the planted payments timeout gap survives.
-    confirmed = res.confirmed()
-    assert len(confirmed) == 1, [(o.proposal.target, o.result) for o in res.outcomes]
-    gap = confirmed[0]
-    assert gap.proposal.target == "payments-api"
-    assert gap.proposal.category == "missing-timeout"
-    assert gap.path.endswith("PaymentsClient.java")
+    by_key = {(o.proposal.category, o.proposal.target): o.result for o in res.outcomes}
+    assert by_key == {
+        ("missing-timeout", "payments-api"): "confirmed",
+        ("unguarded-critical-dependency", "notifications-api"): "confirmed",
+        ("swallowed-failure", "ledgerRepository"): "confirmed",
+        ("undocumented-job", "emitDailyReconciliation"): "confirmed",
+    }
+    assert len(res.facts) == 4
 
-    # NON-CIRCULAR: the two traps are dropped, each for the right reason.
+
+def test_refutes_timeout_control_and_drops_unlocatable_anchor():
+    res = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal(
+            "missing-timeout",
+            'return restTemplate.getForObject(baseUrl + "/quote?order=" + orderId, Quote.class);',
+            target="shipping-api",
+            severity="high",
+        ),
+        Proposal("missing-timeout", "return refunds.charge();", target="refunds-api"),
+    ])
     by_target = {o.proposal.target: o.result for o in res.outcomes}
-    assert by_target["shipping-api"] == "refuted"      # @TimeLimiter present -> signature fires
-    assert by_target["refunds-api"] == "unlocatable"   # excerpt doesn't exist -> no fabricated cite
+    assert by_target["shipping-api"] == "refuted"
+    assert by_target["refunds-api"] == "unlocatable"
+    assert res.facts == []
 
 
 def test_surfaced_gap_is_byte_grounded_and_tier_llm():
     res = gap_finder.collect(_ctx())
-    [fact] = res.facts
+    fact = next(f for f in res.facts if f.attrs["category"] == "missing-timeout")
 
     # The engine stamped the citation itself; it must hash-check against the bytes.
     doc_like = {"evidence": [fact.evidence.model_dump(mode="json")]}
@@ -66,13 +72,13 @@ def test_surfaced_gap_is_byte_grounded_and_tier_llm():
 
 # --------------------------------------------------------------- pipeline-level gating
 
-def test_nothing_the_llm_proposes_auto_verifies():
+def test_refutation_gaps_stay_needs_review_while_confirmation_gaps_verify():
     run = run_gap_finder(str(FIXTURE), service="checkout")
 
-    assert run.by_status == {"needs-review": 1}  # the one planted gap, fenced to review
-    [doc] = run.docs
+    assert run.by_status == {"needs-review": 2, "verified": 2}
+    doc = next(d for d in run.docs if d["metadata"]["name"] == "payments-api-missing-timeout")
     assert doc["kind"] == "ResiliencyGap"
-    assert doc["status"] == "needs-review"          # never verified
+    assert doc["status"] == "needs-review"
     assert validate_doc(doc) == []                  # but it IS a schema-valid artifact
     assert verify_evidence(doc, FIXTURE) == []      # with grounded provenance
     assert doc["confidence"] < 0.7                  # below the verified floor even if status were raised

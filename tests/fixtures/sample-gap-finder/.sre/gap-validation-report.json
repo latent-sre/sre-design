@@ -1,0 +1,109 @@
+{
+  "target": "tests\\fixtures\\sample-gap-finder",
+  "proposalsPath": "tests\\fixtures\\sample-gap-finder\\.sre\\gap-proposals.json",
+  "truthPath": "tests\\fixtures\\sample-gap-finder\\.sre\\gap-truth.json",
+  "counts": {
+    "expected": 4,
+    "proposed": 4,
+    "grounded": 4,
+    "kept": 4,
+    "confirmed": 4,
+    "missedExpected": 0,
+    "falsePositiveProposals": 0,
+    "falsePositiveKept": 0
+  },
+  "metrics": {
+    "proposalRecall": 1.0,
+    "keptRecall": 1.0,
+    "proposalPrecision": 1.0,
+    "keptPrecision": 1.0,
+    "groundedRate": 1.0
+  },
+  "expected": [
+    {
+      "category": "missing-timeout",
+      "target": "payments-api"
+    },
+    {
+      "category": "swallowed-failure",
+      "target": "ledgerrepository"
+    },
+    {
+      "category": "undocumented-job",
+      "target": "emitdailyreconciliation"
+    },
+    {
+      "category": "unguarded-critical-dependency",
+      "target": "notifications-api"
+    }
+  ],
+  "controls": [
+    {
+      "category": "missing-timeout",
+      "target": "refunds-api"
+    },
+    {
+      "category": "missing-timeout",
+      "target": "shipping-api"
+    }
+  ],
+  "missedExpected": [],
+  "falsePositiveProposals": [],
+  "falsePositiveKept": [],
+  "controlsProposed": [],
+  "controlsKept": [],
+  "byStatus": {
+    "needs-review": 2,
+    "verified": 2
+  },
+  "outcomes": [
+    {
+      "category": "swallowed-failure",
+      "target": "ledgerRepository",
+      "severity": "high",
+      "result": "confirmed",
+      "path": "src/main/java/com/acme/checkout/client/LedgerWriter.java",
+      "lines": [
+        23,
+        25
+      ],
+      "note": "graduated to Tier-A \u2014 engine re-derived the gap at the pointer"
+    },
+    {
+      "category": "undocumented-job",
+      "target": "emitDailyReconciliation",
+      "severity": "medium",
+      "result": "confirmed",
+      "path": "src/main/java/com/acme/checkout/jobs/ReportJob.java",
+      "lines": [
+        11,
+        11
+      ],
+      "note": "graduated to Tier-A \u2014 engine re-derived the gap at the pointer"
+    },
+    {
+      "category": "missing-timeout",
+      "target": "payments-api",
+      "severity": "high",
+      "result": "confirmed",
+      "path": "src/main/java/com/acme/checkout/client/PaymentsClient.java",
+      "lines": [
+        22,
+        22
+      ],
+      "note": "no refuting signature ['timeout'] fires in 2 checked location(s)"
+    },
+    {
+      "category": "unguarded-critical-dependency",
+      "target": "notifications-api",
+      "severity": "high",
+      "result": "confirmed",
+      "path": "src/main/java/com/acme/checkout/client/NotificationsClient.java",
+      "lines": [
+        20,
+        20
+      ],
+      "note": "no refuting signature ['circuit-breaker', 'fallback', 'timeout'] fires in 2 checked location(s)"
+    }
+  ]
+}

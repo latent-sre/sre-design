@@ -5,9 +5,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
 from typer.testing import CliRunner
 
 from sre_kb.cli import app
+from sre_kb.models.envelope import Artifact, Evidence, Lines, Metadata
 
 runner = CliRunner()
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -37,3 +39,36 @@ def test_version() -> None:
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
     assert "sre-kb" in result.stdout
+
+
+def test_findings_gates_on_critical(tmp_path: Path) -> None:
+    run = tmp_path / "run"
+    kb = run / "kb" / "verified" / "BlastRadius"
+    kb.mkdir(parents=True)
+    doc = Artifact(
+        kind="BlastRadius",
+        metadata=Metadata(name="shared-db"),
+        spec={
+            "node": {"name": "shared-db"},
+            "severityHint": "critical",
+            "stateful": {"dataLossRisk": True},
+            "impactedFlows": ["checkout"],
+        },
+        evidence=[
+            Evidence(
+                repo="file://sample",
+                commit="0000000000000000000000000000000000000000",
+                path="src/App.java",
+                lines=Lines(start=1, end=1),
+                excerptHash="sha256:" + ("0" * 64),
+                detector="test",
+            )
+        ],
+        confidence=0.9,
+        status="verified",
+    ).to_doc()
+    (kb / "shared-db.yaml").write_text(yaml.safe_dump(doc), encoding="utf-8")
+
+    result = runner.invoke(app, ["findings", "--run", "run", "--work-root", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "[CRITICAL]" in result.stdout

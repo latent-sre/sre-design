@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/DeliveryPipeline.schema.json",
+  "title": "DeliveryPipeline",
+  "description": "A delivery or deployment pipeline relevant to service readiness.",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "DeliveryPipeline" },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "system": { "type": "string" },
+        "repository": { "type": "string" },
+        "branch": { "type": "string" },
+        "stages": { "type": "array", "items": { "type": "string" } },
+        "promotion": { "type": "string" },
+        "rollback": { "type": "string" }
+      }
+    }
+  }
+}

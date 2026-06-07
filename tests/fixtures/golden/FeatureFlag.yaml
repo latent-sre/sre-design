@@ -1,0 +1,32 @@
+apiVersion: sre.kb/v1alpha1
+kind: FeatureFlag
+metadata:
+  name: checkout-new-flow
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  name: checkout-new-flow
+  provider: launchdarkly
+  defaultState: "off"
+  owner: payments-team
+  blastRadius: checkout
+  killSwitch: true
+evidence:
+- repo: file://sample
+  commit: '0000000000000000000000000000000000000000'
+  path: config/flags.yml
+  lines:
+    start: 1
+    end: 1
+  excerptHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  detector: golden
+  source_tier: ast
+confidence: 0.5
+status: needs-review
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

@@ -234,7 +234,7 @@ trap `validation/challenge.py:9-13` warns about). Instead:
 | **1. Adopt `resiliency-skills`' hardening wholesale** ✅ | Architectural scan/publish split (no-credential scan role; scoped publish credential), sandboxed/`json.dumps` renderers, `redact` + second gate, fan-out cap, `needs-human-review` const. | This *is* `sre-design`'s own deferred roadmap. Closes the textual-fence and publish-path weaknesses **before** any LLM breadth is added. |
 | **2. Make the trust spine status-aware** ✅ | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). | Or Tier-B facts will silently inflate "verified" graphs. |
 | **3. Challenge loop (Copilot oracle)** ✅ | Judgment-call claims → worklist; Copilot adjudicates; `challenge-apply` re-gates monotonically. In-process `LLMChallenger` superseded by the worklist (engine stays model-free). | Prerequisite for Tier-B — deterministic grounding is circular for LLM judgment claims. |
-| **4. LLM collectors: gap-finders + pointer-generators** 🟡 (gap-finder spike) | `collectors/llm/`. The LLM reads the engine's facts + the cited code and proposes **(a) gaps the engine missed on code we already cover** (the recall payoff — §7.9) and **(b) pointers for stacks no AST grammar reaches** (breadth). The engine re-derives or *refutes* each (§6.3, §7.9); nothing it proposes can auto-`verify`. | Recall on covered estates **and** breadth, both safely fenced. |
+| **4. LLM collectors: gap-finders + pointer-generators** 🟡 (gap-finder spike) | `collectors/llm/`. The LLM reads the engine's facts + the cited code and proposes **(a) gaps the engine missed on code we already cover** (the recall payoff — §7.9) and **(b) pointers for stacks no AST grammar reaches** (breadth). The engine re-derives or *refutes* each (§6.3, §7.9); nothing verifies on proposal alone. | Recall on covered estates **and** breadth, both safely fenced. |
 | **5. Render-adapter breadth** 🟡 | Generalize `render/` to neutral-intent → adapter; add Wavefront/AppDynamics. | Independent; can run in parallel. *(Seam + 4 alert backends landed; see §8.)* |
 
 Phases 0→1→2 are the trust/security spine and are low-risk extensions of existing code; they land
@@ -351,10 +351,12 @@ It is the mirror of the challenge pass: **challenge checks false positives** ("i
 grounded?"); **the gap-finder checks false negatives** ("what true claim did we miss?"). Together
 they bracket both error types.
 
-**Why it's safe by construction.** Most gaps are *absences* ("no timeout", "swallowed here"), and an
-absence can't be byte-proven the way a present `@CircuitBreaker` can. So gap-finder output is
-inherently Tier-B: it lands as `needs-review` and **can only add candidates to the human's pile —
-never auto-`verify`, never delete an engine fact.** Worst case is noise a reviewer dismisses.
+**Why it's safe by construction.** Absence-style gaps ("no timeout", "no breaker") can't be
+byte-proven the way a present `@CircuitBreaker` can. Those proposals stay Tier-B: they land as
+`needs-review` and **only add review candidates — never delete an engine fact.**
+Confirmation-style gaps (`swallowed-failure`, `undocumented-job`) can graduate only when the
+deterministic engine rule fires at the pointer, at which point the engine, not the LLM, has made the
+assertion. Worst case for unconfirmed proposals is noise a reviewer dismisses.
 
 #### Bounded gap taxonomy + a deterministic *refutation* probe per category
 
@@ -414,7 +416,7 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ## 8. Implementation status (2026-06-07)
 
-Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **178 tests
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **233 tests
 passing, ruff-clean.** Every claim below was re-verified at file:line on 2026-06-07 (the deep
 re-audit in §9) — no drift found; the only corrections were *additions* for behaviors the code
 had but this section under-documented (folded in where they belong).
@@ -497,7 +499,9 @@ Deferred (tracked, not dropped) — both are infra, not engine code:
   AST-grounded / LLM-proposed, with a by-tier roll-up. A shared `tiers.py` is the single source of truth.
 - **§7.6 schema governance** ✅ — `additionalProperties: false` on every per-kind spec (positive
   allow-list), an `ownership` enum (app|platform|shared) and an `unverifiedAgainstLive` flag on the
-  envelope, and a golden-example-per-kind corpus validated in CI (`tests/fixtures/golden/`).
+  envelope, a golden-example-per-kind corpus, and a registry guard that fails CI when a registered
+  kind points at a missing schema or lacks a golden example (`tests/fixtures/golden/`,
+  `tests/test_golden_corpus.py`).
 
 ### Phase 3 — Challenge loop (Copilot oracle) ✅
 
@@ -521,22 +525,26 @@ model (the founding invariant). The §7.3 adversarial-LLM corpus is the regressi
 
 The first Tier-B collector, as a spike (`docs/PHASE-4-GAP-FINDER.md`). Copilot proposes resiliency
 gaps the AST missed (§7.9 recall mode), quoting verbatim excerpts; the engine — never the LLM —
-locates each (`collectors/llm/gap_finder.py`), stamps `path:line:hash` with `source_tier=llm`, and
-runs a deterministic *refutation probe* via the shared `signatures.py` (§7.4): a `missing-timeout`
-gap survives only if the `timeout` signature fires nowhere the engine `checked`. Survivors scaffold
-to a `ResiliencyGap` artifact (new kind, golden-corpus + `additionalProperties:false`), forced to
-`needs-review` / `unverifiedAgainstLive` — nothing it proposes can auto-verify. The recall eval
-(`tests/test_gap_finder.py`, the dual of §7.3) plants a gap, a false positive, and a hallucination,
-and asserts the engine surfaces the first and drops the other two. Prompt: the vendored
-`assess-resiliency` skill (`.github/skills/sre-gap-finder/`). CLI: `sre-kb gap-finder`.
+locates each (`collectors/llm/gap_finder.py`), stamps `path:line:hash`, and runs deterministic
+probes via the shared `signatures.py` (§7.4) / AST detectors. Refutation-probe absence gaps
+(`missing-timeout`, `unguarded-critical-dependency`) survive only when the relevant signature fires
+nowhere checked, then scaffold as `ResiliencyGap` `needs-review` / `source_tier=llm`.
+Confirmation-probe gaps (`swallowed-failure`, `undocumented-job`) graduate only when the
+deterministic rule fires at the pointer, then scaffold as `source_tier=ast` and can verify. The
+recall eval and real assistant validation fixture (`tests/test_gap_finder.py`,
+`tests/test_copilot_gap_validation.py`, the dual of §7.3) now measure four planted gaps plus
+shipping/refunds controls. Prompt: the vendored `assess-resiliency` skill
+(`.github/skills/sre-gap-finder/`). CLI: `sre-kb gap-finder`.
 
-Grounded probes today: `missing-timeout` and `unguarded-critical-dependency` (refuted when
-`circuit-breaker`/`fallback`/`timeout` fire), with **target-scoped** config probing (by resilience
-instance name) and a **noise budget** (`gap_finder.max_candidates`, severity-ranked). Deferred from
-§7.9/§7.10: probes for the remaining categories (`swallowed-failure` next — the cleanest graduation
-instance) and the graduation-to-Tier-A loop. Integration into the main `run` pipeline is **done**
-(§9.3 item 1): `run` auto-detects `.sre/gap-proposals.json` and routes survivors through the shared
-gate; the standalone `sre-kb gap-finder` CLI remains for proposals-only runs.
+Grounded probes today: `missing-timeout` and `unguarded-critical-dependency` refute absence claims
+when `circuit-breaker`/`fallback`/`timeout` fire; `swallowed-failure` and `undocumented-job` are
+confirmation probes that graduate only when the deterministic rule fires at the pointer. Judgment
+categories (`data-loss-path`, `missing-idempotency`, `unbounded-resource`) are citation-grounded and
+routed to review, never auto-verified. The collector also has **target-scoped** config probing (by
+resilience instance name) and a **noise budget** (`gap_finder.max_candidates`, severity-ranked).
+Integration into the main `run` pipeline is **done** (§9.3 item 1): `run` auto-detects
+`.sre/gap-proposals.json` and routes survivors through the shared gate; the standalone
+`sre-kb gap-finder` CLI remains for proposals-only runs.
 
 ### Phase 5 🟡 (render-adapter breadth, started)
 
@@ -615,15 +623,16 @@ honest-negative **`checked:` trail** on gap Facts, and the **`provenanceMode`** 
 
 ### 9.3 The revised order — *integrate before expand*
 
-Phases 0–3 and every §7 enhancement are done and tested (178 green). What remains is **finishing a
+Phases 0–3 and every §7 enhancement are done and tested (227 green). What remains is **finishing a
 proven architecture**, not de-risking an unproven one — which reorders the work. (This also finally
 takes §7.7's standing advice that Phase 5 is independent and should run in parallel, not last.)
 
 1. **Wire the gap-finder into `run`.** ✅ **Done.** `sre-kb run` now re-grounds any
    `.sre/gap-proposals.json` and surfaces the survivors as `ResiliencyGap` artifacts through the
    *same* validate/challenge/gate path — merged into `facts.jsonl` (so the §7.1 tier-conflict check
-   sees them) and landing `needs-review`, `source_tier=llm`, never auto-verified. A complete no-op
-   when no proposals file exists. (`pipeline/orchestrator.py`; `tests/test_run_gap_integration.py`.)
+   sees them). Refutation-probe survivors land `needs-review`, `source_tier=llm`; confirmation-probe
+   survivors can graduate to `source_tier=ast` and verify. A complete no-op when no proposals file
+   exists. (`pipeline/orchestrator.py`; `tests/test_run_gap_integration.py`.)
 2. **`swallowed-failure` confirmation probe** (the 3rd probe). ✅ **Done** (PR #14): the first
    *confirmation*-class probe — the deterministic swallow rule firing at the LLM's pointer *confirms*
    the gap and **graduates it to Tier-A** (`source_tier=ast`, verified-eligible). The cleanest
@@ -694,15 +703,16 @@ add artifact kinds at once; the Python modules don't overlap.
 *consistency* check (does the code match §8) — **not** an adversarial soundness review. These are the
 things most likely to be wrong, roughly by impact:
 
-1. **The LLM half has never actually run.** Every "proof" — the recall eval, the `run` integration
-   test, the probe tests — uses a **hand-written `gap-proposals.json`**. No real Copilot has produced
-   a proposal. So §9.1's "the architecture is *demonstrated*" is true of the **engine's grounding
-   gate**, not of the LLM's **recall or precision** on real code. The core Tier-B value prop —
-   *useful gaps at tolerable noise* — is **unmeasured**. **Action:** run the gap-finder once with a
-   real Copilot against a real-ish service before calling Tier-B "proven."
-2. **"Signal vs noise" is asserted, not measured.** One planted gap + two traps proves the
-   *mechanism*; it says nothing about false-positive rate at scale. The noise budget (§7.9) is a knob
-   with no empirical setting yet.
+1. ~~**The LLM half has never actually run.**~~ **Closed for the sample target.** A real Copilot
+   run using `.github/skills/sre-gap-finder/SKILL.md` produced
+   `tests/fixtures/sample-gap-finder/.sre/gap-proposals.json`; the checked-in validation report at
+   `tests/fixtures/sample-gap-finder/.sre/gap-validation-report.json` measured
+   expected/proposed/grounded/kept/confirmed all at 4, with proposal/kept recall and precision all
+   `1.00` and no false-positive survivors. This demonstrates the full manual boundary: model writes
+   pointers, engine locates/re-derives, validation reports raw and post-grounding quality.
+2. **"Signal vs noise" is measured only on the sample.** The run above proves useful recall and no
+   false-positive survivors on one real-ish fixture; it still says nothing about false-positive rate
+   at service/repo scale. The noise budget (§7.9) is a knob with only fixture-level evidence.
 3. **The §9.4 swallow rationale was misleading (now corrected).** "Re-run the existing rule at the
    pointer" adds nothing alone — `_enclosing_swallow` already runs on every call; `swallowed.failure`
    *facts* are emitted only for Kafka egress (`java_spring/annotations.py`). The recall comes from

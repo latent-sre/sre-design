@@ -1,0 +1,33 @@
+apiVersion: sre.kb/v1alpha1
+kind: DrBackup
+metadata:
+  name: orders-db-backup
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  scope: orders-db
+  rpo: 15m
+  rto: 1h
+  backupFrequency: hourly
+  restoreTested: false
+  openRisks:
+  - restore test evidence is not present
+evidence:
+- repo: file://sample
+  commit: '0000000000000000000000000000000000000000'
+  path: docs/dr.md
+  lines:
+    start: 1
+    end: 1
+  excerptHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  detector: golden
+  source_tier: ast
+confidence: 0.5
+status: needs-review
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

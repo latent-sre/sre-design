@@ -1,0 +1,35 @@
+apiVersion: sre.kb/v1alpha1
+kind: SecurityPosture
+metadata:
+  name: order-service-security
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  controls:
+  - secret-scan
+  - tls
+  secrets: externalized
+  authn: oauth2
+  authz: role-based
+  encryption: tls-in-transit
+  openRisks:
+  - verify live identity provider configuration
+evidence:
+- repo: file://sample
+  commit: '0000000000000000000000000000000000000000'
+  path: docs/security.md
+  lines:
+    start: 1
+    end: 1
+  excerptHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  detector: golden
+  source_tier: ast
+confidence: 0.5
+status: needs-review
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

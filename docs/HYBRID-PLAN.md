@@ -600,9 +600,10 @@ takes §7.7's standing advice that Phase 5 is independent and should run in para
    *same* validate/challenge/gate path — merged into `facts.jsonl` (so the §7.1 tier-conflict check
    sees them) and landing `needs-review`, `source_tier=llm`, never auto-verified. A complete no-op
    when no proposals file exists. (`pipeline/orchestrator.py`; `tests/test_run_gap_integration.py`.)
-2. **`swallowed-failure` refutation probe** (the 3rd probe). The plan's own "natural next," and the
-   cleanest **graduation exemplar**: re-run the deterministic swallow rule at the LLM's pointer and,
-   *if it fires*, promote the finding to Tier-A.
+2. **`swallowed-failure` confirmation probe** (the 3rd probe). ✅ **Done** (PR #14): the first
+   *confirmation*-class probe — the deterministic swallow rule firing at the LLM's pointer *confirms*
+   the gap and **graduates it to Tier-A** (`source_tier=ast`, verified-eligible). The cleanest
+   graduation exemplar; see §9.4 status and §9.5 ④ for the trust-boundary note.
 3. **Graduation loop (§7.9).** Now buildable against the concrete instance from (2): a recurring,
    human-confirmed gap category becomes a deterministic signature, so the gap-finder *ratchets the
    engine's recall upward* instead of being a permanent crutch. The strategic core of Tier-B.

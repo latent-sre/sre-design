@@ -55,6 +55,22 @@ def test_value_shape_ignores_content_hashes():
     assert any(f["rule"] == "value-shape" for f in scan_text("api_token: s3cretLongValue123", "c.yml"))
 
 
+def test_value_shape_catches_secret_in_later_pair():
+    """The secret is the SECOND pair on the line; the old first-pair-only check missed it."""
+    findings = scan_text("note: ok api_token=s3cretLongValue123", "app.yml")
+    assert any(f["rule"] == "value-shape" for f in findings)
+
+
+def test_scan_tree_enforces_file_budget(tmp_path):
+    """DoS guard: a tree exceeding the file budget is refused rather than scanned unbounded."""
+    from sre_kb.security.secret_scan import SecretScanBudgetError, scan_tree
+
+    for i in range(3):
+        (tmp_path / f"f{i}.txt").write_text("ok\n", encoding="utf-8")
+    with pytest.raises(SecretScanBudgetError):
+        scan_tree(tmp_path, max_files=2)
+
+
 def test_secret_scan_decodes_utf16_text(tmp_path):
     key = "AKIA" + "W" * 16
     path = tmp_path / "creds.yml"

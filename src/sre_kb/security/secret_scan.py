@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 
 _MAX_FILE_BYTES = 1_000_000
+_MAX_SCAN_FILES = 50_000
+_MAX_SCAN_BYTES = 512 * 1024 * 1024  # ~512 MiB scanned across a whole tree (DoS guard)
 _ENTROPY_MIN_BITS = 4.0
 _ENTROPY_MIN_LEN = 20
 _SENTINEL_PREFIX = "REPLACE_ME__"
@@ -86,7 +88,7 @@ _SECRETISH_MARKERS = (
     "connstring",
     "dsn",
 )
-_OPAQUE_VALUE = re.compile(r"""^['"]?[^\s'"]{12,}['"]?$""")
+_KV_RE = re.compile(r"""([A-Za-z0-9_.\-]+)\s*[:=]\s*(['"]?[^\s'"]{12,}['"]?)""")
 _TOKEN_RE = re.compile(r"[^\s'\"=:,;()\[\]{}<>]+")
 _OPAQUE = re.compile(r"^[A-Za-z0-9+=_-]+$")
 
@@ -98,6 +100,10 @@ class SecretLeakError(Exception):
         self.findings = findings
         preview = ", ".join(f"{f['rule']} @ {f['path']}:{f['line']}" for f in findings[:5])
         super().__init__(f"{len(findings)} secret(s) detected in PR tree: {preview}")
+
+
+class SecretScanBudgetError(Exception):
+    """Raised when a tree exceeds the scan budget — a guard against DoS via a huge/hostile repo."""
 
 
 def _is_secretish_key(key: str) -> bool:
@@ -151,21 +157,16 @@ def scan_text(text: str, path: str) -> list[dict]:
             if _entropy_candidate(tok) and _shannon_entropy(tok) >= _ENTROPY_MIN_BITS:
                 findings.append({"path": path, "line": i, "rule": "high-entropy"})
 
-        for sep in (":", "="):
-            if sep not in line:
-                continue
-            key, _, value = line.partition(sep)
-            value = value.strip()
+        for m in _KV_RE.finditer(line):
+            key, value = m.group(1), m.group(2).strip("'\"")
             if (
                 _is_secretish_key(key)
-                and value
                 and not value.startswith(_SENTINEL_PREFIX)
-                and _OPAQUE_VALUE.match(value)
                 and not _PLACEHOLDER.search(value)
                 and not _looks_like_hash(value)
             ):
                 findings.append({"path": path, "line": i, "rule": "value-shape"})
-            break
+                break  # one value-shape per line; de-dup collapses the rest anyway
 
     seen: set[tuple[str, int, str]] = set()
     unique: list[dict] = []
@@ -216,16 +217,30 @@ def _decoded_file(path: Path) -> tuple[str, str] | None:
     return _decode_for_scan(data)
 
 
-def scan_tree(root: Path, *, skip_prefixes: tuple[str, ...] = ()) -> list[dict]:
+def scan_tree(
+    root: Path,
+    *,
+    skip_prefixes: tuple[str, ...] = (),
+    max_files: int = _MAX_SCAN_FILES,
+    max_bytes: int = _MAX_SCAN_BYTES,
+) -> list[dict]:
     findings: list[dict] = []
+    files = 0
+    scanned = 0
     for p in sorted(root.rglob("*")):
         if not p.is_file() or p.is_symlink():
             continue
         rel = p.relative_to(root).as_posix()
         if any(rel == pre or rel.startswith(pre + "/") for pre in skip_prefixes):
             continue  # first-party assets (e.g. vendored schemas) are not target-derived content
+        files += 1
+        if files > max_files:
+            raise SecretScanBudgetError(f"scan budget exceeded: more than {max_files} files under {root}")
         decoded = _decoded_file(p)
         if decoded is not None:
+            scanned += len(decoded[0])
+            if scanned > max_bytes:
+                raise SecretScanBudgetError(f"scan budget exceeded: over {max_bytes} bytes under {root}")
             findings += scan_text(decoded[0], rel)
     return findings
 

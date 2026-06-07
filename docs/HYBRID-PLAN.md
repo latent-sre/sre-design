@@ -351,10 +351,12 @@ It is the mirror of the challenge pass: **challenge checks false positives** ("i
 grounded?"); **the gap-finder checks false negatives** ("what true claim did we miss?"). Together
 they bracket both error types.
 
-**Why it's safe by construction.** Most gaps are *absences* ("no timeout", "swallowed here"), and an
-absence can't be byte-proven the way a present `@CircuitBreaker` can. So gap-finder output is
-inherently Tier-B: it lands as `needs-review` and **can only add candidates to the human's pile —
-never auto-`verify`, never delete an engine fact.** Worst case is noise a reviewer dismisses.
+**Why it's safe by construction.** Absence-style gaps ("no timeout", "no breaker") can't be
+byte-proven the way a present `@CircuitBreaker` can. Those proposals stay Tier-B: they land as
+`needs-review` and **only add review candidates — never delete an engine fact.**
+Confirmation-style gaps (`swallowed-failure`, `undocumented-job`) can graduate only when the
+deterministic engine rule fires at the pointer, at which point the engine, not the LLM, has made the
+assertion. Worst case for unconfirmed proposals is noise a reviewer dismisses.
 
 #### Bounded gap taxonomy + a deterministic *refutation* probe per category
 
@@ -414,7 +416,7 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ## 8. Implementation status (2026-06-07)
 
-Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **178 tests
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **227 tests
 passing, ruff-clean.** Every claim below was re-verified at file:line on 2026-06-07 (the deep
 re-audit in §9) — no drift found; the only corrections were *additions* for behaviors the code
 had but this section under-documented (folded in where they belong).
@@ -497,7 +499,9 @@ Deferred (tracked, not dropped) — both are infra, not engine code:
   AST-grounded / LLM-proposed, with a by-tier roll-up. A shared `tiers.py` is the single source of truth.
 - **§7.6 schema governance** ✅ — `additionalProperties: false` on every per-kind spec (positive
   allow-list), an `ownership` enum (app|platform|shared) and an `unverifiedAgainstLive` flag on the
-  envelope, and a golden-example-per-kind corpus validated in CI (`tests/fixtures/golden/`).
+  envelope, a golden-example-per-kind corpus, and a registry guard that fails CI when a registered
+  kind points at a missing schema or lacks a golden example (`tests/fixtures/golden/`,
+  `tests/test_golden_corpus.py`).
 
 ### Phase 3 — Challenge loop (Copilot oracle) ✅
 
@@ -530,13 +534,15 @@ to a `ResiliencyGap` artifact (new kind, golden-corpus + `additionalProperties:f
 and asserts the engine surfaces the first and drops the other two. Prompt: the vendored
 `assess-resiliency` skill (`.github/skills/sre-gap-finder/`). CLI: `sre-kb gap-finder`.
 
-Grounded probes today: `missing-timeout` and `unguarded-critical-dependency` (refuted when
-`circuit-breaker`/`fallback`/`timeout` fire), with **target-scoped** config probing (by resilience
-instance name) and a **noise budget** (`gap_finder.max_candidates`, severity-ranked). Deferred from
-§7.9/§7.10: probes for the remaining categories (`swallowed-failure` next — the cleanest graduation
-instance) and the graduation-to-Tier-A loop. Integration into the main `run` pipeline is **done**
-(§9.3 item 1): `run` auto-detects `.sre/gap-proposals.json` and routes survivors through the shared
-gate; the standalone `sre-kb gap-finder` CLI remains for proposals-only runs.
+Grounded probes today: `missing-timeout` and `unguarded-critical-dependency` refute absence claims
+when `circuit-breaker`/`fallback`/`timeout` fire; `swallowed-failure` and `undocumented-job` are
+confirmation probes that graduate only when the deterministic rule fires at the pointer. Judgment
+categories (`data-loss-path`, `missing-idempotency`, `unbounded-resource`) are citation-grounded and
+routed to review, never auto-verified. The collector also has **target-scoped** config probing (by
+resilience instance name) and a **noise budget** (`gap_finder.max_candidates`, severity-ranked).
+Integration into the main `run` pipeline is **done** (§9.3 item 1): `run` auto-detects
+`.sre/gap-proposals.json` and routes survivors through the shared gate; the standalone
+`sre-kb gap-finder` CLI remains for proposals-only runs.
 
 ### Phase 5 🟡 (render-adapter breadth, started)
 
@@ -615,7 +621,7 @@ honest-negative **`checked:` trail** on gap Facts, and the **`provenanceMode`** 
 
 ### 9.3 The revised order — *integrate before expand*
 
-Phases 0–3 and every §7 enhancement are done and tested (178 green). What remains is **finishing a
+Phases 0–3 and every §7 enhancement are done and tested (227 green). What remains is **finishing a
 proven architecture**, not de-risking an unproven one — which reorders the work. (This also finally
 takes §7.7's standing advice that Phase 5 is independent and should run in parallel, not last.)
 

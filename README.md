@@ -19,7 +19,7 @@ The full design lives in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Status
 
-Working engine, tested offline (212 tests, ruff-clean) against bundled **Java/Spring**,
+Working engine, tested offline (227 tests, ruff-clean) against bundled **Java/Spring**,
 **.NET/Steeltoe**, and **Python/FastAPI** fixtures — the same collectors emit the same KB across
 stacks (repo-neutrality). See [`docs/DESIGN.md`](docs/DESIGN.md) for the full
 design and a current implementation-status section.
@@ -31,8 +31,8 @@ Implemented:
   direct parsing. Python/FastAPI emits the same facts (endpoints, egress, tech stack) so the
   unchanged scaffolder produces the same KB. Confidence is signal-derived; risk from breadth.
 - **Trust tiers (provenance)** — every evidence item carries a `source_tier` (`ast`
-  deterministic | `llm`), rolled up per artifact in the validation report. The foundation for
-  fenced LLM (Tier-B) collectors that can only add `needs-review` candidates, never auto-verify.
+  deterministic | `llm`), rolled up per artifact in the validation report. Tier-B proposals stay
+  fenced unless the engine independently confirms them with a deterministic rule at the cited bytes.
 - **LLM gap-finder (Tier-B, spike)** — Copilot proposes resiliency gaps the AST missed
   (e.g. a client with no timeout); the engine locates each, stamps `path:line:hash`
   (`source_tier=llm`), and re-derives/refutes it via the shared `signatures` library — surviving
@@ -59,15 +59,16 @@ Implemented:
 
 The roadmap is [`docs/HYBRID-PLAN.md`](docs/HYBRID-PLAN.md); §8 tracks status and §9 the post-spike
 reassessment. Phases 0–3 (trust tiers, output + publish hardening, the status-aware trust spine, and
-the Copilot challenge loop), the §7.6 schema governance, and the **Phase 4 gap-finder spike** (now
-two grounded probes — `missing-timeout` + `unguarded-critical-dependency` — with target-scoped config
-probing and a noise budget) have landed. The spike cleared the plan's make-or-break bar, and it is
-now **wired into `sre-kb run`** (a `.sre/gap-proposals.json` is auto-detected and routed through the
-shared gate; §9.3 item 1). The remaining order is **integrate before expand** (§9.3):
+the Copilot challenge loop), the §7.6 schema governance, and the **Phase 4 gap-finder spike** have
+landed. Phase 4 now has refutation probes (`missing-timeout`, `unguarded-critical-dependency`),
+confirmation probes (`swallowed-failure`, `undocumented-job`), judgment routing, target-scoped config
+probing, and a noise budget. The spike cleared the plan's make-or-break bar, and it is now **wired
+into `sre-kb run`** (a `.sre/gap-proposals.json` is auto-detected and routed through the shared gate;
+§9.3 item 1). The remaining order is **integrate before expand** (§9.3):
 
-- **`swallowed-failure` probe + the graduation loop** — the 3rd refutation probe and the cleanest
-  instance of promoting a recurring confirmed gap to a deterministic Tier-A signature. This is also
-  how new stacks (Node, Python) gain breadth.
+- **Graduation loop** — `swallowed-failure` is the first concrete confirmation probe that can
+  graduate to Tier-A; the next step is making that ratchet a reusable promotion workflow for
+  recurring human-confirmed gap categories.
 - **Render-adapter breadth** (Phase 5, started) — a tool-neutral alert-intent → adapter seam now
   emits Prometheus, Splunk, Wavefront, and AppDynamics from one intent (config `render.alert_tools`),
   covering the current monitoring stack; next are dashboard adapters.
@@ -81,7 +82,7 @@ AST model.
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                                                   # the test suite (212 tests)
+pytest -q                                                   # the test suite (227 tests)
 sre-kb schema list                                          # the kind registry
 
 # scan -> scaffold -> validate -> render -> stage a PR tree (dry-run)

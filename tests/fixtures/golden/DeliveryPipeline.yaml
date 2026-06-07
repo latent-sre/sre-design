@@ -1,0 +1,36 @@
+apiVersion: sre.kb/v1alpha1
+kind: DeliveryPipeline
+metadata:
+  name: order-service-delivery
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  name: order-service
+  system: github-actions
+  repository: acme/order-service
+  branch: main
+  stages:
+  - build
+  - test
+  - deploy
+  promotion: manual
+  rollback: cf rollback
+evidence:
+- repo: file://sample
+  commit: '0000000000000000000000000000000000000000'
+  path: .github/workflows/ci.yml
+  lines:
+    start: 1
+    end: 1
+  excerptHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  detector: golden
+  source_tier: ast
+confidence: 0.5
+status: needs-review
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/FeatureFlag.schema.json",
+  "title": "FeatureFlag",
+  "description": "A feature flag or runtime toggle that affects operational behavior.",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "FeatureFlag" },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "provider": { "type": "string" },
+        "defaultState": { "type": "string", "enum": ["on", "off", "unknown"] },
+        "owner": { "type": "string" },
+        "blastRadius": { "type": "string" },
+        "killSwitch": { "type": "boolean" }
+      }
+    }
+  }
+}

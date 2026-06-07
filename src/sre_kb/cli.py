@@ -201,7 +201,7 @@ def findings(
         typer.echo(render_md(service, run_id, found, docs))
     else:
         typer.echo(render_text(service, run_id, found, docs))
-    if any(f["severity"] == "high" for f in found):
+    if any(f["severity"] in ("critical", "high") for f in found):
         raise typer.Exit(code=1)  # non-zero so CI can gate on high-severity findings
 
 

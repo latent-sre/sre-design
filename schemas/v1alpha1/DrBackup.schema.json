@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/DrBackup.schema.json",
+  "title": "DrBackup",
+  "description": "Disaster recovery and backup posture for a service or datastore.",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "DrBackup" },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope"],
+      "properties": {
+        "scope": { "type": "string" },
+        "rpo": { "type": "string" },
+        "rto": { "type": "string" },
+        "backupFrequency": { "type": "string" },
+        "restoreTested": { "type": "boolean" },
+        "lastRestoreTest": { "type": "string" },
+        "openRisks": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

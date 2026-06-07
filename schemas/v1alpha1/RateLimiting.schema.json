@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/RateLimiting.schema.json",
+  "title": "RateLimiting",
+  "description": "Rate limiting, quota, and throttle posture for an endpoint or dependency.",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "RateLimiting" },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope"],
+      "properties": {
+        "scope": { "type": "string" },
+        "limit": { "type": "string" },
+        "burst": { "type": "string" },
+        "enforcementPoint": { "type": "string" },
+        "response": { "type": "string" },
+        "openRisks": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

@@ -45,7 +45,7 @@ network/synthetic).
 ## Implementation status (June 2026)
 
 The design below is the full intent; this section records what is **built and tested
-offline** today (178 tests, ruff-clean). The vertical slice and the items earlier marked
+offline** today (227 tests, ruff-clean). The vertical slice and the items earlier marked
 "deferred to P3/P4" are now implemented. The forward roadmap — trust tiers and fenced LLM
 (Tier-B) collectors — lives in [`HYBRID-PLAN.md`](HYBRID-PLAN.md) (§8 tracks phase status).
 
@@ -57,8 +57,9 @@ offline** today (178 tests, ruff-clean). The vertical slice and the items earlie
   correlation. Confidence is signal-derived and BlastRadius risk is computed from impacted
   -flow breadth + containment, not type-keyed constants.
 - **Trust tiers** — every `Evidence` carries a `source_tier` (`ast` deterministic | `llm`),
-  rolled up per artifact and surfaced in the validation report. The foundation for fenced
-  LLM (Tier-B) collectors that can only add `needs-review` candidates, never auto-verify.
+  rolled up per artifact and surfaced in the validation report. Tier-B refutation/judgment
+  proposals stay fenced to `needs-review`; confirmation probes can graduate only when a
+  deterministic engine rule fires on the located bytes.
 - **Validation** — 5 layers: structural (schema), provenance (excerpt hash **+ repo-root
   path confinement**), **status-aware** cross-ref (a verified artifact can't depend on an
   unverified one), gating, and an **adversarial challenge pass** (deterministic grounding +
@@ -87,11 +88,13 @@ adjudicates (`challenge-worklist`), then `challenge-apply` re-gates monotonicall
 Copilot via the worklist, so the engine never calls a model.
 
 Landed as a spike: the fenced Tier-B LLM gap-finder collector (Phase 4, `collectors/llm/`,
-`ResiliencyGap` — see [`PHASE-4-GAP-FINDER.md`](PHASE-4-GAP-FINDER.md)) with four grounded probes
-(`missing-timeout`, `unguarded-critical-dependency`, `swallowed-failure`, `undocumented-job`), and a
-first-slice **Python/FastAPI** collector. Not yet built: the remaining judgment-call gap categories;
-the full scan/publish credential split (deployment/infra) and supply-chain pinning; further
-language collectors (Node/Go) and Python flow/resiliency parity beyond the endpoint slice. See
+`ResiliencyGap` — see [`PHASE-4-GAP-FINDER.md`](PHASE-4-GAP-FINDER.md)) with refutation probes
+(`missing-timeout`, `unguarded-critical-dependency`), confirmation probes (`swallowed-failure`,
+`undocumented-job`), judgment routing (`data-loss-path`, `missing-idempotency`,
+`unbounded-resource`), and a first-slice **Python/FastAPI** collector. Not yet proven: useful
+real-Copilot recall/precision, the full recurring-category promotion workflow, the full
+scan/publish credential split (deployment/infra) and supply-chain pinning, further language
+collectors (Node/Go), and Python flow/resiliency parity beyond the endpoint slice. See
 [`HYBRID-PLAN.md`](HYBRID-PLAN.md) §8.
 
 ---

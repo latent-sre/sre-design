@@ -146,7 +146,7 @@ so `swallowed-failure` confirms-and-graduates on a FastAPI handler just as it do
 - ~~**Standalone path.**~~ Resolved: `sre-kb run` now auto-detects `.sre/gap-proposals.json` and
   routes survivors through the shared validate/gate path (HYBRID-PLAN §9.3 item 1). The standalone
   `sre-kb gap-finder` CLI remains for proposals-only runs.
-- **No graduation loop yet** (§7.9): promoting a recurring, human-confirmed gap category to a
-  deterministic Tier-A signature (so it drops out of the LLM's frontier) is the next strategic step.
-- **`swallowed-failure` is the natural next probe** — and the cleanest instance of graduation: re-run
-  the deterministic swallow rule at the pointer and, *if it fires*, promote the finding to Tier-A.
+- **Graduation is demonstrated, not generalized.** `swallowed-failure` and `undocumented-job`
+  already show confirmation-probe graduation at a pointer. The next strategic step is the reusable
+  loop: when a recurring human-confirmed category proves stable, promote it into a deterministic
+  Tier-A signature/collector so it drops out of the LLM frontier.

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/SecurityPosture.schema.json",
+  "title": "SecurityPosture",
+  "description": "Security controls and review notes that affect operational readiness.",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "SecurityPosture" },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["controls"],
+      "properties": {
+        "controls": { "type": "array", "items": { "type": "string" } },
+        "secrets": { "type": "string" },
+        "authn": { "type": "string" },
+        "authz": { "type": "string" },
+        "encryption": { "type": "string" },
+        "openRisks": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

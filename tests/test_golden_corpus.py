@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from sre_kb.config import schemas_dir
+from sre_kb.config import registry_path, schemas_dir
 from sre_kb.validation import validate_doc
 
 GOLDEN = Path(__file__).parent / "fixtures" / "golden"
@@ -28,3 +28,21 @@ def test_every_per_kind_schema_has_a_golden_example() -> None:
     golden_kinds = {p.stem for p in _FILES}
     assert schema_kinds and schema_kinds <= golden_kinds, \
         f"per-kind schemas without a golden example: {sorted(schema_kinds - golden_kinds)}"
+
+
+def test_registry_schema_paths_exist_and_have_golden_examples() -> None:
+    registry = yaml.safe_load(registry_path().read_text(encoding="utf-8")) or {}
+    kinds = registry.get("kinds") or {}
+    missing_schema: list[str] = []
+    missing_golden: list[str] = []
+    golden_kinds = {p.stem for p in _FILES}
+    for kind, entry in kinds.items():
+        schema = (entry or {}).get("schema")
+        if not schema:
+            continue
+        if not (registry_path().parents[1] / schema).exists():
+            missing_schema.append(kind)
+        if kind not in golden_kinds:
+            missing_golden.append(kind)
+    assert not missing_schema, f"registry kinds with missing schema paths: {missing_schema}"
+    assert not missing_golden, f"registry kinds without golden examples: {missing_golden}"

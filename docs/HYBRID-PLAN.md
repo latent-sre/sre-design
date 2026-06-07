@@ -568,9 +568,24 @@ strength. (`schemas/v1alpha1/Alert.schema.json`; `tests/test_e2e_scan.py`.)
 The four backends above cover the team's current monitoring stack (Prometheus + Splunk + Wavefront +
 AppDynamics); the seam makes any further backend a drop-in adapter if the stack changes.
 
-Deferred: dashboard/diagram render adapters (only alert exprs are adapter-routed today); and verifying
+**`Dashboard` kind adopted** (from resiliency-skills' `dashboard` schema, on our envelope): the
+scaffolder emits a per-service `Dashboard` with the standard RED panels (rate/errors/duration) as
+deterministically generated Prometheus queries scoped to the flow's route, `needs-review` +
+`unverifiedAgainstLive` (`render/dashboards.py`; `schemas/v1alpha1/Dashboard.schema.json`;
+`tests/test_dashboards.py`). Per-backend dashboard rendering (Grafana/Wavefront) is the next step.
+
+Deferred: per-backend dashboard rendering beyond Prometheus and diagram render adapters; and verifying
 the Wavefront/AppDynamics metric names against a live tenant (they carry `unverifiedAgainstLive` like
 all metric alerts).
+
+### Adopted kind — `ScheduledJob` (P2 breadth, from the resiliency-skills re-audit)
+
+Their `jobs` schema → our **`ScheduledJob`** kind (the registry already reserved the row). A
+`@Scheduled` collector (`collectors/java_spring/jobs.py`) emits one **byte-grounded, verified**
+`ScheduledJob` per job (cron vs fixed-rate, the trigger method, concurrency). This gives recurring
+jobs **Tier-A** coverage and pairs with the gap-finder's Tier-B `undocumented-job` probe, which
+flags jobs *no* collector reaches — so as this collector grows, that probe's recall shrinks (the
+§7.9 graduation dynamic). `schemas/v1alpha1/ScheduledJob.schema.json`; `tests/test_jobs.py`.
 
 ---
 

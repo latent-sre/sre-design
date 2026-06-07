@@ -12,6 +12,7 @@ from sre_kb.render.alerts import (
     render_log_pattern,
     rendered_targets,
 )
+from sre_kb.render.dashboards import red_panels
 from sre_kb.scoring.confidence import Signal, confidence
 from sre_kb.scoring.readiness import readiness_spec
 from sre_kb.scoring.risk import assess as assess_risk
@@ -416,6 +417,48 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                 ],
                 unverified_against_live=True,  # burn-rate fires on live Prometheus metrics
             )
+        )
+
+    # --- Dashboard (RED overview for the top flow's route) ---
+    # A generated monitoring dashboard (kind adopted from resiliency-skills, on our envelope):
+    # Rate/Errors/Duration panels with deterministically generated Prometheus queries, scoped to the
+    # flow's route. Lands needs-review (a suggested dashboard to verify) + unverifiedAgainstLive
+    # (its queries fire on live metrics).
+    if flow:
+        d_uri = (flow.attrs.get("trigger") or {}).get("path")
+        pct = objective.attrs.get("percentile") if objective else None
+        d_ev = [objective.evidence] if objective else [flow.evidence]
+        docs.append(
+            _doc(
+                "Dashboard",
+                f"{service}-overview",
+                {
+                    "title": f"{service} — service overview (RED)",
+                    "renderTarget": "prometheus",
+                    "panels": red_panels(d_uri, percentile=pct),
+                },
+                d_ev,
+                "needs-review",
+                confidence(Signal.INFERRED),
+                service,
+                cross_refs=[{"kind": "Flow", "name": flow_name, "relation": "covers"}],
+                unverified_against_live=True,
+            )
+        )
+
+    # --- ScheduledJob (one per detected @Scheduled job; Tier-A, byte-grounded) ---
+    for j in fs.of("job.scheduled"):
+        a = j.attrs
+        spec = {"name": a["name"], "jobType": a["jobType"]}
+        if a.get("schedule"):
+            spec["schedule"] = a["schedule"]
+        if a.get("trigger"):
+            spec["trigger"] = a["trigger"]
+        if a.get("concurrency"):
+            spec["concurrencyPolicy"] = a["concurrency"]
+        docs.append(
+            _doc("ScheduledJob", a["name"], spec, [j.evidence], "verified",
+                 confidence(Signal.DIRECT), service)
         )
 
     # --- ServiceCatalogEntry ---

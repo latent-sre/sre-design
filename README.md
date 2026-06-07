@@ -56,15 +56,20 @@ Implemented:
 
 ## What's next
 
-The roadmap is [`docs/HYBRID-PLAN.md`](docs/HYBRID-PLAN.md); §8 tracks status. Phases 0–3 (trust
-tiers, output + publish hardening, the status-aware trust spine, and the Copilot challenge loop),
-the §7.6 schema governance, and the **Phase 4 gap-finder spike** have landed. Next, in order:
+The roadmap is [`docs/HYBRID-PLAN.md`](docs/HYBRID-PLAN.md); §8 tracks status and §9 the post-spike
+reassessment. Phases 0–3 (trust tiers, output + publish hardening, the status-aware trust spine, and
+the Copilot challenge loop), the §7.6 schema governance, and the **Phase 4 gap-finder spike** (now
+two grounded probes — `missing-timeout` + `unguarded-critical-dependency` — with target-scoped config
+probing and a noise budget) have landed. The spike cleared the plan's make-or-break bar, so the
+remaining order is **integrate before expand** (§9.3):
 
-- **Gap-finder, beyond the spike** — refutation probes for the other §7.9 gap categories (only
-  `missing-timeout` today), target-scoped (not whole-file) config probing, a noise-budget
-  ranking/cap, and the graduation loop that promotes a recurring confirmed gap to a Tier-A
-  signature. This is also how new stacks (Node, Python) gain breadth.
-- **Render-adapter breadth** — AppDynamics / Wavefront emitters beyond Splunk + Prometheus (Phase 5).
+- **Wire the gap-finder into `run`** — it's a standalone CLI today, so the shipped pipeline doesn't
+  yet surface Tier-B; integrating it is the highest impact-to-risk step.
+- **`swallowed-failure` probe + the graduation loop** — the 3rd refutation probe and the cleanest
+  instance of promoting a recurring confirmed gap to a deterministic Tier-A signature. This is also
+  how new stacks (Node, Python) gain breadth.
+- **Render-adapter breadth** — AppDynamics / Wavefront emitters beyond Splunk + Prometheus (Phase 5),
+  runnable as a parallel track.
 
 Known limitations (documented, not bugs): variable-topic egress (non-literal Kafka topics)
 and cross-file call-graph beyond a single handler body are out of scope for the per-file

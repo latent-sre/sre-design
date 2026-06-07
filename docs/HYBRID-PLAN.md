@@ -238,7 +238,9 @@ trap `validation/challenge.py:9-13` warns about). Instead:
 | **5. Render-adapter breadth** ⬜ | Generalize `render/` to neutral-intent → adapter; add Wavefront/AppDynamics. | Independent; can run in parallel. |
 
 Phases 0→1→2 are the trust/security spine and are low-risk extensions of existing code; they land
-first. Phase 4 is the only heavy lift and the only new LLM-integration risk.
+first. Phase 4 was the only heavy lift and the only new LLM-integration risk — and the spike has
+since cleared that bar (§9). The remaining order has been revised post-spike from "expand Phase 4,
+then Phase 5" to **integrate before expand**; see **§9.3** for the current sequence.
 
 ### Lift verbatim from `resiliency-skills`
 
@@ -413,7 +415,9 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 ## 8. Implementation status (2026-06-07)
 
 Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **178 tests
-passing, ruff-clean.**
+passing, ruff-clean.** Every claim below was re-verified at file:line on 2026-06-07 (the deep
+re-audit in §9) — no drift found; the only corrections were *additions* for behaviors the code
+had but this section under-documented (folded in where they belong).
 
 ### Phase 0 — Fact contract & trust tiers ✅
 
@@ -441,6 +445,13 @@ Both weaknesses §6 assigns to Phase 1 are closed, and the §6 hardening list is
 - **redact + second gate** (`security/secret_scan.py`) — `redact_tree()` scrubs the staged tree
   before `enforce_secret_gate` verifies it.
 - **Fan-out cap** (`publish.max_artifacts`) — refuses a runaway/compromised PR tree.
+- **Dangerous-pattern safety lint** (`validation/safety.py`) — artifact specs are scanned for
+  shell-pipe-to-network, `rm -rf`, TLS/auth-disable, and dynamic-eval patterns; a hit forces the
+  artifact to `needs-review` in the orchestrator gate even when provenance is clean (a de-facto
+  gate-strength layer, surfaced by the §9 re-audit).
+- **Markdown-level injection defense** — the runbook renderer (`render/copilot.py:_inline`)
+  de-backticks/flattens every field, so untrusted text can't break out of a code span in the
+  generated markdown (beyond the guardrail sanitization above).
 - `needs-human-review` const — satisfied by our existing `verified | needs-review | rejected`
   status (§7.6 keeps ours over their const).
 
@@ -529,3 +540,54 @@ a standalone opt-in path).
 ### Phase 5 ⬜
 
 Not started: render-adapter breadth (Wavefront / AppDynamics emitters beyond Splunk + Prometheus).
+
+---
+
+## 9. Reassessment & revised forward order (2026-06-07, post-spike)
+
+A re-audit once the Phase 4 spike had landed and merged to `main`, on two axes: (a) a source-level
+re-verification of every §8 claim, and (b) a strategic re-read of the plan now that the spike
+*exists* rather than being the open risk it was framed as.
+
+### 9.1 The plan's central bet has cleared its bar
+
+The whole plan was sequenced around one make-or-break experiment — the fenced Tier-B gap-finder
+(§6.3, §7.9). If the *non-circular contract* couldn't be made to work, "just extend
+`resiliency-skills`" was the rational alternative (the framing in `REASSESSMENT-2026-06.md`). The
+spike resolved it: its recall eval **surfaces a planted gap, refutes a false positive** (a timeout
+*is* present → the shared signature fires → the gap is dropped), and **drops a hallucinated citation**
+(anchor not found verbatim) — and the probe generalizes across Java *and* .NET. The architecture is
+now *demonstrated*, not argued; that strategic question is closed in the plan's favor.
+
+### 9.2 Deep-review verdict — §8 is trustworthy, and slightly understated
+
+Every Phase 0–4 claim in §8 was re-verified at file:line: **zero drift.** The audit also surfaced
+behaviors the code has but §8 hadn't recorded — now folded in: the dangerous-pattern **safety lint**
+(`validation/safety.py`), **markdown-level injection defense** in the runbook renderer, the
+honest-negative **`checked:` trail** on gap Facts, and the **`provenanceMode`** (`deterministic` |
+`llm-asserted`) signal on the envelope. None change status; they make the doc match the code.
+
+### 9.3 The revised order — *integrate before expand*
+
+Phases 0–3 and every §7 enhancement are done and tested (178 green). What remains is **finishing a
+proven architecture**, not de-risking an unproven one — which reorders the work. (This also finally
+takes §7.7's standing advice that Phase 5 is independent and should run in parallel, not last.)
+
+1. **Wire the gap-finder into `run`.** It is a standalone CLI/pipeline today (§8 Phase 4), so the
+   shipped `sre-kb run` never surfaces Tier-B at all. Small, no new trust risk; turns the spike into
+   a feature. *Highest impact-to-risk ratio of anything remaining.*
+2. **`swallowed-failure` refutation probe** (the 3rd probe). The plan's own "natural next," and the
+   cleanest **graduation exemplar**: re-run the deterministic swallow rule at the LLM's pointer and,
+   *if it fires*, promote the finding to Tier-A.
+3. **Graduation loop (§7.9).** Now buildable against the concrete instance from (2): a recurring,
+   human-confirmed gap category becomes a deterministic signature, so the gap-finder *ratchets the
+   engine's recall upward* instead of being a permanent crutch. The strategic core of Tier-B.
+4. **Phase 5 render-adapter breadth.** Independent of the trust spine, zero LLM-trust risk, immediate
+   user-visible value — run as a **parallel track**, not after Phase 4.
+5. **Infra hardening** (full scan/publish credential split; supply-chain SHA-pinning +
+   `--require-hashes`). Gate on intent to do **live (`--no-dry-run`) publishes** — it is the one open
+   item that becomes a real safety bug the moment someone ships against a real target.
+
+Net: (1) makes Tier-B real for users, (2)+(3) make it compound, (4) runs alongside, (5) lands before
+the first live publish. The §6 phase *table* records the original sequence; this subsection is the
+current one.

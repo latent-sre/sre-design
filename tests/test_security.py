@@ -21,6 +21,22 @@ def test_secret_scan_detects_common_secrets():
     assert any(f["rule"] == "github-token" for f in scan_text("GITHUB_TOKEN=ghp_" + "a" * 36, "e.env"))
 
 
+def test_secret_scan_detects_more_provider_tokens():
+    """M6: provider-prefixed and Authorization/connection-string secret classes."""
+    cases = {
+        "stripe-secret-key": "key = sk_live_" + "a" * 24,
+        "slack-webhook": "url: https://hooks.slack.com/services/T00000000/B11111111/abcdEFGH1234abcd5678",
+        "slack-app-token": "SLACK_APP_TOKEN=xapp-1-A012345678-" + "9" * 20,
+        "sendgrid-key": "k=SG." + "a" * 22 + "." + "b" * 43,
+        "npm-token": "//registry.npmjs.org/:_authToken=npm_" + "a" * 36,
+        "pypi-token": "TWINE_PASSWORD=pypi-" + "A" * 40,
+        "authorization-basic": "Authorization: Basic " + "Q" * 24,
+        "azure-storage-key": "AccountKey=" + "a" * 60 + "==",
+    }
+    for rule, text in cases.items():
+        assert any(f["rule"] == rule for f in scan_text(text, "c.txt")), rule
+
+
 def test_secret_scan_detects_entropy_and_value_shape():
     token = "Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8Ii9Jj0Kk"
     assert any(f["rule"] == "high-entropy" for f in scan_text(f"opaque: {token}", "a.yml"))

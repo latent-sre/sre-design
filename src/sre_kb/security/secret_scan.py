@@ -44,11 +44,29 @@ _RULES: list[tuple[str, re.Pattern]] = [
         ),
     ),
     ("jdbc-password", re.compile(r"(?i)jdbc:[^\s\"']*[?&;]password=[^\s\"'&;]{4,}")),
+    ("stripe-secret-key", re.compile(r"\b[sr]k_live_[0-9A-Za-z]{16,}\b")),
+    (
+        "slack-webhook",
+        re.compile(r"https://hooks\.slack\.com/services/[A-Z0-9]+/[A-Z0-9]+/[A-Za-z0-9]+"),
+    ),
+    ("slack-app-token", re.compile(r"\bxapp-[0-9]-[A-Za-z0-9-]{10,}\b")),
+    ("sendgrid-key", re.compile(r"\bSG\.[A-Za-z0-9_\-]{16,}\.[A-Za-z0-9_\-]{16,}\b")),
+    ("npm-token", re.compile(r"\bnpm_[A-Za-z0-9]{36}\b")),
+    ("pypi-token", re.compile(r"\bpypi-[A-Za-z0-9_\-]{16,}\b")),
+    ("authorization-basic", re.compile(r"(?i)authorization\s*:\s*basic\s+[A-Za-z0-9+/=]{8,}")),
+    ("azure-storage-key", re.compile(r"(?i)account_?key\s*=\s*[A-Za-z0-9+/=]{40,}")),
 ]
 
 # Value-based rules suppressed when the line is obviously a placeholder. Format-strict rules above
 # are never suppressed.
-_SUPPRESSIBLE = {"assigned-secret", "assigned-secret-unquoted", "bearer-token", "jdbc-password"}
+_SUPPRESSIBLE = {
+    "assigned-secret",
+    "assigned-secret-unquoted",
+    "bearer-token",
+    "jdbc-password",
+    "authorization-basic",
+    "azure-storage-key",
+}
 _PLACEHOLDER = re.compile(
     r"(?i)(your[-_ ]|placeholder|example|change[-_ ]?me|x{4,}|\.\.\.|replace|"
     r"<[a-z._-]+>|\$\{|\{\{|todo|dummy|sample|redacted|\*{3,}|here)"

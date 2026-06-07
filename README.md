@@ -19,7 +19,7 @@ The full design lives in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Status
 
-Working engine, tested offline (233 tests, ruff-clean) against bundled **Java/Spring**,
+Working engine, tested offline (261 tests, ruff-clean) against bundled **Java/Spring**,
 **.NET/Steeltoe**, and **Python/FastAPI** fixtures — the same collectors emit the same KB across
 stacks (repo-neutrality). See [`docs/DESIGN.md`](docs/DESIGN.md) for the full
 design and a current implementation-status section.
@@ -42,9 +42,10 @@ Implemented:
   `sre-kb gap-finder`; see [`docs/PHASE-4-GAP-FINDER.md`](docs/PHASE-4-GAP-FINDER.md).
 - **Scan → scaffold → validate** (5 layers: schema, provenance hash, cross-ref, gating,
   and an adversarial challenge pass that grounds each claim against its cited evidence)
-  for ~22 kinds incl. Flow, Alert (log-pattern + SLO burn-rate), Runbook, BlastRadius,
-  ResiliencyPattern, Observability, SloSli, ReadinessScore (PRR grade), TechStack,
-  Architecture, Deployment, Dependency, Interface, DataStore, ConfigManagement.
+  for ~28 kinds incl. Flow, Alert (log-pattern + SLO burn-rate), Runbook, BlastRadius,
+  ResiliencyPattern, Observability, SloSli, ReadinessScore (PRR grade), TechStack, Criticality,
+  ScheduledJob, Dashboard, ResiliencyGap, Architecture, Deployment, Dependency, Interface,
+  DataStore, ConfigManagement.
 - **Render**: Mermaid sequence + topology diagrams, Copilot reliability guardrails, runbooks.
 - **Publish**: Backstage per-service PR tree + REVIEW.md + FINDINGS.md; SCM-neutral Forge.
   `--dry-run` stages locally; `--no-dry-run` opens a live PR via git + GitHub REST (`GITHUB_TOKEN`).
@@ -84,7 +85,7 @@ AST model.
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                                                   # the test suite (233 tests)
+pytest -q                                                   # the test suite (261 tests)
 sre-kb schema list                                          # the kind registry
 
 # scan -> scaffold -> validate -> render -> stage a PR tree (dry-run)

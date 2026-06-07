@@ -45,11 +45,13 @@ network/synthetic).
 ## Implementation status (June 2026)
 
 The design below is the full intent; this section records what is **built and tested
-offline** today (233 tests, ruff-clean). The vertical slice and the items earlier marked
+offline** today (261 tests, ruff-clean). The vertical slice and the items earlier marked
 "deferred to P3/P4" are now implemented. The forward roadmap — trust tiers and fenced LLM
-(Tier-B) collectors — lives in [`HYBRID-PLAN.md`](HYBRID-PLAN.md) (§8 tracks phase status).
+(Tier-B) collectors — lives in [`HYBRID-PLAN.md`](HYBRID-PLAN.md), the **single source of truth for
+live status** (§8 the tracker, §9 the rolling reassessment); this summary is high-level — when it and
+§8 disagree, §8 wins.
 
-- **Engine** — deterministic `scan → scaffold → validate` for ~22 `kind`s. Collectors:
+- **Engine** — deterministic `scan → scaffold → validate` for **28** `kind`s. Collectors:
   **Java/Spring on PCF**, **.NET/Steeltoe on PCF**, and a first-slice **Python/FastAPI**
   collector (endpoints + egress + tech stack) — same normalized facts → same KB across stacks,
   proving repo-neutrality. Code structure is read from a **tree-sitter AST** (Java, C#, Python —

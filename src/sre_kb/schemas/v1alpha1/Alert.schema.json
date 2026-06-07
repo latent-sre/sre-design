@@ -67,7 +67,7 @@
         "renderTargets": {
           "type": "array",
           "description": "Monitoring backends the `expr` was rendered for (adopted from AlertIntent.renderTargets).",
-          "items": { "type": "string", "enum": ["prometheus", "splunk", "wavefront", "appdynamics"] }
+          "items": { "type": "string", "enum": ["prometheus", "splunk", "wavefront", "appdynamics", "grafana", "thousandeyes"] }
         }
       }
     }

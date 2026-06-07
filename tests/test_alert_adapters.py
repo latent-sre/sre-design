@@ -96,3 +96,34 @@ def test_rendered_targets_reports_only_real_backends():
     lp = render_log_pattern(LogPatternIntent("boom", "svc"))
     assert rendered_targets(lp) == ["splunk"]
     assert "prometheus_fast" in expr  # sanity: default tools still produce Prometheus
+
+
+def test_grafana_burn_reuses_prometheus_query_over_a_datasource():
+    expr = render_burn_rate(BurnRateIntent("availability", None, 0.005, "/x"), tools=("grafana",))
+    g = expr["grafana"]
+    assert g["datasourceUid"].startswith("REPLACE_ME__")
+    assert set(g["rules"]) == {"fast", "slow"}
+    # reuses the deterministic Prometheus multi-window PromQL (same 14.4 * 0.005 budget math)
+    assert "> 0.072" in g["rules"]["fast"]["expr"] and g["rules"]["fast"]["for"] == "5m"
+    assert "Prometheus datasource" in g["mechanism"]
+    assert rendered_targets(expr) == ["grafana"]
+
+
+def test_grafana_log_is_a_loki_logql_query():
+    expr = render_log_pattern(LogPatternIntent("order.created failed", "orders"), tools=("grafana",))
+    g = expr["grafana"]
+    assert g["query"] == (
+        'sum by (host) (count_over_time({service="orders"} |= "order.created failed" [5m]))'
+    )
+    assert g["datasourceUid"].startswith("REPLACE_ME__")
+    assert rendered_targets(expr) == ["grafana"]
+
+
+def test_thousandeyes_is_a_labelled_synthetic_rule_not_a_burn_rate():
+    expr = render_burn_rate(BurnRateIntent("latency", 800, 0.005, "/x", "p95"), tools=("thousandeyes",))
+    te = expr["thousandeyes"]
+    assert te["alertRule"]["condition"] == "> 800 ms"
+    assert te["alertRule"]["testIds"] == ["REPLACE_ME__thousandeyes_http_server_test_id"]
+    assert "not a query" in te["mechanism"]
+    assert "no passive multi-window error-budget burn-rate" in te["mechanism"]
+    assert rendered_targets(expr) == ["thousandeyes"]

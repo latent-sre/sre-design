@@ -74,8 +74,8 @@ into `sre-kb run`** (a `.sre/gap-proposals.json` is auto-detected and routed thr
   graduate to Tier-A; the next step is making that ratchet a reusable promotion workflow for
   recurring human-confirmed gap categories.
 - **Render-adapter breadth** (Phase 5, started) — a tool-neutral alert-intent → adapter seam now
-  emits Prometheus, Splunk, Wavefront, and AppDynamics from one intent (config `render.alert_tools`),
-  covering the current monitoring stack; next are dashboard adapters.
+  emits Prometheus, Splunk, Wavefront, AppDynamics, Grafana, and ThousandEyes from one intent (config
+  `render.alert_tools`), covering the current monitoring stack; next are dashboard adapters.
 
 Known limitations (documented, not bugs): variable-topic egress (non-literal Kafka topics)
 and cross-file call-graph beyond a single handler body are out of scope for the per-file

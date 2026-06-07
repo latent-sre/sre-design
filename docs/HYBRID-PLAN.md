@@ -594,6 +594,12 @@ scaffold / gating. Backends today:
   no `le`-bucket series), explicitly *not* a budget burn-rate.
 - **AppDynamics** — a structured **Health Rule** fragment (metric path + condition), since AppD alerts
   via health rules, not a query language; the tier/BT is templated for the reviewer to map.
+- **Grafana** — unified-alert rules over a datasource: burn-rate reuses the deterministic Prometheus
+  PromQL against a Prometheus datasource (fidelity equals Prometheus), log alerts render as Loki LogQL;
+  the datasource UID is a `REPLACE_ME__` sentinel.
+- **ThousandEyes** — a synthetic HTTP Server test alert rule (metric + condition, not a query), since
+  synthetic monitoring has no passive request histogram or budget burn-rate; the covering test IDs are
+  templated for the reviewer, labelled a static threshold, not a burn-rate.
 
 "Honest coverage": an adapter emits a backend only where it maps faithfully to the intent, and labels
 the mechanism wherever it differs from a multi-window burn-rate (`tests/test_alert_adapters.py`).
@@ -740,8 +746,8 @@ takes §7.7's standing advice that Phase 5 is independent and should run in para
    human-confirmed gap category becomes a deterministic signature, so the gap-finder *ratchets the
    engine's recall upward* instead of being a permanent crutch. The strategic core of Tier-B.
 4. **Phase 5 render-adapter breadth.** 🟡 **Started** (parallel track). The neutral-intent → adapter
-   seam plus Prometheus/Splunk/Wavefront/AppDynamics alert backends have landed (§8 Phase 5); next are
-   dashboard adapters and more backends. Independent of the trust spine, zero LLM-trust risk.
+   seam plus Prometheus/Splunk/Wavefront/AppDynamics + Grafana/ThousandEyes alert backends have landed
+   (6/6; §8 Phase 5); next are dashboard adapters. Independent of the trust spine, zero LLM-trust risk.
 5. **Infra hardening** (full scan/publish credential split; supply-chain SHA-pinning +
    `--require-hashes`). Gate on intent to do **live (`--no-dry-run`) publishes** — it is the one open
    item that becomes a real safety bug the moment someone ships against a real target.
@@ -855,7 +861,8 @@ output, not source grounding). Our byte-grounding differentiator holds.
 **Lift actions:**
 1. ✅ **AlertIntent model adopted** onto our envelope (this PR) — `class`/`signal`/`burnRate`/
    `renderTargets` on `Alert.spec`, byte-grounded (see Phase 5 above).
-2. ⬜ **Adopt their `grafana` + `thousandeyes` adapters** to reach backend parity (Phase 5 next).
+2. ✅ **`grafana` + `thousandeyes` adapters adopted** — backend support now 6/6 (`render/alerts.py`),
+   available via `render.alert_tools` (opt-in, not default-on). See Phase 5 above.
 3. ⬜ **Lift their supply-chain config** (`--require-hashes` lockfile + Renovate digest pinning) to
    close §9.3 #5 / Phase 1 deferred — it is proven and directly portable.
 

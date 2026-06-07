@@ -722,12 +722,17 @@ things most likely to be wrong, roughly by impact:
    an **LLM-chosen location** can now produce a hard rule. It is sound (the engine's deterministic
    rule fired on hashed bytes; the LLM can only point at a *real* swallow, never fabricate one) — but
    it is a real change from "nothing the LLM touches auto-verifies," and should stay conscious.
-5. **Re-derivation soundness rides on the shared signatures, which are text-broad.** The `fallback`
-   signature is a bare `"fallback"` substring → it matches the word in a **code comment** and can
-   refute a real gap (a false negative — observed while building the probes). The config target-scope
-   is a substring match on the instance name → can false-match (`payments` ⊂ `payments-api`). Both are
-   acceptable for a spike (worst case: a missed candidate a human never sees) but are precision debt,
-   not the "zero drift" §9.2 might imply. **Action:** tighten signatures before leaning on them harder.
+5. **Re-derivation soundness rides on the shared signatures — two precision holes now fixed.**
+   ~~The `fallback` signature is a bare `"fallback"` substring → it matches the word in a code
+   comment and can refute a real gap; the config target-scope is a substring match → can false-match
+   (`payments` ⊂ `payments-api`).~~ **FIXED:** the `fallback` signature now matches a fallback
+   *mechanism* (`fallbackMethod=`/`@Recover`/`.Fallback(`/`.withFallback(`/Feign `fallback=`), never
+   the bare word, and config scoping is a **whole-token** match (`payments` no longer scopes into a
+   `payments-api` block) — `signatures.py`, `collectors/llm/gap_finder.py:_name_in_text`, with
+   regression tests `test_fallback_signature_matches_mechanisms_not_the_bare_word` and
+   `test_config_scope_matches_whole_instance_token_not_prefix`. Residual (by design): the catalogue is
+   still text-based — broaden it to more stacks as Tier-B leans harder; the two holes that could drop
+   a real gap are closed.
 
 ### 9.6 Source-verified competitive re-audit (2026-06-07) + lift actions
 

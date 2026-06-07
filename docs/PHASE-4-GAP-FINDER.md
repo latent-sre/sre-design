@@ -197,10 +197,15 @@ so `swallowed-failure` confirms-and-graduates on a FastAPI handler just as it do
   three are judgment-routed (`data-loss-path`, `missing-idempotency`, `unbounded-resource`) —
   located but not re-derived, surfaced as `needs-review` for the oracle. The judgment ones are pure
   LLM assertions modulo the citation, so they lean entirely on the noise budget + human review.
-- **Signatures are text-broad.** Re-derivation reuses the shared signature regexes, some of which
-  match plain words (e.g. `fallback`), so a code *comment* mentioning a pattern can refute a real
-  gap. Acceptable here (worst case: a false negative a human never sees) but a reason the probes
-  aren't airtight.
+- **Signatures are text-based — two false-refute holes now closed.** Re-derivation reuses the shared
+  signature regexes. ~~Some match plain words (e.g. `fallback`), so a code *comment* can refute a
+  real gap~~ — the `fallback` signature now matches a fallback *mechanism*
+  (`fallbackMethod=`/`@Recover`/`.Fallback(`/`.withFallback(`/Feign `fallback=`), never the bare word,
+  and config scoping is a **whole-token** match so `payments` no longer scopes into a `payments-api`
+  block (HYBRID-PLAN §9.5 ⑤; `test_fallback_signature_matches_mechanisms_not_the_bare_word`,
+  `test_config_scope_matches_whole_instance_token_not_prefix`). The catalogue is still text-based by
+  design; broaden it (more stacks) as Tier-B leans harder, but the two holes that could drop a real
+  gap are gone.
 - **In-scope/per-file re-derivation**, the same documented boundary as the AST model: a "confirmed"
   gap is *plausible*, not *proven* — hence `needs-review`, never `verified`.
 - ~~**Standalone path.**~~ Resolved: `sre-kb run` now auto-detects `.sre/gap-proposals.json` and

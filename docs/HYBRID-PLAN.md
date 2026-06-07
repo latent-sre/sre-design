@@ -892,9 +892,12 @@ reviews. Completion is tracked in the §8 table; the rationale lives here.
   config ship as package data). Still open: `--require-hashes` lockfile + Renovate digest-pin of
   Actions + an independent `detect-secrets` second gate. See §9.6 #3 / §9.3 #5. Gate before any live
   (`--no-dry-run`) publish.
-- **N4 — central vocabulary + severity reconciliation.** A single `taxonomy.yaml` the schemas draw
-  their enums from, with a consistency test, to kill enum drift (our `critical/high/medium/low` vs
-  their `sev1/sev2/sev3`). Deliberately not adopted yet — revisit if enum drift bites.
+- **N4 — central vocabulary + severity reconciliation.** ✅ **Done.** `schemas/taxonomy.yaml` is the
+  single source of truth for the recurring vocabularies (severity, status, source_tier, ownership,
+  criticality tier, data classification); `sre_kb/taxonomy.py` exposes them + `reconcile_severity`
+  (sevN/pN/blocker/numeric → our `critical/high/medium/low`). The severity-rank/floor constants are
+  derived from it, and `tests/test_taxonomy.py` sanctions the known severity shapes and fails on any
+  new schema/code enum drift.
 - **N5 — lower priority.** `load-shed`/`backpressure` vocab + judgment probes; declarative inventory
   signatures (tech-stack/messaging/datastore, incl. Node/Go) as a data-driven breadth path; an
   LLM-authored narrative over the `findings` digest (advisory, Tier-B); lifting the `AGENTS.md`-hijack

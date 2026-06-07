@@ -128,22 +128,21 @@ These were verified at the source and **fixed with regression tests** in the sam
    `resiliency-skills` hardened exactly this. **Fixed:** sanitize the metacharacters that could
    break out of a label or inject diagram syntax (node ids were already sanitized).
 
-### `sre-design` — weaknesses noted (not yet fixed; tracked for the hybrid)
+### `sre-design` — weaknesses noted (now closed in Phase 1/2; see §8)
 
-- **Injection fence is textual and breakable** (`synth/context_pack.py:40`): the
-  `<<<UNTRUSTED …>>> … <<<END UNTRUSTED>>>` delimiters and the path field are unescaped, so a
-  hostile source file can close the fence early and inject instructions into the "trusted"
-  region. The architectural defense in `resiliency-skills` is strictly stronger.
-- **Publish path** (`publish/forge/github.py:98`): the token is embedded in the remote URL and
-  passed as a `git` argv (visible to `ps`); `open_pr` has no target-repo allowlist (relies
-  wholly on the ambient token's scope).
-- **Gates not status-aware**: `crossref.py` resolves a reference if *any* artifact with that
-  name exists, regardless of whether it is `verified`/`rejected`; `readiness` counts artifacts
-  by kind, not status — a "verified" graph can cite unverified artifacts and grade "A".
-- **`provenance.py:28`** has no path-confinement (`root / path` with no `is_relative_to` check) —
-  harmless for engine output (always in-root) but bites edited / future LLM-sourced artifacts.
-- **`DESIGN.md` is internally stale**: its header says the challenge pass and secret gate are
-  built (they are — verified), while its body still says "P3 / deferred". Trust the code.
+These were the gaps the hybrid set out to fix; all are implemented in code as of 2026-06-07:
+
+- **Injection fence** (`synth/context_pack.py`) — fence/sentinel runs in cited excerpts *and*
+  paths are now defanged, so a hostile source file can't close the `<<<UNTRUSTED …>>>` block
+  early. *(Was: textual and breakable.)*
+- **Publish path** (`publish/forge/github.py`) — the token is kept out of `git` argv
+  (env-injected auth) and live publishes are confined to a `publish.allowed_repos` allowlist
+  (empty = block-all). *(Was: token in argv, no allowlist.)*
+- **Status-aware gates** (`validation/crossref.py`, `scoring/readiness.py`) — a verified
+  artifact citing a non-verified referent is downgraded to a fixpoint; artifact-presence
+  readiness credits only verified coverage. *(Was: name-only resolution, status-blind grade.)*
+- **Provenance path-confinement** (`validation/provenance.py`) — evidence paths must resolve
+  inside the repo root (`is_relative_to`); `../`/absolute escapes are rejected. *(Was: none.)*
 
 ### Findings that turned out to be *tested intent*, not bugs (calibration)
 
@@ -232,11 +231,11 @@ trap `validation/challenge.py:9-13` warns about). Instead:
 | Phase | What | Why first/last |
 |---|---|---|
 | **0. Fact contract & trust tiers** ✅ | Add `source_tier: ast\|llm` to `Fact`/`Evidence`; a `CollectorProtocol` both tiers satisfy. No behavior change. | Foundation. |
-| **1. Adopt `resiliency-skills`' hardening wholesale** 🟡 | Architectural scan/publish split (no-credential scan role; scoped publish credential), sandboxed/`json.dumps` renderers, `redact` + second gate, fan-out cap, `needs-human-review` const. | This *is* `sre-design`'s own deferred roadmap. Closes the textual-fence and publish-path weaknesses **before** any LLM breadth is added. |
+| **1. Adopt `resiliency-skills`' hardening wholesale** ✅ | Architectural scan/publish split (no-credential scan role; scoped publish credential), sandboxed/`json.dumps` renderers, `redact` + second gate, fan-out cap, `needs-human-review` const. | This *is* `sre-design`'s own deferred roadmap. Closes the textual-fence and publish-path weaknesses **before** any LLM breadth is added. |
 | **2. Make the trust spine status-aware** ✅ | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). | Or Tier-B facts will silently inflate "verified" graphs. |
-| **3. Wire `LLMChallenger` to a live oracle** | Real adjudication for judgment-call claims. | Prerequisite for Tier-B, not polish — deterministic grounding is circular for LLM claims. |
-| **4. LLM collectors: gap-finders + pointer-generators** | `collectors/llm/`. The LLM reads the engine's facts + the cited code and proposes **(a) gaps the engine missed on code we already cover** (the recall payoff — §7.9) and **(b) pointers for stacks no AST grammar reaches** (breadth). The engine re-derives or *refutes* each (§6.3, §7.9); nothing it proposes can auto-`verify`. | Recall on covered estates **and** breadth, both safely fenced. |
-| **5. Render-adapter breadth** | Generalize `render/` to neutral-intent → adapter; add Wavefront/AppDynamics. | Independent; can run in parallel. |
+| **3. Challenge loop (Copilot oracle)** ✅ | Judgment-call claims → worklist; Copilot adjudicates; `challenge-apply` re-gates monotonically. In-process `LLMChallenger` superseded by the worklist (engine stays model-free). | Prerequisite for Tier-B — deterministic grounding is circular for LLM judgment claims. |
+| **4. LLM collectors: gap-finders + pointer-generators** ⬜ | `collectors/llm/`. The LLM reads the engine's facts + the cited code and proposes **(a) gaps the engine missed on code we already cover** (the recall payoff — §7.9) and **(b) pointers for stacks no AST grammar reaches** (breadth). The engine re-derives or *refutes* each (§6.3, §7.9); nothing it proposes can auto-`verify`. | Recall on covered estates **and** breadth, both safely fenced. |
+| **5. Render-adapter breadth** ⬜ | Generalize `render/` to neutral-intent → adapter; add Wavefront/AppDynamics. | Independent; can run in parallel. |
 
 Phases 0→1→2 are the trust/security spine and are low-risk extensions of existing code; they land
 first. Phase 4 is the only heavy lift and the only new LLM-integration risk.
@@ -411,7 +410,7 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ---
 
-## 8. Implementation status (2026-06-06)
+## 8. Implementation status (2026-06-07)
 
 Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **166 tests
 passing, ruff-clean.**
@@ -427,7 +426,7 @@ passing, ruff-clean.**
 - Per-artifact `tier` + a `by_tier` roll-up surfaced in the validation report.
 - Pure plumbing: no artifact status/confidence/content changed.
 
-### Phase 1 — Adopt `resiliency-skills`' hardening 🟡
+### Phase 1 — Adopt `resiliency-skills`' hardening ✅ (code-complete)
 
 Both weaknesses §6 assigns to Phase 1 are closed, and the §6 hardening list is implemented in code:
 
@@ -445,14 +444,14 @@ Both weaknesses §6 assigns to Phase 1 are closed, and the §6 hardening list is
 - `needs-human-review` const — satisfied by our existing `verified | needs-review | rejected`
   status (§7.6 keeps ours over their const).
 
-Deferred (tracked, not dropped):
+Deferred (tracked, not dropped) — both are infra, not engine code:
 
-- **§7.6 schema governance** — `additionalProperties: false` per kind (must first enumerate every
-  emitted field, e.g. `BlastRadius.riskRationale`, or current artifacts fail), `ownership`,
-  `unverified-against-live`, golden-example corpus. Its own unit (**P2**) because it changes schemas
-  + artifact content.
 - **Full scan/publish credential split** — separate no-credential scan role + scoped publish role +
   CI wiring is deployment/infra per §7.7; the code-side pieces (allowlist, token-out-of-argv) are done.
+- **Supply-chain pinning** — GitHub Actions are tag-pinned (not SHA-pinned) and deps are floor-pinned
+  (not hashed); `resiliency-skills`' Renovate digest-pin + `--require-hashes` pattern is the lift target.
+
+(§7.6 schema governance, originally slotted here, is **done** — see below.)
 
 ### Phase 2 — Status-aware trust spine ✅
 
@@ -489,10 +488,19 @@ Deferred (tracked, not dropped):
   allow-list), an `ownership` enum (app|platform|shared) and an `unverifiedAgainstLive` flag on the
   envelope, and a golden-example-per-kind corpus validated in CI (`tests/fixtures/golden/`).
 
-### Phases 3–5 ⬜
+### Phase 3 — Challenge loop (Copilot oracle) ✅
 
-Not started: live `LLMChallenger` oracle (Phase 3), Tier-B LLM collectors / gap-finder (Phase 4, §7.9),
-render-adapter breadth (Phase 5).
+Built and exercised end-to-end (2026-06-07): a deterministic `GroundingChallenger` runs inline in the
+orchestrator; `build_worklist` emits judgment-call claims (Alert appropriateness, Runbook safety) to
+`challenge/worklist.json`; `challenge-worklist` shows them; Copilot adjudicates
+(`supported|unsupported|contradicted`); `challenge-apply` re-gates with the **same monotonic
+downgrade-only** rule and moves each artifact to its new status dir. The in-process `LLMChallenger`
+class stays a **dormant hook** — the oracle is Copilot via the worklist, so the engine never calls a
+model (the founding invariant). The §7.3 adversarial-LLM corpus is the regression harness.
 
-> Doc note: `docs/DESIGN.md` still describes the challenge pass + secret gate as "P3 / deferred"
-> though both are built (§4) — trust the code; a DESIGN.md refresh is outstanding.
+> Verified live: on `sample-spring-pcf` the loop routed the `create-order-latency-burn-rate` Alert
+> `verified → needs-review` when its burn-rate expr didn't measure the latency SLI it cited (now fixed).
+
+### Phases 4–5 ⬜
+
+Not started: Tier-B LLM collectors / gap-finder (Phase 4, §7.9), render-adapter breadth (Phase 5).

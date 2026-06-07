@@ -29,6 +29,12 @@ def test_validate_kb_passes_on_good_tree() -> None:
     assert "0 failed" in result.stdout
 
 
+def test_validate_kb_accepts_schema_dir() -> None:
+    result = runner.invoke(app, ["validate-kb", "--schema-dir", "schemas", str(FIXTURES / "kb-good")])
+    assert result.exit_code == 0, result.stdout
+    assert "0 failed" in result.stdout
+
+
 def test_validate_kb_fails_on_bad_tree() -> None:
     result = runner.invoke(app, ["validate-kb", str(FIXTURES / "kb-bad")])
     assert result.exit_code == 1

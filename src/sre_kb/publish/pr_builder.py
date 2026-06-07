@@ -7,6 +7,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from sre_kb import __version__
 from sre_kb.config import load_config
 from sre_kb.publish.forge import ForgePublishError, get_forge
 from sre_kb.publish.manifest import merge_tree
@@ -51,6 +52,82 @@ def _claim_tree(produced: dict[str, Path], src_root: Path, dest_rel: Path) -> No
             _claim_file(produced, src, dest_rel / src.relative_to(src_root))
 
 
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _write_generated_file(produced: dict[str, Path], stage: Path, rel: Path, content: str) -> None:
+    path = stage / "_generated" / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    _claim_file(produced, path, rel)
+
+
+def _generated_validate_workflow() -> str:
+    return """name: validate-sre-kb
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require CODEOWNERS team
+        run: |
+          if grep -q 'REPLACE_ME__owning_team' .github/CODEOWNERS; then
+            echo "::error::Replace REPLACE_ME__owning_team and enable Code Owner review."
+            exit 1
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned engine
+        run: python -m pip install "$(cat .sre/version)"
+      - name: Validate KB artifacts
+        run: sre-kb validate-kb --schema-dir .sre/schemas kb
+      - name: Fail-closed secret gate
+        run: sre-kb secret-scan .
+"""
+
+
+def _generated_pr_template() -> str:
+    return """# SRE KB update
+
+This repository contains AI-assisted SRE knowledge-base output. Review every changed artifact before
+merge.
+
+- [ ] Replace any `REPLACE_ME__` sentinels or leave a tracked follow-up.
+- [ ] Review all `needs-review` artifacts in `REVIEW.md`.
+- [ ] Confirm generated alerts, dashboards, and runbooks against live systems before enabling them.
+- [ ] Confirm CODEOWNERS and branch protection are configured for this repo.
+"""
+
+
+def _claim_generated_repo_hardening(produced: dict[str, Path], stage: Path) -> None:
+    _claim_tree(produced, _repo_root() / "schemas", Path(".sre/schemas"))
+    _write_generated_file(produced, stage, Path(".sre/version"), f"sre-kb=={__version__}\n")
+    _write_generated_file(produced, stage, Path(".github/CODEOWNERS"), "* REPLACE_ME__owning_team\n")
+    _write_generated_file(
+        produced,
+        stage,
+        Path(".github/workflows/validate-sre-kb.yml"),
+        _generated_validate_workflow(),
+    )
+    _write_generated_file(
+        produced,
+        stage,
+        Path(".github/pull_request_template.md"),
+        _generated_pr_template(),
+    )
+
+
 def _stage_pr_tree(stage: Path, layout: RunLayout, proj: Path, service: str, docs: list[dict], report: dict | None) -> None:
     produced: dict[str, Path] = {}
 
@@ -59,6 +136,7 @@ def _stage_pr_tree(stage: Path, layout: RunLayout, proj: Path, service: str, doc
     _claim_tree(produced, proj / "runbooks", Path("runbooks"))
     _claim_tree(produced, proj / "diagrams", Path("diagrams"))
     _claim_file(produced, proj / "catalog-info.yaml", Path("catalog-info.yaml"))
+    _claim_generated_repo_hardening(produced, stage)
 
     review = stage / "_generated" / "REVIEW.md"
     review.parent.mkdir(parents=True, exist_ok=True)

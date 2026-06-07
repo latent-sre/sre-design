@@ -41,6 +41,12 @@ def test_pr_tree_structure(result):
     assert (base / "REVIEW.md").exists()
     assert (base / "catalog-info.yaml").exists()
     assert (base / ".github" / "copilot-instructions.md").exists()
+    assert (base / ".github" / "CODEOWNERS").read_text() == "* REPLACE_ME__owning_team\n"
+    assert (base / ".github" / "pull_request_template.md").exists()
+    assert (base / ".github" / "workflows" / "validate-sre-kb.yml").exists()
+    assert (base / ".sre" / "version").read_text().startswith("sre-kb==")
+    assert (base / ".sre" / "schemas" / "_envelope.schema.json").exists()
+    assert (base / ".sre" / "schemas" / "v1alpha1" / "Flow.schema.json").exists()
     assert (base / "kb").exists()
 
 

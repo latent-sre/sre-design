@@ -653,3 +653,43 @@ and `pipeline/gap_finder.py`. Priority 4 (render adapters) touches `render/` and
 `synth/scaffold.py` — **fully disjoint**, safe to run concurrently. The only shared surface across
 all remaining tracks is the schema/registry (a new gap shape or kind), so coordinate there if both
 add artifact kinds at once; the Python modules don't overlap.
+
+> **Status (priority 2 — done):** the `swallowed-failure` **confirmation probe** is built
+> (`_CONFIRMING_CATEGORIES` / `_confirm_swallow` in `collectors/llm/gap_finder.py`). A swallow the
+> rule reproduces at the pointer graduates to `source_tier=ast` and reaches `verified` through the
+> normal gate (`scaffold_gap`); a pointer where it doesn't fire is dropped. Recall eval extended in
+> `tests/test_gap_finder.py` (planted non-messaging swallow → verified; no-swallow pointer → dropped).
+> One framing correction vs. the note above: the value is **not** "re-run the existing rule" (it
+> already runs on every call) — it is *emitting a swallow finding for the call sites the collectors
+> ignore* (everything but Kafka egress). See §9.5 ③.
+
+### 9.5 Risks & open questions — what this reassessment might be wrong about
+
+§9.1–9.2 are confident; this subsection is the deliberate counterweight. The §9.2 audit was a
+*consistency* check (does the code match §8) — **not** an adversarial soundness review. These are the
+things most likely to be wrong, roughly by impact:
+
+1. **The LLM half has never actually run.** Every "proof" — the recall eval, the `run` integration
+   test, the probe tests — uses a **hand-written `gap-proposals.json`**. No real Copilot has produced
+   a proposal. So §9.1's "the architecture is *demonstrated*" is true of the **engine's grounding
+   gate**, not of the LLM's **recall or precision** on real code. The core Tier-B value prop —
+   *useful gaps at tolerable noise* — is **unmeasured**. **Action:** run the gap-finder once with a
+   real Copilot against a real-ish service before calling Tier-B "proven."
+2. **"Signal vs noise" is asserted, not measured.** One planted gap + two traps proves the
+   *mechanism*; it says nothing about false-positive rate at scale. The noise budget (§7.9) is a knob
+   with no empirical setting yet.
+3. **The §9.4 swallow rationale was misleading (now corrected).** "Re-run the existing rule at the
+   pointer" adds nothing alone — `_enclosing_swallow` already runs on every call; `swallowed.failure`
+   *facts* are emitted only for Kafka egress (`java_spring/annotations.py`). The recall comes from
+   emitting a finding for the **non-messaging** call sites the collectors skip. Verified at source.
+4. **Graduation widens the trust boundary (conscious decision).** A confirmed swallow becomes
+   `source_tier=ast` and can reach `verified` → it then drives **hard** Tier-A guardrails (§7.2). So
+   an **LLM-chosen location** can now produce a hard rule. It is sound (the engine's deterministic
+   rule fired on hashed bytes; the LLM can only point at a *real* swallow, never fabricate one) — but
+   it is a real change from "nothing the LLM touches auto-verifies," and should stay conscious.
+5. **Re-derivation soundness rides on the shared signatures, which are text-broad.** The `fallback`
+   signature is a bare `"fallback"` substring → it matches the word in a **code comment** and can
+   refute a real gap (a false negative — observed while building the probes). The config target-scope
+   is a substring match on the instance name → can false-match (`payments` ⊂ `payments-api`). Both are
+   acceptable for a spike (worst case: a missed candidate a human never sees) but are precision debt,
+   not the "zero drift" §9.2 might imply. **Action:** tighten signatures before leaning on them harder.

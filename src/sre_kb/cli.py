@@ -62,12 +62,18 @@ def schema_show(kind: str) -> None:
 
 
 @app.command("validate-kb")
-def validate_kb(directory: Path = typer.Argument(..., help="Directory of KB YAML artifacts.")) -> None:
+def validate_kb(
+    directory: Path = typer.Argument(..., help="Directory of KB YAML artifacts."),
+    schema_dir: Path | None = typer.Option(None, "--schema-dir", help="Schema directory to validate against."),
+) -> None:
     """Validate an existing KB tree against the schemas. Exits non-zero on any failure."""
     if not directory.exists():
         typer.echo(f"no such directory: {directory}", err=True)
         raise typer.Exit(code=2)
-    results = validate_kb_tree(directory)
+    if schema_dir is not None and not schema_dir.exists():
+        typer.echo(f"no such schema dir: {schema_dir}", err=True)
+        raise typer.Exit(code=2)
+    results = validate_kb_tree(directory, schema_root=schema_dir)
     failures = [r for r in results if not r.ok]
     for r in results:
         mark = "ok  " if r.ok else "FAIL"

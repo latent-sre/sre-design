@@ -1,7 +1,7 @@
 """Configuration loading: packaged defaults + optional file overlay + env overrides.
 
-Resolves repo paths (schemas, registry, prompts) relative to the package root so the
-CLI works regardless of the current working directory.
+Schemas and the default config ship as package data, so they resolve relative to the installed
+package and work in a wheel install, not just an editable checkout.
 """
 
 from __future__ import annotations
@@ -12,23 +12,23 @@ from pathlib import Path
 import yaml
 
 
-@cache
-def repo_root() -> Path:
-    """Return the sre-design repo root (two levels up from this file: src/sre_kb/..)."""
-    return Path(__file__).resolve().parents[2]
+def _package_dir() -> Path:
+    """Directory of the installed `sre_kb` package — the root for bundled data (schemas, config)."""
+    return Path(__file__).resolve().parent
 
 
 @cache
 def load_config() -> dict:
-    """Load config/default.yaml. (Profile + env overlay land in a later phase.)"""
-    cfg_path = repo_root() / "config" / "default.yaml"
+    """Load the bundled data/default.yaml. (Profile + env overlay land in a later phase.)"""
+    cfg_path = _package_dir() / "data" / "default.yaml"
     with cfg_path.open("r", encoding="utf-8") as fh:
         return yaml.safe_load(fh) or {}
 
 
 def schemas_dir() -> Path:
-    return repo_root() / "schemas"
+    """Bundled JSON Schemas, shipped as package data so they resolve in a wheel install too."""
+    return _package_dir() / "schemas"
 
 
 def registry_path() -> Path:
-    return repo_root() / "schemas" / "registry.yaml"
+    return schemas_dir() / "registry.yaml"

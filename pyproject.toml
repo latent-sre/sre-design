@@ -31,7 +31,9 @@ sre-kb = "sre_kb.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-# schemas/, prompts/, output_templates/ are loaded at runtime; keep them discoverable.
+# Schemas and the default config ship inside the package so a wheel-installed engine
+# resolves them at runtime.
+sre_kb = ["schemas/*.json", "schemas/*.yaml", "schemas/**/*.json", "data/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

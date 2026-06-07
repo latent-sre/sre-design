@@ -22,6 +22,18 @@ def _tree(root: Path, files: dict[str, str]) -> None:
 # --------------------------------------------------------------------------- merge_tree (unit)
 
 
+def test_merge_tree_skips_symlinks(tmp_path):
+    """A symlink in the staged tree is not followed/copied (consistent with the secret scanner)."""
+    staged, dest = tmp_path / "staged", tmp_path / "dest"
+    staged.mkdir()
+    (staged / "real.txt").write_text("x\n", encoding="utf-8")
+    (staged / "link.txt").symlink_to(staged / "real.txt")
+    res = merge_tree(staged, dest)
+    assert "real.txt" in res.written
+    assert "link.txt" not in res.written
+    assert not (dest / "link.txt").exists()
+
+
 def test_first_publish_writes_all_and_records_a_manifest(tmp_path):
     staged, dest = tmp_path / "staged", tmp_path / "dest"
     _tree(staged, {"catalog/a.yaml": "a\n", "catalog/b.yaml": "b\n"})
@@ -106,7 +118,11 @@ def test_forge_publish_preserves_operator_edit_and_prunes_orphan(tmp_path):
         if cmd[-2:] == ["add", "-A"]:  # snapshot the merged tree before the tempdir is cleaned up
             base = Path(cmd[2])
             snapshot.update(
-                {str(p.relative_to(base)): p.read_text() for p in base.rglob("*") if p.is_file()}
+                {
+                    str(p.relative_to(base)).replace("\\", "/"): p.read_text()
+                    for p in base.rglob("*")
+                    if p.is_file()
+                }
             )
         if "rev-parse" in cmd:
             return "main\n"

@@ -21,6 +21,63 @@ def test_secret_scan_detects_common_secrets():
     assert any(f["rule"] == "github-token" for f in scan_text("GITHUB_TOKEN=ghp_" + "a" * 36, "e.env"))
 
 
+def test_secret_scan_detects_more_provider_tokens():
+    """M6: provider-prefixed and Authorization/connection-string secret classes."""
+    cases = {
+        "stripe-secret-key": "key = sk_live_" + "a" * 24,
+        "slack-webhook": "url: https://hooks.slack.com/services/T00000000/B11111111/abcdEFGH1234abcd5678",
+        "slack-app-token": "SLACK_APP_TOKEN=xapp-1-A012345678-" + "9" * 20,
+        "sendgrid-key": "k=SG." + "a" * 22 + "." + "b" * 43,
+        "npm-token": "//registry.npmjs.org/:_authToken=npm_" + "a" * 36,
+        "pypi-token": "TWINE_PASSWORD=pypi-" + "A" * 40,
+        "authorization-basic": "Authorization: Basic " + "Q" * 24,
+        "azure-storage-key": "AccountKey=" + "a" * 60 + "==",
+    }
+    for rule, text in cases.items():
+        assert any(f["rule"] == rule for f in scan_text(text, "c.txt")), rule
+
+
+def test_secret_scan_detects_entropy_and_value_shape():
+    token = "Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8Ii9Jj0Kk"
+    assert any(f["rule"] == "high-entropy" for f in scan_text(f"opaque: {token}", "a.yml"))
+    assert any(
+        f["rule"] == "value-shape"
+        for f in scan_text("db_password: s3cretValueWithLength", "app.yml")
+    )
+
+
+def test_value_shape_ignores_content_hashes():
+    """B1 regression: a provenance/manifest line like `<path-with-token>: sha256:<hex>` is a content
+    hash, not a secret, and must not trip the fail-closed gate on ordinary artifact names."""
+    line = "kb/verified/Alert/token-refresh-failures.yaml: sha256:" + "a" * 64
+    assert scan_text(line, ".sre/manifest.yaml") == []
+    # a real opaque value on a secretish key still fires
+    assert any(f["rule"] == "value-shape" for f in scan_text("api_token: s3cretLongValue123", "c.yml"))
+
+
+def test_value_shape_catches_secret_in_later_pair():
+    """The secret is the SECOND pair on the line; the old first-pair-only check missed it."""
+    findings = scan_text("note: ok api_token=s3cretLongValue123", "app.yml")
+    assert any(f["rule"] == "value-shape" for f in findings)
+
+
+def test_scan_tree_enforces_file_budget(tmp_path):
+    """DoS guard: a tree exceeding the file budget is refused rather than scanned unbounded."""
+    from sre_kb.security.secret_scan import SecretScanBudgetError, scan_tree
+
+    for i in range(3):
+        (tmp_path / f"f{i}.txt").write_text("ok\n", encoding="utf-8")
+    with pytest.raises(SecretScanBudgetError):
+        scan_tree(tmp_path, max_files=2)
+
+
+def test_secret_scan_decodes_utf16_text(tmp_path):
+    key = "AKIA" + "W" * 16
+    path = tmp_path / "creds.yml"
+    path.write_text(f"id: {key}\n", encoding="utf-16")
+    assert any(f["rule"] == "aws-access-key-id" for f in enforce_secret_gate(tmp_path, allow=True))
+
+
 def test_secret_scan_clean_text():
     assert scan_text("just logs and ordinary code here", "a.txt") == []
 

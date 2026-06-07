@@ -475,8 +475,9 @@ Both weaknesses §6 assigns to Phase 1 are closed, and the §6 hardening list is
   confined to an allowlist; empty list = block-all by default (§4 publish path).
 - **Token out of `git` argv** — tokenless remote + auth via env config (`GIT_CONFIG_*` /
   `http.extraheader`).
-- **redact + second gate** (`security/secret_scan.py`) — `redact_tree()` scrubs the staged tree
-  before `enforce_secret_gate` verifies it.
+- **fail-closed secret gate** (`security/secret_scan.py`) — `enforce_secret_gate()` scans the staged
+  tree and raises on any match (surfaced for review, not silently scrubbed); `redact_tree()` runs
+  only under the explicit `--allow-secrets` override.
 - **Fan-out cap** (`publish.max_artifacts`) — refuses a runaway/compromised PR tree.
 - **Dangerous-pattern safety lint** (`validation/safety.py`) — artifact specs are scanned for
   shell-pipe-to-network, `rm -rf`, TLS/auth-disable, and dynamic-eval patterns; a hit forces the
@@ -488,12 +489,14 @@ Both weaknesses §6 assigns to Phase 1 are closed, and the §6 hardening list is
 - `needs-human-review` const — satisfied by our existing `verified | needs-review | rejected`
   status (§7.6 keeps ours over their const).
 
-Deferred (tracked, not dropped) — both are infra, not engine code:
+Deferred (tracked, not dropped) — infra, not engine code:
 
-- **Full scan/publish credential split** — separate no-credential scan role + scoped publish role +
-  CI wiring is deployment/infra per §7.7; the code-side pieces (allowlist, token-out-of-argv) are done.
-- **Supply-chain pinning** — GitHub Actions are tag-pinned (not SHA-pinned) and deps are floor-pinned
-  (not hashed); `resiliency-skills`' Renovate digest-pin + `--require-hashes` pattern is the lift target.
+- **Full scan/publish credential split** — the **no-credential scan role landed** (read-only
+  `sre-target-scan` agent); the scoped publish role + CI wiring remain deployment/infra per §7.7.
+  Code-side pieces (allowlist, token-out-of-argv) were already done.
+- **Supply-chain pinning** — schemas + config now ship as package data (a self-contained,
+  air-gappable wheel), but GitHub Actions are still tag-pinned (not SHA-pinned) and deps are
+  floor-pinned (not hashed); `resiliency-skills`' Renovate digest-pin + `--require-hashes` is the lift.
 
 (§7.6 schema governance, originally slotted here, is **done** — see below.)
 
@@ -677,6 +680,20 @@ operator-edited). The cloned target is the only place the operator's current fil
 PR-based model (adopted from resiliency-skills' in-tree `assemble`). `tests/test_publish_manifest.py`
 (6 unit + 1 end-to-end through the forge). **261 tests green** (after #25 R4 + #26 review fixes).
 
+### Publish-repo hardening + self-contained engine (publish-hardening slices)
+
+Generated target repos now carry guardrails at the **repo root** (where GitHub honors them): a
+`validate-sre-kb` CI workflow that runs `validate-kb` over `catalog/*/kb` plus a fail-closed
+`secret-scan`, a `CODEOWNERS` sentinel, and a PR template — alongside vendored schemas + a pinned
+engine version. The forge stays the **sole** clobber-merge authority (R4); the staging step is a
+clean re-stage, not a second merge (an earlier slice's local merge that leaked a per-service
+`.sre/manifest.yaml` was removed). The secret ruleset gained provider classes
+(Stripe/Slack/SendGrid/npm/PyPI/`Authorization: Basic`/Azure) + a DoS budget, and `value-shape` no
+longer trips on content hashes. Schemas **and** config now ship as package data, so a
+wheel-installed engine is self-contained. The read-only `sre-target-scan` agent delivers the
+no-credential scan role. **Gate a live (`--no-dry-run`) publish on R8** (SHA-pinned Actions +
+`--require-hashes` + an independent second gate) and a real engine release.
+
 ---
 
 ## 9. Reassessment & revised forward order (2026-06-07, post-spike)
@@ -858,8 +875,9 @@ reviews. Completion is tracked in the §8 table; the rationale lives here.
   neutral-intent → adapter seam: lift their template *structure*, feed our deterministically generated
   query (never their LLM-supplied `signal.query`). See §9.6 lift action #2.
 - **R8 — supply-chain hardening.** `--require-hashes` lockfile + Renovate digest-pin of Actions + an
-  independent `detect-secrets` second gate + an offline wheel for air-gapped PCF. See §9.6 #3 / §9.3
-  #5. Gate before any live (`--no-dry-run`) publish.
+  independent `detect-secrets` second gate + an offline wheel for air-gapped PCF (schemas + config now
+  ship as package data, so the engine wheel is self-contained — the offline-wheel precondition is met).
+  See §9.6 #3 / §9.3 #5. Gate before any live (`--no-dry-run`) publish.
 - **N4 — central vocabulary + severity reconciliation.** A single `taxonomy.yaml` the schemas draw
   their enums from, with a consistency test, to kill enum drift (our `critical/high/medium/low` vs
   their `sev1/sev2/sev3`). Deliberately not adopted yet — revisit if enum drift bites.
@@ -868,5 +886,6 @@ reviews. Completion is tracked in the §8 table; the rationale lives here.
   LLM-authored narrative over the `findings` digest (advisory, Tier-B); lifting the `AGENTS.md`-hijack
   + app-name-polyglot fixtures as regression tests (defenses exist via the fence + `_mm()`; named
   fixtures don't).
-- **Infra — full scan/publish credential split** (§9.3 #5): the no-credential scan role + scoped
-  publish role + CI wiring. Becomes a real safety bug the moment we publish live.
+- **Infra — full scan/publish credential split** (§9.3 #5): the no-credential scan role **landed**
+  (read-only `sre-target-scan` agent); the scoped publish role + CI wiring remain. Becomes a real
+  safety bug the moment we publish live.

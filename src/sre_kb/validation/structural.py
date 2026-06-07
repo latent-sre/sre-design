@@ -34,9 +34,7 @@ class DocResult:
 @cache
 def _envelope_validator() -> Draft202012Validator:
     schema_path = schemas_dir() / "_envelope.schema.json"
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema)
+    return _validator_from_path(schema_path)
 
 
 @cache
@@ -44,9 +42,26 @@ def _kind_validator(kind: str) -> Draft202012Validator | None:
     schema_path = schemas_dir() / "v1alpha1" / f"{kind}.schema.json"
     if not schema_path.exists():
         return None
+    return _validator_from_path(schema_path)
+
+
+def _validator_from_path(schema_path: Path) -> Draft202012Validator:
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     Draft202012Validator.check_schema(schema)
     return Draft202012Validator(schema)
+
+
+@cache
+def _envelope_validator_from(schema_root: Path) -> Draft202012Validator:
+    return _validator_from_path(schema_root / "_envelope.schema.json")
+
+
+@cache
+def _kind_validator_from(schema_root: Path, kind: str) -> Draft202012Validator | None:
+    schema_path = schema_root / "v1alpha1" / f"{kind}.schema.json"
+    if not schema_path.exists():
+        return None
+    return _validator_from_path(schema_path)
 
 
 def _format_errors(validator: Draft202012Validator, doc: dict) -> list[str]:
@@ -57,18 +72,19 @@ def _format_errors(validator: Draft202012Validator, doc: dict) -> list[str]:
     return msgs
 
 
-def validate_doc(doc: dict) -> list[str]:
+def validate_doc(doc: dict, schema_root: Path | None = None) -> list[str]:
     """Validate a single parsed artifact. Returns a list of error strings ([] = valid)."""
-    errors = _format_errors(_envelope_validator(), doc)
+    envelope = _envelope_validator_from(schema_root) if schema_root else _envelope_validator()
+    errors = _format_errors(envelope, doc)
     kind = doc.get("kind") if isinstance(doc, dict) else None
     if isinstance(kind, str):
-        kv = _kind_validator(kind)
+        kv = _kind_validator_from(schema_root, kind) if schema_root else _kind_validator(kind)
         if kv is not None:
             errors += _format_errors(kv, doc)
     return errors
 
 
-def validate_kb_tree(root: Path) -> list[DocResult]:
+def validate_kb_tree(root: Path, schema_root: Path | None = None) -> list[DocResult]:
     """Validate every *.yaml/*.yml artifact under `root`. Used by `sre-kb validate-kb`."""
     results: list[DocResult] = []
     for path in sorted(root.rglob("*.y*ml")):
@@ -80,6 +96,6 @@ def validate_kb_tree(root: Path) -> list[DocResult]:
         if not isinstance(doc, dict):
             results.append(DocResult(str(path), None, False, ["not a mapping/object"]))
             continue
-        errors = validate_doc(doc)
+        errors = validate_doc(doc, schema_root=schema_root)
         results.append(DocResult(str(path), doc.get("kind"), not errors, errors))
     return results

@@ -3,10 +3,13 @@
 
 from __future__ import annotations
 
+import re
 import shutil
+import tempfile
 from pathlib import Path
 
-from sre_kb.config import load_config
+from sre_kb import __version__
+from sre_kb.config import load_config, schemas_dir
 from sre_kb.publish.forge import ForgePublishError, get_forge
 from sre_kb.render.project import load_kb, render_projections, service_name
 from sre_kb.tiers import tier_label
@@ -34,6 +37,129 @@ def _review_md(docs: list[dict], report: dict | None) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _pr_title(service: str) -> str:
+    """Single-line, length-bounded PR/commit title — an unconstrained service name can't inject a
+    newline into the commit subject or forge a misleading second line."""
+    return "SRE KB: " + re.sub(r"\s+", " ", service).strip()[:100]
+
+
+def _claim_file(produced: dict[str, Path], src: Path, rel: Path) -> None:
+    key = rel.as_posix()
+    if key in produced:
+        raise ForgePublishError(f"output name collision: {key}")
+    produced[key] = src
+
+
+def _claim_tree(produced: dict[str, Path], src_root: Path, dest_rel: Path) -> None:
+    if not src_root.exists():
+        return
+    for src in sorted(src_root.rglob("*")):
+        if src.is_file():
+            _claim_file(produced, src, dest_rel / src.relative_to(src_root))
+
+
+def _write_file(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def _copy_tree(src: Path, dest: Path) -> None:
+    if src.exists():
+        shutil.copytree(src, dest, dirs_exist_ok=True)
+
+
+def _generated_validate_workflow() -> str:
+    return """name: validate-sre-kb
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require CODEOWNERS team
+        run: |
+          if grep -q 'REPLACE_ME__owning_team' .github/CODEOWNERS; then
+            echo "::error::Replace REPLACE_ME__owning_team and enable Code Owner review."
+            exit 1
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned engine
+        run: python -m pip install "$(cat .sre/version)"
+      - name: Validate KB artifacts
+        run: |
+          shopt -s nullglob
+          found=0
+          for kb in catalog/*/kb; do
+            sre-kb validate-kb --schema-dir .sre/schemas "$kb"
+            found=1
+          done
+          [ "$found" = 1 ] || { echo "::error::no catalog/*/kb directories found"; exit 1; }
+      - name: Fail-closed secret gate
+        run: sre-kb secret-scan .
+"""
+
+
+def _generated_pr_template() -> str:
+    return """# SRE KB update
+
+This repository contains AI-assisted SRE knowledge-base output. Review every changed artifact before
+merge.
+
+- [ ] Replace any `REPLACE_ME__` sentinels or leave a tracked follow-up.
+- [ ] Review all `needs-review` artifacts in `REVIEW.md`.
+- [ ] Confirm generated alerts, dashboards, and runbooks against live systems before enabling them.
+- [ ] Confirm CODEOWNERS and branch protection are configured for this repo.
+"""
+
+
+def _stage_repo_root_hardening(pr_root: Path) -> None:
+    """Stage repo-control files at the *published repo root*. GitHub honors workflows, CODEOWNERS,
+    and the PR template only at the root (or root ``.github/``), never under ``catalog/<service>/`` —
+    so these must sit beside the catalog, not inside it. The vendored schemas + pinned engine version
+    let the generated CI validate the KB hermetically."""
+    _copy_tree(schemas_dir(), pr_root / ".sre" / "schemas")
+    _write_file(pr_root / ".sre" / "version", f"sre-kb=={__version__}\n")
+    _write_file(pr_root / ".github" / "CODEOWNERS", "* REPLACE_ME__owning_team\n")
+    _write_file(pr_root / ".github" / "workflows" / "validate-sre-kb.yml", _generated_validate_workflow())
+    _write_file(pr_root / ".github" / "pull_request_template.md", _generated_pr_template())
+
+
+def _stage_pr_tree(stage: Path, layout: RunLayout, proj: Path, service: str, docs: list[dict], report: dict | None) -> None:
+    produced: dict[str, Path] = {}
+
+    _claim_tree(produced, layout.kb, Path("kb"))
+    _claim_tree(produced, proj / ".github", Path(".github"))
+    _claim_tree(produced, proj / "runbooks", Path("runbooks"))
+    _claim_tree(produced, proj / "diagrams", Path("diagrams"))
+    _claim_file(produced, proj / "catalog-info.yaml", Path("catalog-info.yaml"))
+
+    review = stage / "_generated" / "REVIEW.md"
+    review.parent.mkdir(parents=True, exist_ok=True)
+    review.write_text(_review_md(docs, report), encoding="utf-8")
+    _claim_file(produced, review, Path("REVIEW.md"))
+
+    from sre_kb.reporting import collect_findings, render_md
+
+    findings = stage / "_generated" / "FINDINGS.md"
+    findings.write_text(render_md(service, layout.run_id, collect_findings(docs), docs), encoding="utf-8")
+    _claim_file(produced, findings, Path("FINDINGS.md"))
+
+    for rel, src in produced.items():
+        dest = stage / "tree" / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+
+
 def assemble_pr(
     layout: RunLayout,
     docs: list[dict] | None = None,
@@ -59,35 +185,39 @@ def assemble_pr(
         render_projections(layout, docs)
 
     service = service_name(docs)
-    base = layout.root / "pr" / "catalog" / service
-    if base.exists():
-        shutil.rmtree(base)
+    pr_root = layout.root / "pr"
+    base = pr_root / "catalog" / service
+    # Containment: `service` is not schema-pattern-constrained, so guard against a name like
+    # `../../x` letting the staged path escape the catalog before we ever write to disk.
+    if not base.resolve().is_relative_to((pr_root / "catalog").resolve()):
+        raise ForgePublishError(f"unsafe service name for publish path: {service!r}")
+    # Clean re-stage so a prior run's files never linger to be re-scanned or re-published. Operator
+    # edits live in the published *target* repo (preserved by the forge's manifest merge), never in
+    # this throwaway staging dir — so rebuilding it from scratch each run is correct.
+    if pr_root.exists():
+        shutil.rmtree(pr_root)
     base.mkdir(parents=True, exist_ok=True)
 
-    shutil.copytree(layout.kb, base / "kb", dirs_exist_ok=True)
-    shutil.copytree(proj / ".github", base / ".github", dirs_exist_ok=True)
-    shutil.copytree(proj / "runbooks", base / "runbooks", dirs_exist_ok=True)
-    if (proj / "diagrams").exists():
-        shutil.copytree(proj / "diagrams", base / "diagrams", dirs_exist_ok=True)
-    shutil.copy2(proj / "catalog-info.yaml", base / "catalog-info.yaml")
-    (base / "REVIEW.md").write_text(_review_md(docs, report), encoding="utf-8")
+    with tempfile.TemporaryDirectory(prefix="sre-kb-pr-") as tmp:
+        stage = Path(tmp)
+        _stage_pr_tree(stage, layout, proj, service, docs, report)
+        shutil.copytree(stage / "tree", base, dirs_exist_ok=True)
+    # Repo-control files belong at the published repo root, not under catalog/<service>/.
+    _stage_repo_root_hardening(pr_root)
 
-    from sre_kb.reporting import collect_findings, render_md
-
-    (base / "FINDINGS.md").write_text(
-        render_md(service, layout.run_id, collect_findings(docs), docs), encoding="utf-8"
-    )
-
-    tree = layout.root / "pr"
-    # Defense-in-depth: redact any secret in the tree, THEN the gate verifies nothing slipped
-    # through. Both run even on --dry-run, so the staged tree is safe to inspect/publish.
+    tree = pr_root
+    # Fail closed before publish: generated output containing a real secret is surfaced for human
+    # review, not silently scrubbed. Vendored schemas are first-party assets, so they're skipped —
+    # a schema's example value must not be able to wedge every publish.
     from sre_kb.security import enforce_secret_gate, redact_tree
 
-    redact_tree(tree)
-    enforce_secret_gate(tree, allow=allow_secrets)
+    findings = enforce_secret_gate(tree, allow=allow_secrets, skip_prefixes=(".sre/schemas",))
+    if findings and allow_secrets:
+        # Explicit operator override: redact regex-detectable secrets rather than publish them raw.
+        redact_tree(tree)
     if dry_run:
         return tree, f"dry-run: staged PR tree at {tree} (would target {sre_repo})"
     ref = get_forge(forge, allowed_repos=allowed_repos).open_pr(
-        tree, sre_repo=sre_repo, branch=branch, title=f"SRE KB: {service}", body=_review_md(docs, report)
+        tree, sre_repo=sre_repo, branch=branch, title=_pr_title(service), body=_review_md(docs, report)
     )
     return tree, ref

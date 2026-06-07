@@ -51,10 +51,11 @@ Implemented:
   `--dry-run` stages locally; `--no-dry-run` opens a live PR via git + GitHub REST (`GITHUB_TOKEN`).
 - **Findings** (`sre-kb findings`) — ranked, evidence-linked risk digest (CI-gateable).
 - **Drift** (`sre-kb diff`) and **Estate** (`sre-kb estate`: cross-service topology + co-tenancy).
-- **Security**: redact + publish-time secret-scan gate (defense-in-depth), non-escapable
-  untrusted-input context packs, sanitized renderers, publish-repo allowlist with the token
-  kept out of `git` argv, fan-out cap, dangerous-pattern output lint, engine resource limits.
-- **Copilot driver** under `.github/` (sre-analyst agent + sre-flow-analysis skill) with the
+- **Security**: fail-closed publish-time secret-scan gate (redaction on the `--allow-secrets`
+  override), non-escapable untrusted-input context packs, sanitized renderers, publish-repo
+  allowlist with the token kept out of `git` argv, fan-out cap, dangerous-pattern output lint,
+  engine resource limits, and a read-only `sre-target-scan` agent for untrusted repos.
+- **Copilot driver** under `.github/` (sre-analyst + read-only sre-target-scan agents, sre-flow-analysis skill) with the
   challenge loop: the engine emits a worklist, Copilot adjudicates, `sre-kb challenge-apply`
   re-gates the verdicts (monotonic, downgrade-only).
 

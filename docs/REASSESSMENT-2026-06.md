@@ -1,5 +1,9 @@
 # Reassessment & Next Steps — `sre-design` ↔ `resiliency-skills` (2026-06-06; deep review 2026-06-07)
 
+> **Historical snapshot.** This is a dated reassessment captured *before* the Phase 4 gap-finder
+> spike landed; its "Phase 4 is the make-or-break decision" framing has since been acted on. For
+> current implementation status, see [`HYBRID-PLAN.md`](HYBRID-PLAN.md) §8 (the live tracker).
+
 > **Why this doc exists.** Before resuming feature work we re-audited both repos *from source at
 > their current `main`* and re-checked whether the merge/hybrid rationale in
 > [`HYBRID-PLAN.md`](HYBRID-PLAN.md) still holds. It does — and a deeper second round ran **both

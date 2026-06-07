@@ -19,7 +19,7 @@ The full design lives in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Status
 
-Working engine, tested offline (172 tests, ruff-clean) against bundled **Java/Spring**,
+Working engine, tested offline (178 tests, ruff-clean) against bundled **Java/Spring**,
 **.NET/Steeltoe**, and multi-endpoint fixtures — the same collectors emit the same KB for
 both languages (repo-neutrality). See [`docs/DESIGN.md`](docs/DESIGN.md) for the full
 design and a current implementation-status section.
@@ -75,7 +75,7 @@ AST model.
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                                                   # the test suite (172 tests)
+pytest -q                                                   # the test suite (178 tests)
 sre-kb schema list                                          # the kind registry
 
 # scan -> scaffold -> validate -> render -> stage a PR tree (dry-run)

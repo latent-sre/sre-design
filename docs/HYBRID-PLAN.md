@@ -412,7 +412,7 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ## 8. Implementation status (2026-06-07)
 
-Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **172 tests
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **178 tests
 passing, ruff-clean.**
 
 ### Phase 0 — Fact contract & trust tiers ✅
@@ -500,6 +500,11 @@ model (the founding invariant). The §7.3 adversarial-LLM corpus is the regressi
 
 > Verified live: on `sample-spring-pcf` the loop routed the `create-order-latency-burn-rate` Alert
 > `verified → needs-review` when its burn-rate expr didn't measure the latency SLI it cited (now fixed).
+>
+> Two follow-on fixes hardened that derivation (`synth/scaffold.py:burn_rate_expr`): a latency SLO now
+> burns on its histogram buckets (`*_bucket{le=<threshold>}`) rather than the request error ratio, and
+> the burn-rate is **scoped to the flow's own route** (`uri="…"`) so a per-flow SLO is no longer
+> measured service-wide. Covered by `tests/test_burn_rate_expr.py`.
 
 ### Phase 4 — Tier-B LLM gap-finder 🟡 (spike)
 

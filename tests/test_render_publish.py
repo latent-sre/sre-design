@@ -60,3 +60,57 @@ def test_fan_out_cap_blocks_runaway_tree(tmp_path):
             for i in range(5)]
     with pytest.raises(ForgePublishError):
         assemble_pr(layout, docs, None, dry_run=True, max_artifacts=2)
+
+
+def test_publish_reassembly_preserves_human_edit(tmp_path):
+    first = run_pipeline(str(FIXTURE), work_root=str(tmp_path), run_id="preserve", to_stage="publish")
+    base = first.pr / "catalog" / "order-service"
+    review = base / "REVIEW.md"
+    human = review.read_text(encoding="utf-8") + "\nmanual note\n"
+    review.write_text(human, encoding="utf-8")
+
+    run_pipeline(str(FIXTURE), work_root=str(tmp_path), run_id="preserve", to_stage="publish")
+
+    assert review.read_text(encoding="utf-8") == human
+    assert (base / ".proposed" / "REVIEW.md").is_file()
+
+
+def test_manifest_merge_prunes_only_ai_owned_orphans(tmp_path):
+    from sre_kb.publish.manifest import merge_tree
+
+    dest = tmp_path / "dest"
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    (stage / "generated.md").write_text("v1\n", encoding="utf-8")
+    merge_tree(stage, dest)
+    assert (dest / "generated.md").is_file()
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    merge_tree(empty, dest)
+    assert not (dest / "generated.md").exists()
+
+    (stage / "generated.md").write_text("v2\n", encoding="utf-8")
+    merge_tree(stage, dest)
+    (dest / "generated.md").write_text("human edit\n", encoding="utf-8")
+    merge_tree(empty, dest)
+    assert (dest / "generated.md").read_text(encoding="utf-8") == "human edit\n"
+
+
+def test_manifest_merge_routes_diverged_file_to_proposed(tmp_path):
+    from sre_kb.publish.manifest import merge_tree
+
+    dest = tmp_path / "dest"
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    generated = stage / "runbooks" / "r.md"
+    generated.parent.mkdir()
+    generated.write_text("v1\n", encoding="utf-8")
+    merge_tree(stage, dest)
+
+    (dest / "runbooks" / "r.md").write_text("human edit\n", encoding="utf-8")
+    generated.write_text("v2\n", encoding="utf-8")
+    merge_tree(stage, dest)
+
+    assert (dest / "runbooks" / "r.md").read_text(encoding="utf-8") == "human edit\n"
+    assert (dest / ".proposed" / "runbooks" / "r.md").read_text(encoding="utf-8") == "v2\n"

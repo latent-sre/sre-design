@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import shutil
+import tempfile
 from pathlib import Path
 
 from sre_kb.config import load_config
 from sre_kb.publish.forge import ForgePublishError, get_forge
+from sre_kb.publish.manifest import merge_tree
 from sre_kb.render.project import load_kb, render_projections, service_name
 from sre_kb.tiers import tier_label
 from sre_kb.workspace import RunLayout
@@ -32,6 +34,47 @@ def _review_md(docs: list[dict], report: dict | None) -> str:
     if not any_nr:
         lines.append("- (all verified)")
     return "\n".join(lines) + "\n"
+
+
+def _claim_file(produced: dict[str, Path], src: Path, rel: Path) -> None:
+    key = rel.as_posix()
+    if key in produced:
+        raise ForgePublishError(f"output name collision: {key}")
+    produced[key] = src
+
+
+def _claim_tree(produced: dict[str, Path], src_root: Path, dest_rel: Path) -> None:
+    if not src_root.exists():
+        return
+    for src in sorted(src_root.rglob("*")):
+        if src.is_file():
+            _claim_file(produced, src, dest_rel / src.relative_to(src_root))
+
+
+def _stage_pr_tree(stage: Path, layout: RunLayout, proj: Path, service: str, docs: list[dict], report: dict | None) -> None:
+    produced: dict[str, Path] = {}
+
+    _claim_tree(produced, layout.kb, Path("kb"))
+    _claim_tree(produced, proj / ".github", Path(".github"))
+    _claim_tree(produced, proj / "runbooks", Path("runbooks"))
+    _claim_tree(produced, proj / "diagrams", Path("diagrams"))
+    _claim_file(produced, proj / "catalog-info.yaml", Path("catalog-info.yaml"))
+
+    review = stage / "_generated" / "REVIEW.md"
+    review.parent.mkdir(parents=True, exist_ok=True)
+    review.write_text(_review_md(docs, report), encoding="utf-8")
+    _claim_file(produced, review, Path("REVIEW.md"))
+
+    from sre_kb.reporting import collect_findings, render_md
+
+    findings = stage / "_generated" / "FINDINGS.md"
+    findings.write_text(render_md(service, layout.run_id, collect_findings(docs), docs), encoding="utf-8")
+    _claim_file(produced, findings, Path("FINDINGS.md"))
+
+    for rel, src in produced.items():
+        dest = stage / "tree" / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
 
 
 def assemble_pr(
@@ -60,23 +103,12 @@ def assemble_pr(
 
     service = service_name(docs)
     base = layout.root / "pr" / "catalog" / service
-    if base.exists():
-        shutil.rmtree(base)
     base.mkdir(parents=True, exist_ok=True)
 
-    shutil.copytree(layout.kb, base / "kb", dirs_exist_ok=True)
-    shutil.copytree(proj / ".github", base / ".github", dirs_exist_ok=True)
-    shutil.copytree(proj / "runbooks", base / "runbooks", dirs_exist_ok=True)
-    if (proj / "diagrams").exists():
-        shutil.copytree(proj / "diagrams", base / "diagrams", dirs_exist_ok=True)
-    shutil.copy2(proj / "catalog-info.yaml", base / "catalog-info.yaml")
-    (base / "REVIEW.md").write_text(_review_md(docs, report), encoding="utf-8")
-
-    from sre_kb.reporting import collect_findings, render_md
-
-    (base / "FINDINGS.md").write_text(
-        render_md(service, layout.run_id, collect_findings(docs), docs), encoding="utf-8"
-    )
+    with tempfile.TemporaryDirectory(prefix="sre-kb-pr-") as tmp:
+        stage = Path(tmp)
+        _stage_pr_tree(stage, layout, proj, service, docs, report)
+        merge_tree(stage / "tree", base)
 
     tree = layout.root / "pr"
     # Defense-in-depth: redact any secret in the tree, THEN the gate verifies nothing slipped

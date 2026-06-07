@@ -106,7 +106,11 @@ def test_forge_publish_preserves_operator_edit_and_prunes_orphan(tmp_path):
         if cmd[-2:] == ["add", "-A"]:  # snapshot the merged tree before the tempdir is cleaned up
             base = Path(cmd[2])
             snapshot.update(
-                {str(p.relative_to(base)): p.read_text() for p in base.rglob("*") if p.is_file()}
+                {
+                    str(p.relative_to(base)).replace("\\", "/"): p.read_text()
+                    for p in base.rglob("*")
+                    if p.is_file()
+                }
             )
         if "rev-parse" in cmd:
             return "main\n"

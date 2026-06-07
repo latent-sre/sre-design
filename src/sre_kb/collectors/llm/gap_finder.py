@@ -50,9 +50,16 @@ _CLIENT_METHODS = {
     "getasync", "postasync", "putasync", "deleteasync", "patchasync", "sendasync",
 }
 
-# Gap categories that have a deterministic refutation probe in this spike. Others from the §7.9
-# taxonomy are recorded as proposals but not asserted (no engine probe yet → can't ground).
-_REFUTABLE = {"missing-timeout": "timeout"}
+# Gap category -> the resilience concern(s) whose PRESENCE in scope refutes the gap (the absence
+# doesn't hold). Re-derivation fires the *shared* signatures for these, so it can't drift from
+# Tier-A detection. Categories absent here are recorded but not asserted (no probe yet → can't
+# ground). Annotation keys that carry a resilience instance name, used to scope config probing.
+_REFUTING_CONCERNS = {
+    "missing-timeout": ("timeout",),
+    "unguarded-critical-dependency": ("circuit-breaker", "fallback", "timeout"),
+}
+_INSTANCE_ANNOTATIONS = ("@CircuitBreaker", "@TimeLimiter", "@Retry", "@Bulkhead", "@RateLimiter")
+_SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
 
 
 @dataclass(frozen=True)
@@ -157,10 +164,26 @@ def _config_texts(ctx: ScanContext) -> list[tuple[str, str]]:
     return [(ctx.rel(p), ctx.read_text(ctx.rel(p))) for p in ctx.files(*_CONFIG_GLOBS)]
 
 
-def _rederive(ctx: ScanContext, rel: str, start: int, end: int, category: str):
+def _scope_names(method, target: str | None) -> set[str]:
+    """The resilience *instance* names that identify this dependency in config — the breaker/
+    limiter `name=` on the enclosing method, plus the proposed target. Used to scope the config
+    probe: a timeout block for some *other* client must not refute this gap."""
+    names: set[str] = set()
+    if method:
+        for ann in _INSTANCE_ANNOTATIONS:
+            args = method.annotations.get(ann)
+            if args and args.get("name"):
+                names.add(args["name"].lower())
+    if target:
+        names.add(target.lower())
+    return {n for n in names if n}
+
+
+def _rederive(ctx: ScanContext, rel: str, start: int, end: int, category: str, target: str | None):
     """Deterministic refutation probe for `category` at the cited bytes, using the shared
-    `signatures` library. Returns (verdict, checked, note)."""
-    concern = _REFUTABLE[category]
+    `signatures` library. Any refuting concern firing in scope drops the gap. Returns
+    (verdict, checked, note)."""
+    refuters = _REFUTING_CONCERNS[category]
     parsed = _enclosing_type(ctx, rel, start, end)
     if parsed is None:
         return "unconfirmable", (rel,), "could not parse an enclosing type at the cited location"
@@ -168,53 +191,81 @@ def _rederive(ctx: ScanContext, rel: str, start: int, end: int, category: str):
     if not _has_client_call(typedecl, method):
         return "unconfirmable", (rel,), "no outbound client call at the cited location to ground the gap"
 
+    # (a) code scope: a signature in the enclosing type refutes the absence.
     checked = [rel]
-    # The signature firing anywhere the engine looked refutes the absence.
-    if fires(concern, type_text):
-        return "refuted", (rel,), f"the {concern} signature fires in scope — the gap does not hold"
+    for concern in refuters:
+        if fires(concern, type_text):
+            return "refuted", (rel,), f"the {concern} signature fires in scope — the gap does not hold"
+
+    # (b) config scope, TARGET-SCOPED: only a config block that names this dependency's resilience
+    # instance can refute it — a timeout for some other client in the same file must not.
+    names = _scope_names(method, target)
     for cpath, ctext in _config_texts(ctx):
         checked.append(cpath)
-        if fires(concern, ctext):
-            return "refuted", tuple(checked), f"the {concern} signature fires in {cpath} — the gap does not hold"
-    return "confirmed", tuple(checked), f"no {concern} signature fires in {len(checked)} checked location(s)"
+        low = ctext.lower()
+        if names and not any(n in low for n in names):
+            continue  # this config doesn't mention our instance — out of scope
+        for concern in refuters:
+            if fires(concern, ctext):
+                return ("refuted", tuple(checked),
+                        f"the {concern} signature fires for this instance in {cpath} — the gap does not hold")
+    return "confirmed", tuple(checked), f"no refuting signature {list(refuters)} fires in {len(checked)} checked location(s)"
 
 
 # --------------------------------------------------------------------------- collect
 
-def collect_from_proposals(ctx: ScanContext, proposals: list[Proposal]) -> GapResult:
+def collect_from_proposals(
+    ctx: ScanContext, proposals: list[Proposal], *, max_candidates: int | None = None
+) -> GapResult:
     """The collector: locate → stamp → re-derive every proposal. Emits one `resiliency.gap` Fact
-    per surviving gap; records an Outcome for all (incl. drops) as audit evidence."""
+    per surviving gap; records an Outcome for all (incl. drops) as audit evidence. A noise budget
+    (§7.9) ranks survivors by severity and keeps at most `max_candidates` — the rest are recorded
+    `capped` so a cry-wolf run can't flood a reviewer."""
     res = GapResult()
+    survivors: list[tuple[Outcome, Fact]] = []
     for p in proposals:
         loc = _locate(ctx, p.anchor)
         if loc is None:
             res.outcomes.append(Outcome(p, "unlocatable", note="anchor not found verbatim in the source"))
             continue
         rel, s, e = loc
-        if p.category not in _REFUTABLE:
+        if p.category not in _REFUTING_CONCERNS:
             res.outcomes.append(Outcome(p, "unconfirmable", rel, (s, e),
                                         note=f"no deterministic refutation probe for category '{p.category}'"))
             continue
-        verdict, checked, note = _rederive(ctx, rel, s, e, p.category)
+        verdict, checked, note = _rederive(ctx, rel, s, e, p.category, p.target)
         if verdict != "confirmed":
             res.outcomes.append(Outcome(p, verdict, rel, (s, e), checked, note))
             continue
         target = p.target or Path(rel).stem
-        res.facts.append(Fact(
+        fact = Fact(
             "resiliency.gap",
             {"category": p.category, "target": target, "severity": p.severity,
              "rationale": p.rationale, "rederivation": "confirmed", "checked": list(checked), "note": note},
             ctx.evidence(rel, s, e, "llm.gap_finder", source_tier=LLM),
             Symbol(f"{rel}:{s}-{e}", "gap"),
-        ))
-        res.outcomes.append(Outcome(p, "confirmed", rel, (s, e), checked, note))
+        )
+        survivors.append((Outcome(p, "confirmed", rel, (s, e), checked, note), fact))
+
+    # Noise budget: highest severity first (stable within a severity), cap the rest.
+    survivors.sort(key=lambda of: _SEVERITY_RANK.get(of[0].proposal.severity, 3))
+    for i, (outcome, fact) in enumerate(survivors):
+        if max_candidates is not None and i >= max_candidates:
+            outcome.result = "capped"
+            outcome.note = f"dropped by noise budget (max_candidates={max_candidates})"
+            res.outcomes.append(outcome)
+        else:
+            res.facts.append(fact)
+            res.outcomes.append(outcome)
     return res
 
 
-def collect(ctx: ScanContext, proposals_path: Path | None = None) -> GapResult:
+def collect(
+    ctx: ScanContext, proposals_path: Path | None = None, *, max_candidates: int | None = None
+) -> GapResult:
     """Self-gating entry point: read proposals from `proposals_path` (default the conventional
     in-repo location). No proposals file → empty result."""
     path = proposals_path or (ctx.root / PROPOSALS_REL)
     if not path.exists():
         return GapResult()
-    return collect_from_proposals(ctx, load_proposals(path))
+    return collect_from_proposals(ctx, load_proposals(path), max_candidates=max_candidates)

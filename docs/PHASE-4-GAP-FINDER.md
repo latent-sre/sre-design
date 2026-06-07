@@ -69,7 +69,7 @@ Polly-breaker-but-no-timeout gap → confirmed) and refutes the Spring `Inventor
 | Prompt (LLM half) | `.github/skills/sre-gap-finder/SKILL.md` — wraps the vendored `assess-resiliency` skill (`@00b3071`) in the pointer-generator contract |
 | Context pack | `synth/gap_prompt.build_gap_context` (nonce-fenced, content-preserving so anchors round-trip) |
 | Collector (engine half) | `collectors/llm/gap_finder.py` — load → locate → stamp → re-derive |
-| Re-derivation | `signatures.fires("timeout", …)` — the same library Tier-A uses |
+| Re-derivation | `signatures.fires(concern, …)` per `_REFUTING_CONCERNS` (target-scoped in config) — the same library Tier-A uses |
 | Artifact | `ResiliencyGap` (schema + registry row, phase P4); `needs-review`, `source_tier=llm` |
 | Pipeline + gating | `pipeline/gap_finder.py` |
 | CLI | `sre-kb gap-finder --target <repo> [--proposals <file>]` |
@@ -77,15 +77,36 @@ Polly-breaker-but-no-timeout gap → confirmed) and refutes the Spring `Inventor
 The engine still **never calls a model**: it ingests a `.sre/gap-proposals.json` Copilot already
 wrote, exactly as `challenge-apply` ingests Copilot's verdicts.
 
-## Honest limitations (why it's a spike)
+## Grounded probes
 
-- **One probe.** Only `missing-timeout` has a deterministic refutation probe; other §7.9 categories
-  are recorded but not asserted (no probe ⇒ can't ground).
-- **Config probe is whole-file, not target-scoped.** A timeout configured for *any* client in
-  `application.yml` would refute a gap for *every* client in that file. §7.10 wants the probe bound
-  to the specific client — a follow-up.
+Two §7.9 categories have a deterministic refutation probe today (`_REFUTING_CONCERNS`), each firing
+the *shared* signatures so it can't drift from Tier-A:
+
+| Category | Refuted when (in scope) any of these signatures fire |
+|---|---|
+| `missing-timeout` | `timeout` |
+| `unguarded-critical-dependency` | `circuit-breaker` · `fallback` · `timeout` |
+
+Config probing is **target-scoped**: a config block only refutes a gap if it names the dependency's
+resilience instance (the breaker/limiter `name=` on the call site, or the proposed target), so a
+timeout for some *other* client in the same `application.yml` can't refute it.
+
+A **noise budget** (`gap_finder.max_candidates`, default 25) ranks confirmed gaps by severity and
+caps the rest as `capped`, so a cry-wolf run can't flood a reviewer.
+
+## Honest limitations (why it's still a spike)
+
+- **Only two categories grounded.** The other §7.9 categories (`swallowed-failure`,
+  `data-loss-path`, `missing-idempotency`, `undocumented-job`, `unbounded-resource`) are recorded
+  but not asserted (no probe ⇒ can't ground).
+- **Signatures are text-broad.** Re-derivation reuses the shared signature regexes, some of which
+  match plain words (e.g. `fallback`), so a code *comment* mentioning a pattern can refute a real
+  gap. Acceptable here (worst case: a false negative a human never sees) but a reason the probes
+  aren't airtight.
 - **In-scope/per-file re-derivation**, the same documented boundary as the AST model: a "confirmed"
   gap is *plausible*, not *proven* — hence `needs-review`, never `verified`.
 - **Standalone path.** The gap-finder is its own CLI + pipeline, not yet wired into the main `run`.
-- **No noise budget or graduation loop yet** (§7.9): severity×confidence ranking + per-run cap, and
-  promoting a recurring confirmed category to a Tier-A signature, are follow-ups.
+- **No graduation loop yet** (§7.9): promoting a recurring, human-confirmed gap category to a
+  deterministic Tier-A signature (so it drops out of the LLM's frontier) is the next strategic step.
+- **`swallowed-failure` is the natural next probe** — and the cleanest instance of graduation: re-run
+  the deterministic swallow rule at the pointer and, *if it fires*, promote the finding to Tier-A.

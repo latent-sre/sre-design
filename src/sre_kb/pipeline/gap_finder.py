@@ -66,14 +66,18 @@ def run_gap_finder(
     target: str, *, proposals_path: str | Path | None = None, service: str | None = None
 ) -> GapRunResult:
     """Scan `target`'s LLM gap proposals, re-ground them, scaffold + validate + gate."""
-    cfg = load_config().get("gating", {})
+    full_cfg = load_config()
+    cfg = full_cfg.get("gating", {})
+    cap = (full_cfg.get("gap_finder") or {}).get("max_candidates")
     root = Path(target).resolve()
     if not root.exists():
         raise FileNotFoundError(f"target not found: {root}")
     ctx = ScanContext(root=root, repo=f"file://{root.name}", commit=LOCAL_COMMIT)
     svc = service or root.name
 
-    result = gap_finder.collect(ctx, Path(proposals_path) if proposals_path else None)
+    result = gap_finder.collect(
+        ctx, Path(proposals_path) if proposals_path else None, max_candidates=cap
+    )
 
     docs, records = [], []
     by_status: dict[str, int] = {}

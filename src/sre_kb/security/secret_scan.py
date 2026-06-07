@@ -107,6 +107,18 @@ def _entropy_candidate(tok: str) -> bool:
     return any(c.isdigit() for c in tok) and any(c.isalpha() for c in tok)
 
 
+def _looks_like_hash(value: str) -> bool:
+    """A content hash — provenance `algo:hex` (e.g. ``sha256:<hex>``) or a bare hex digest — is not a
+    secret. Generated manifests and ``excerptHash`` fields are full of these; without this guard a
+    line like ``kb/.../token-rotation.yaml: sha256:<hex>`` would trip ``value-shape`` and wedge the
+    fail-closed gate on ordinary artifact names."""
+    v = value.strip("'\"")
+    algo, sep, digest = v.partition(":")
+    if sep and algo.isalnum() and re.fullmatch(r"[0-9a-fA-F]{32,}", digest):
+        return True
+    return bool(re.fullmatch(r"[0-9a-fA-F]{32,}", v))
+
+
 def scan_text(text: str, path: str) -> list[dict]:
     findings: list[dict] = []
     for i, line in enumerate(text.splitlines(), 1):
@@ -132,6 +144,7 @@ def scan_text(text: str, path: str) -> list[dict]:
                 and not value.startswith(_SENTINEL_PREFIX)
                 and _OPAQUE_VALUE.match(value)
                 and not _PLACEHOLDER.search(value)
+                and not _looks_like_hash(value)
             ):
                 findings.append({"path": path, "line": i, "rule": "value-shape"})
             break
@@ -185,14 +198,17 @@ def _decoded_file(path: Path) -> tuple[str, str] | None:
     return _decode_for_scan(data)
 
 
-def scan_tree(root: Path) -> list[dict]:
+def scan_tree(root: Path, *, skip_prefixes: tuple[str, ...] = ()) -> list[dict]:
     findings: list[dict] = []
     for p in sorted(root.rglob("*")):
         if not p.is_file() or p.is_symlink():
             continue
+        rel = p.relative_to(root).as_posix()
+        if any(rel == pre or rel.startswith(pre + "/") for pre in skip_prefixes):
+            continue  # first-party assets (e.g. vendored schemas) are not target-derived content
         decoded = _decoded_file(p)
         if decoded is not None:
-            findings += scan_text(decoded[0], str(p.relative_to(root)))
+            findings += scan_text(decoded[0], rel)
     return findings
 
 
@@ -236,9 +252,11 @@ def redact_tree(root: Path) -> int:
     return total
 
 
-def enforce_secret_gate(tree: Path, *, allow: bool = False) -> list[dict]:
+def enforce_secret_gate(
+    tree: Path, *, allow: bool = False, skip_prefixes: tuple[str, ...] = ()
+) -> list[dict]:
     """Scan `tree`; raise SecretLeakError if anything matches (unless allow=True)."""
-    findings = scan_tree(tree)
+    findings = scan_tree(tree, skip_prefixes=skip_prefixes)
     if findings and not allow:
         raise SecretLeakError(findings)
     return findings

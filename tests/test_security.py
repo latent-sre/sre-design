@@ -30,6 +30,15 @@ def test_secret_scan_detects_entropy_and_value_shape():
     )
 
 
+def test_value_shape_ignores_content_hashes():
+    """B1 regression: a provenance/manifest line like `<path-with-token>: sha256:<hex>` is a content
+    hash, not a secret, and must not trip the fail-closed gate on ordinary artifact names."""
+    line = "kb/verified/Alert/token-refresh-failures.yaml: sha256:" + "a" * 64
+    assert scan_text(line, ".sre/manifest.yaml") == []
+    # a real opaque value on a secretish key still fires
+    assert any(f["rule"] == "value-shape" for f in scan_text("api_token: s3cretLongValue123", "c.yml"))
+
+
 def test_secret_scan_decodes_utf16_text(tmp_path):
     key = "AKIA" + "W" * 16
     path = tmp_path / "creds.yml"

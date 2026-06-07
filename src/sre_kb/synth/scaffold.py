@@ -11,6 +11,54 @@ from sre_kb.synth.emit import emit as _doc
 from sre_kb.synth.inventory import inventory_docs
 from sre_kb.util import member_of, slug
 
+_BURN_METRIC = "http_server_requests_seconds"
+
+
+def _sel(*selectors: str) -> str:
+    """Join non-empty Prometheus label selectors into a `{...}` block ('' if none)."""
+    parts = [s for s in selectors if s]
+    return "{" + ",".join(parts) + "}" if parts else ""
+
+
+def burn_rate_expr(
+    sli: str, threshold_ms: float | int | None, budget_frac: float, uri: str | None
+) -> tuple[dict, str]:
+    """Multi-window burn-rate expr that measures the SLO's OWN SLI, scoped to the flow's route.
+
+    latency -> fraction of requests slower than the threshold from the histogram buckets
+    ((count - bucket{le=<t>}) / count); else -> error fraction (count{outcome!="SUCCESS"} /
+    count) for availability/error-rate SLIs. Scoping by `uri` keeps a per-flow SLO from being
+    measured service-wide. Returns (expr_dict, numerator_phrase).
+    """
+    fast, slow = round(14.4 * budget_frac, 6), round(6 * budget_frac, 6)
+    windows = "multi-window (1h fast @14.4x, 6h slow @6x)"
+    uri_sel = f'uri="{uri}"' if uri else ""
+    if sli == "latency" and threshold_ms is not None:
+        le = ("%f" % (float(threshold_ms) / 1000)).rstrip("0").rstrip(".")
+        tot, within = _sel(uri_sel), _sel(uri_sel, f'le="{le}"')
+
+        def _r(w: str, thr: float) -> str:
+            total = f"sum(rate({_BURN_METRIC}_count{tot}[{w}]))"
+            within_term = f"sum(rate({_BURN_METRIC}_bucket{within}[{w}]))"
+            return f"({total} - {within_term}) / {total} > {thr}"
+
+        numerator = f"fraction of requests slower than {le}s"
+    else:
+        errs, tot = _sel(uri_sel, 'outcome!="SUCCESS"'), _sel(uri_sel)
+
+        def _r(w: str, thr: float) -> str:
+            errors = f"sum(rate({_BURN_METRIC}_count{errs}[{w}]))"
+            total = f"sum(rate({_BURN_METRIC}_count{tot}[{w}]))"
+            return f"{errors} / {total} > {thr}"
+
+        numerator = 'error fraction (outcome!="SUCCESS")'
+    expr = {
+        "prometheus_fast": _r("1h", fast),
+        "prometheus_slow": _r("6h", slow),
+        "windows": windows,
+    }
+    return expr, numerator
+
 
 def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
     app = fs.first("pcf.app")
@@ -313,8 +361,8 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                         {"kind": "Flow", "name": for_flow, "relation": "covers"}]))
 
     # --- Alert (SLO burn-rate, when a full objective exists) ---
-    # The burn-rate signal must match the SLI the SLO names: a latency objective burns on the
-    # fraction of requests slower than its threshold (histogram buckets), not on error rate.
+    # The burn-rate signal must match the SLI the SLO names (latency -> histogram buckets, else
+    # error rate) and be scoped to the flow's own route, not measured service-wide.
     sli = (objective.attrs.get("sli") if objective else None) or "latency"
     threshold_ms = objective.attrs.get("thresholdMs") if objective else None
     # A latency objective needs a concrete threshold to derive a bucket-based expr; without one
@@ -322,44 +370,20 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
     if objective and slo_ref and flow and (sli != "latency" or threshold_ms is not None):
         target = objective.attrs.get("target")
         budget_frac = round((100 - float(target)) / 100, 6) if target is not None else 0.01
-        fast, slow = round(14.4 * budget_frac, 6), round(6 * budget_frac, 6)
-        base = "http_server_requests_seconds"
+        uri = (flow.attrs.get("trigger") or {}).get("path")
+        expr, numerator = burn_rate_expr(sli, threshold_ms, budget_frac, uri)
+        scope = f"route {uri}" if uri else f"the {flow_name} flow"
         if sli == "latency":
-            le = ("%f" % (float(threshold_ms) / 1000)).rstrip("0").rstrip(".")
             pct = objective.attrs.get("percentile")
-            expr = {
-                # bad ratio = 1 - (requests faster than threshold / total) > burn threshold
-                "prometheus_fast": (
-                    f'(sum(rate({base}_count[1h])) - sum(rate({base}_bucket{{le="{le}"}}[1h]))) '
-                    f"/ sum(rate({base}_count[1h])) > {fast}"
-                ),
-                "prometheus_slow": (
-                    f'(sum(rate({base}_count[6h])) - sum(rate({base}_bucket{{le="{le}"}}[6h]))) '
-                    f"/ sum(rate({base}_count[6h])) > {slow}"
-                ),
-                "windows": "multi-window (1h fast @14.4x, 6h slow @6x)",
-            }
             rationale = (
                 f"Multi-window burn-rate on the latency SLO ("
                 f"{(str(pct) + ' ') if pct else ''}<= {threshold_ms}ms, target {target}%, budget "
-                f"{round(budget_frac * 100, 3)}%): fraction of requests slower than {threshold_ms}ms "
-                f"on the {flow_name} flow."
+                f"{round(budget_frac * 100, 3)}%): {numerator} on {scope}."
             )
         else:
-            expr = {
-                "prometheus_fast": (
-                    f'sum(rate({base}_count{{outcome!="SUCCESS"}}[1h])) / sum(rate({base}_count[1h])) '
-                    f"> {fast}"
-                ),
-                "prometheus_slow": (
-                    f'sum(rate({base}_count{{outcome!="SUCCESS"}}[6h])) / sum(rate({base}_count[6h])) '
-                    f"> {slow}"
-                ),
-                "windows": "multi-window (1h fast @14.4x, 6h slow @6x)",
-            }
             rationale = (
                 f"Multi-window error-budget burn-rate against SLO target {target}% "
-                f"(budget {round(budget_frac * 100, 3)}%) on the {flow_name} flow."
+                f"(budget {round(budget_frac * 100, 3)}%): {numerator} on {scope}."
             )
         docs.append(
             _doc(

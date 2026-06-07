@@ -3,7 +3,14 @@
 from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
+from sre_kb.config import load_config
 from sre_kb.models.facts import FactSet
+from sre_kb.render.alerts import (
+    BurnRateIntent,
+    LogPatternIntent,
+    render_burn_rate,
+    render_log_pattern,
+)
 from sre_kb.scoring.confidence import Signal, confidence
 from sre_kb.scoring.readiness import readiness_spec
 from sre_kb.scoring.risk import assess as assess_risk
@@ -11,58 +18,36 @@ from sre_kb.synth.emit import emit as _doc
 from sre_kb.synth.inventory import inventory_docs
 from sre_kb.util import member_of, slug
 
-_BURN_METRIC = "http_server_requests_seconds"
 
-
-def _sel(*selectors: str) -> str:
-    """Join non-empty Prometheus label selectors into a `{...}` block ('' if none)."""
-    parts = [s for s in selectors if s]
-    return "{" + ",".join(parts) + "}" if parts else ""
+def _configured_alert_tools() -> tuple[str, ...] | None:
+    """The monitoring backends to render alert exprs for (`render.alert_tools`); None = adapter
+    defaults, so an unconfigured engine keeps emitting Prometheus + Splunk as before."""
+    cfg = (load_config().get("render") or {}).get("alert_tools")
+    return tuple(cfg) if cfg else None
 
 
 def burn_rate_expr(
-    sli: str, threshold_ms: float | int | None, budget_frac: float, uri: str | None
+    sli: str,
+    threshold_ms: float | int | None,
+    budget_frac: float,
+    uri: str | None,
+    tools: tuple[str, ...] | None = None,
 ) -> tuple[dict, str]:
     """Multi-window burn-rate expr that measures the SLO's OWN SLI, scoped to the flow's route.
 
-    latency -> fraction of requests slower than the threshold from the histogram buckets
-    ((count - bucket{le=<t>}) / count); else -> error fraction (count{outcome!="SUCCESS"} /
-    count) for availability/error-rate SLIs. Scoping by `uri` keeps a per-flow SLO from being
-    measured service-wide. Returns (expr_dict, numerator_phrase).
+    Thin wrapper over the tool-neutral adapter seam (`render/alerts.py`): builds a `BurnRateIntent`
+    and renders it across the selected backends (`tools`; None = adapter defaults). latency ->
+    fraction of requests slower than the threshold from the histogram buckets; else -> error
+    fraction for availability/error-rate SLIs. Returns `(expr_dict, numerator_phrase)`.
     """
-    fast, slow = round(14.4 * budget_frac, 6), round(6 * budget_frac, 6)
-    windows = "multi-window (1h fast @14.4x, 6h slow @6x)"
-    uri_sel = f'uri="{uri}"' if uri else ""
-    if sli == "latency" and threshold_ms is not None:
-        le = ("%f" % (float(threshold_ms) / 1000)).rstrip("0").rstrip(".")
-        tot, within = _sel(uri_sel), _sel(uri_sel, f'le="{le}"')
-
-        def _r(w: str, thr: float) -> str:
-            total = f"sum(rate({_BURN_METRIC}_count{tot}[{w}]))"
-            within_term = f"sum(rate({_BURN_METRIC}_bucket{within}[{w}]))"
-            return f"({total} - {within_term}) / {total} > {thr}"
-
-        numerator = f"fraction of requests slower than {le}s"
-    else:
-        errs, tot = _sel(uri_sel, 'outcome!="SUCCESS"'), _sel(uri_sel)
-
-        def _r(w: str, thr: float) -> str:
-            errors = f"sum(rate({_BURN_METRIC}_count{errs}[{w}]))"
-            total = f"sum(rate({_BURN_METRIC}_count{tot}[{w}]))"
-            return f"{errors} / {total} > {thr}"
-
-        numerator = 'error fraction (outcome!="SUCCESS")'
-    expr = {
-        "prometheus_fast": _r("1h", fast),
-        "prometheus_slow": _r("6h", slow),
-        "windows": windows,
-    }
-    return expr, numerator
+    intent = BurnRateIntent(sli, threshold_ms, budget_frac, uri)
+    return render_burn_rate(intent, tools), intent.numerator
 
 
 def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
     app = fs.first("pcf.app")
     service = (app.attrs.get("name") if app else None) or "service"
+    alert_tools = _configured_alert_tools()
     docs: list[dict] = []
 
     cb = fs.first("resiliency.circuitbreaker")
@@ -327,10 +312,9 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
             "severity": "high",
             "forFlow": for_flow,
             "logFormatRef": obs_name,
-            "expr": {
-                "splunk": f'index=app sourcetype={service} "{search}" | stats count by host',
-                "prometheus": None,
-            },
+            "expr": render_log_pattern(
+                LogPatternIntent(search=search, service=service), alert_tools
+            ),
             "rationale": (
                 "Publish failure is logged and swallowed (data-loss risk); no metric exists, so "
                 "alert on the log line. Add a counter + burn-rate alert once an SLO is defined "
@@ -371,7 +355,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
         target = objective.attrs.get("target")
         budget_frac = round((100 - float(target)) / 100, 6) if target is not None else 0.01
         uri = (flow.attrs.get("trigger") or {}).get("path")
-        expr, numerator = burn_rate_expr(sli, threshold_ms, budget_frac, uri)
+        expr, numerator = burn_rate_expr(sli, threshold_ms, budget_frac, uri, alert_tools)
         scope = f"route {uri}" if uri else f"the {flow_name} flow"
         if sli == "latency":
             pct = objective.attrs.get("percentile")

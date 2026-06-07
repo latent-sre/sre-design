@@ -556,6 +556,15 @@ scaffold / gating. Backends today:
 "Honest coverage": an adapter emits a backend only where it maps faithfully to the intent, and labels
 the mechanism wherever it differs from a multi-window burn-rate (`tests/test_alert_adapters.py`).
 
+**Lifted from `resiliency-skills` (source-verified re-audit, §9.6):** their `AlertIntent` schema has a
+better-factored tool-neutral spec, so we adopted its *model* onto our envelope — the `Alert` spec now
+also carries `class` (symptom|cause), a `signal` object, a structured `burnRate`
+(`sloRef`/`sli`/`shortWindow`/`longWindow`/factors/`budgetFraction`), and `renderTargets` (the
+backends actually rendered). We did **not** copy their JSON: their governance (`needs-human-review:
+const`, enum confidence, file-level `path`) stays *weaker* than ours, so the adopted spec rides our
+byte-grounded `evidence`, numeric `confidence`, and `status` model — each repo contributes its
+strength. (`schemas/v1alpha1/Alert.schema.json`; `tests/test_e2e_scan.py`.)
+
 The four backends above cover the team's current monitoring stack (Prometheus + Splunk + Wavefront +
 AppDynamics); the seam makes any further backend a drop-in adapter if the stack changes.
 
@@ -694,3 +703,32 @@ things most likely to be wrong, roughly by impact:
    is a substring match on the instance name → can false-match (`payments` ⊂ `payments-api`). Both are
    acceptable for a spike (worst case: a missed candidate a human never sees) but are precision debt,
    not the "zero drift" §9.2 might imply. **Action:** tighten signatures before leaning on them harder.
+
+### 9.6 Source-verified competitive re-audit (2026-06-07) + lift actions
+
+A full clone of `resiliency-skills` @ `f99e028` (not the public-surface skim §1–§5 was), to refresh
+the stale comparison and act on it.
+
+**Confirmed unchanged:** still **8 signatures** (5 framework + 3 messaging; no datastore/infra/
+observability detectors) and **18 skills**. **Still not byte-grounded** — provenance is now a
+*required* governance block (`repo/commit/scanDate/skill`) with an optional file-level `source.path`,
+but no line/excerptHash/verbatim re-verification (their hashing is clobber-protection for generated
+output, not source grounding). Our byte-grounding differentiator holds.
+
+**Corrections to the surface read — they are ahead on two axes:**
+- **Render breadth.** A first-class `AlertIntent` schema + **six** Jinja adapters
+  (`prometheus, splunk, wavefront, appdynamics, grafana, thousandeyes`) vs our four. Nuance in our
+  favor: their adapters pass through an LLM-supplied `signal.query`; ours *deterministically generate*
+  the query. Fat-engine vs fat-skills, in the render layer.
+- **Supply-chain hardening.** `engine/requirements.lock` uses pip `--require-hashes` and `renovate.json`
+  pins Actions to commit SHAs — exactly our deferred §9.3 #5.
+
+**Lift actions:**
+1. ✅ **AlertIntent model adopted** onto our envelope (this PR) — `class`/`signal`/`burnRate`/
+   `renderTargets` on `Alert.spec`, byte-grounded (see Phase 5 above).
+2. ⬜ **Adopt their `grafana` + `thousandeyes` adapters** to reach backend parity (Phase 5 next).
+3. ⬜ **Lift their supply-chain config** (`--require-hashes` lockfile + Renovate digest pinning) to
+   close §9.3 #5 / Phase 1 deferred — it is proven and directly portable.
+
+**Caveats:** their engine tests didn't run in the audit env (deps), so their suite's green state is
+unverified; their "reliability model" batch was not deep-read.

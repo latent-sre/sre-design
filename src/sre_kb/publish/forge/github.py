@@ -95,10 +95,17 @@ class GitHubForge:
         if not token:
             raise ForgePublishError("set GITHUB_TOKEN to publish live (or use --dry-run)")
         owner, repo = parse_repo(sre_repo)
-        remote = f"https://x-access-token:{token}@github.com/{owner}/{repo}.git"
+        # Keep the token out of argv (visible to `ps`) and out of the persisted remote URL:
+        # the clone/push use a clean https URL, and credentials come from a 0600 credential
+        # file referenced only by PATH on the command line.
+        clean_remote = f"https://github.com/{owner}/{repo}.git"
         with tempfile.TemporaryDirectory() as tmp:
+            cred = Path(tmp) / ".git-credentials"
+            cred.write_text(f"https://x-access-token:{token}@github.com\n", encoding="utf-8")
+            cred.chmod(0o600)
+            git_cred = ["-c", f"credential.helper=store --file={cred}"]
             work = Path(tmp) / "repo"
-            self._run(["git", "clone", "--depth", "1", remote, str(work)])
+            self._run(["git", *git_cred, "clone", "--depth", "1", clean_remote, str(work)])
             base = (self._run(["git", "-C", str(work), "rev-parse", "--abbrev-ref", "HEAD"]).strip() or "main")
             self._run(["git", "-C", str(work), "checkout", "-b", branch])
             _sync_tree(tree, work)
@@ -106,7 +113,7 @@ class GitHubForge:
             if not self._run(["git", "-C", str(work), "status", "--porcelain"]).strip():
                 raise ForgePublishError("nothing to publish: the KB already matches the target branch")
             self._run(["git", "-C", str(work), *_GIT_USER, "commit", "-m", title])
-            self._run(["git", "-C", str(work), "push", "-u", "origin", branch])
+            self._run(["git", "-C", str(work), *git_cred, "push", "-u", "origin", branch])
         resp = self._post(
             f"https://api.github.com/repos/{owner}/{repo}/pulls",
             {"title": title, "head": branch, "base": base, "body": body},

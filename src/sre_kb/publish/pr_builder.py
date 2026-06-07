@@ -71,6 +71,9 @@ def assemble_pr(
     enforce_secret_gate(tree, allow=allow_secrets)
     if dry_run:
         return tree, f"dry-run: staged PR tree at {tree} (would target {sre_repo})"
+    from sre_kb.publish.policy import enforce_repo_allowlist
+
+    enforce_repo_allowlist(sre_repo)  # fail-closed: only push to an allowlisted repo
     ref = get_forge(forge).open_pr(
         tree, sre_repo=sre_repo, branch=branch, title=f"SRE KB: {service}", body=_review_md(docs, report)
     )

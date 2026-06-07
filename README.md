@@ -47,6 +47,10 @@ Implemented:
 
 ## What's next
 
+- **Security hardening (Phase 1, done)** — untrusted code is fenced to the LLM with an
+  unbreakable per-block nonce (`security/fence.py`); the publish path keeps the token out of
+  `git` argv and is gated by a fail-closed target-repo allowlist. See
+  [`docs/PHASE-1-HARDENING.md`](docs/PHASE-1-HARDENING.md).
 - **Status-aware trust spine (Phase 2, done)** — crossref now downgrades any verified artifact
   whose `depends-on`/`implements` referent is unverified (to a fixpoint); readiness credits only
   verified controls; provenance confines cited paths to the repo root. See

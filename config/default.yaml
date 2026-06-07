@@ -22,3 +22,6 @@ collectors:
 publish:
   forge: github
   dry_run_default: true
+  # Fail-closed target-repo allowlist for LIVE publish (owner/repo). Empty = refuse every
+  # live publish until set; extend via the SRE_KB_ALLOWED_REPOS env var. Dry-run is never gated.
+  allowed_repos: []

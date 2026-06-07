@@ -130,13 +130,18 @@ These were verified at the source and **fixed with regression tests** in the sam
 
 ### `sre-design` — weaknesses noted (not yet fixed; tracked for the hybrid)
 
-- **Injection fence is textual and breakable** (`synth/context_pack.py:40`): the
+- ~~**Injection fence is textual and breakable** (`synth/context_pack.py:40`): the
   `<<<UNTRUSTED …>>> … <<<END UNTRUSTED>>>` delimiters and the path field are unescaped, so a
   hostile source file can close the fence early and inject instructions into the "trusted"
-  region. The architectural defense in `resiliency-skills` is strictly stronger.
-- **Publish path** (`publish/forge/github.py:98`): the token is embedded in the remote URL and
+  region.~~ **Fixed (Phase 1):** `security/fence.py` binds every fence to a fresh random nonce
+  (terminator recognised only with that nonce, so embedded fence-text is just data); the path
+  meta is sanitised; content is preserved verbatim. Used by `context_pack`, `gap_prompt`, and
+  the `LLMChallenger`. See `docs/PHASE-1-HARDENING.md`.
+- ~~**Publish path** (`publish/forge/github.py:98`): the token is embedded in the remote URL and
   passed as a `git` argv (visible to `ps`); `open_pr` has no target-repo allowlist (relies
-  wholly on the ambient token's scope).
+  wholly on the ambient token's scope).~~ **Fixed (Phase 1):** the token now lives in a `0600`
+  credential file referenced only by path; clone/push use a clean URL. A fail-closed
+  `publish/policy.py` allowlist gates the destination repo for live publish.
 - ~~**Gates not status-aware**: `crossref.py` resolves a reference if *any* artifact with that
   name exists, regardless of whether it is `verified`/`rejected`; `readiness` counts artifacts
   by kind, not status — a "verified" graph can cite unverified artifacts and grade "A".~~
@@ -237,7 +242,7 @@ trap `validation/challenge.py:9-13` warns about). Instead:
 | Phase | What | Why first/last |
 |---|---|---|
 | **0. Fact contract & trust tiers** | Add `source_tier: ast\|llm` to `Fact`/`Evidence`; a `CollectorProtocol` both tiers satisfy. No behavior change. | Foundation. |
-| **1. Adopt `resiliency-skills`' hardening wholesale** | Architectural scan/publish split (no-credential scan role; scoped publish credential), sandboxed/`json.dumps` renderers, `redact` + second gate, fan-out cap, `needs-human-review` const. | This *is* `sre-design`'s own deferred roadmap. Closes the textual-fence and publish-path weaknesses **before** any LLM breadth is added. |
+| **1. Adopt `resiliency-skills`' hardening** ◑ | Nonce-bound untrusted-data fence; token-off-argv + fail-closed publish allowlist. **Done** — `docs/PHASE-1-HARDENING.md`. (Still deferred: sandboxed-Jinja/`json.dumps` renderers, second secret gate, fan-out cap — larger lifts, partly already mitigated.) | This *is* `sre-design`'s own deferred roadmap. Closes the textual-fence and publish-path weaknesses **before** any LLM breadth is added. |
 | **2. Make the trust spine status-aware** ✅ | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). **Done** — `docs/PHASE-2-TRUST-SPINE.md`. | Or Tier-B facts will silently inflate "verified" graphs. |
 | **3. Wire `LLMChallenger` to a live oracle** | Real adjudication for judgment-call claims. | Prerequisite for Tier-B, not polish — deterministic grounding is circular for LLM claims. |
 | **4. LLM collectors as pointer-generators** | `collectors/llm/`; clone `sre-flow-analysis` into the granular skill set; engine re-confirms each pointer (§ contract). | The breadth payoff, now safely fenced. |

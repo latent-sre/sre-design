@@ -18,7 +18,57 @@
         "forFlow": { "type": "string" },
         "logFormatRef": { "type": ["string", "null"] },
         "expr": { "type": "object" },
-        "rationale": { "type": "string" }
+        "rationale": { "type": "string" },
+
+        "class": {
+          "type": "string",
+          "enum": ["symptom", "cause"],
+          "description": "SRE alert class (adopted from resiliency-skills AlertIntent): symptom = user-visible SLO burn; cause = a specific failure mode (e.g. a swallowed publish)."
+        },
+        "signal": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Tool-neutral description of what is observed (the intent), independent of any backend's query dialect.",
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string", "enum": ["log", "metric", "trace", "synthetic"] },
+            "metric": { "type": "string" },
+            "route": { "type": ["string", "null"] },
+            "description": { "type": "string" }
+          }
+        },
+        "condition": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Tool-neutral threshold for a threshold-type alert.",
+          "required": ["comparator", "threshold"],
+          "properties": {
+            "comparator": { "type": "string", "enum": [">", ">=", "<", "<=", "==", "!="] },
+            "threshold": { "type": ["number", "string"] },
+            "window": { "type": "string" },
+            "occurrences": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "burnRate": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Structured multi-window error-budget burn-rate parameters (the intent behind the rendered `expr`).",
+          "required": ["sloRef", "shortWindow", "longWindow"],
+          "properties": {
+            "sloRef": { "type": "string" },
+            "sli": { "type": "string", "enum": ["latency", "availability"] },
+            "shortWindow": { "type": "string" },
+            "longWindow": { "type": "string" },
+            "shortFactor": { "type": "number" },
+            "longFactor": { "type": "number" },
+            "budgetFraction": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "renderTargets": {
+          "type": "array",
+          "description": "Monitoring backends the `expr` was rendered for (adopted from AlertIntent.renderTargets).",
+          "items": { "type": "string", "enum": ["prometheus", "splunk", "wavefront", "appdynamics"] }
+        }
       }
     }
   }

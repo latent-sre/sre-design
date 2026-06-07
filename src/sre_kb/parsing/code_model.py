@@ -8,11 +8,13 @@ collectors need are extracted; the grammars carry the rest.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from functools import cache
 
 import tree_sitter_c_sharp as ts_cs
 import tree_sitter_java as ts_java
+import tree_sitter_python as ts_py
 from tree_sitter import Language, Node, Parser
 
 _STR_KINDS = {"string_literal", "verbatim_string_literal", "raw_string_literal", "interpolated_string_expression"}
@@ -80,9 +82,12 @@ class Module:
     types: list[TypeDecl]
 
 
+_GRAMMARS = {"java": ts_java, "csharp": ts_cs, "python": ts_py}
+
+
 @cache
 def _lang(language: str) -> Language:
-    return Language(ts_java.language() if language == "java" else ts_cs.language())
+    return Language(_GRAMMARS[language].language())
 
 
 @cache
@@ -93,7 +98,7 @@ def _parser(language: str) -> Parser:
 def parse(language: str, text: str) -> Module:
     src = text.encode("utf-8")
     root = _parser(language).parse(src).root_node
-    return (_parse_java if language == "java" else _parse_csharp)(root, src)
+    return {"java": _parse_java, "csharp": _parse_csharp, "python": _parse_python}[language](root, src)
 
 
 # ---------------- shared traversal ----------------
@@ -302,3 +307,77 @@ def _parse_csharp(root: Node, src: bytes) -> Module:
             start=t.start_point[0] + 1, end=t.end_point[0] + 1,
         ))
     return Module(ns, types)
+
+
+# ---------------- Python ----------------
+# Python is function/decorator-centric, not class-centric. We map a module's top-level functions
+# onto the shared MethodDecl shape (decorators -> annotations, e.g. "app.get" -> {"": "/path"})
+# under one synthetic module-level TypeDecl, so collectors query it like any other stack.
+
+def _py_str_args(args: Node | None, src: bytes) -> tuple[str, ...]:
+    if args is None:
+        return ()
+    out = []
+    for s in _descend(args, {"string"}):
+        t = _txt(s, src).strip()
+        t = re.sub(r"^[rbfu]+(?=[\"'])", "", t, flags=re.I)  # drop string prefixes (r/b/f/u)
+        out.append(t.strip("\"'"))
+    return tuple(out)
+
+
+def _py_decorators(deco_def: Node, src: bytes) -> dict[str, dict[str, str]]:
+    out: dict[str, dict[str, str]] = {}
+    for d in deco_def.children:
+        if d.type != "decorator":
+            continue
+        expr = next((c for c in d.children if c.type in ("call", "attribute", "identifier")), None)
+        if expr is None:
+            continue
+        if expr.type == "call":
+            fn = expr.child_by_field_name("function")
+            args = _py_str_args(expr.child_by_field_name("arguments"), src)
+            out[_txt(fn, src) if fn else ""] = {"": args[0]} if args else {}
+        else:
+            out[_txt(expr, src)] = {}
+    return out
+
+
+def _py_calls(body: Node | None, src: bytes) -> list[Call]:
+    out = []
+    for call in _descend(body, {"call"}):
+        fn = call.child_by_field_name("function")
+        recv, meth = "", ""
+        if fn is not None and fn.type == "attribute":
+            obj, at = fn.child_by_field_name("object"), fn.child_by_field_name("attribute")
+            recv, meth = (_last_ident(obj, src) if obj else ""), (_txt(at, src) if at else "")
+        elif fn is not None:
+            meth = _last_ident(fn, src)
+        out.append(Call(recv, meth, call.start_point[0] + 1,
+                        _py_str_args(call.child_by_field_name("arguments"), src), None))
+    return out
+
+
+def _py_function(fdef: Node, src: bytes, span_node: Node, decorators: dict) -> MethodDecl:
+    nm = fdef.child_by_field_name("name")
+    return MethodDecl(
+        name=_txt(nm, src) if nm else "",
+        annotations=decorators,
+        start=span_node.start_point[0] + 1,  # the decorator line, for evidence
+        name_line=(nm.start_point[0] + 1) if nm else fdef.start_point[0] + 1,
+        end=fdef.end_point[0] + 1,
+        calls=_py_calls(fdef.child_by_field_name("body"), src),
+    )
+
+
+def _parse_python(root: Node, src: bytes) -> Module:
+    funcs: list[MethodDecl] = []
+    for child in root.children:
+        if child.type == "function_definition":
+            funcs.append(_py_function(child, src, child, {}))
+        elif child.type == "decorated_definition":
+            fdef = next((c for c in child.children if c.type == "function_definition"), None)
+            if fdef is not None:
+                funcs.append(_py_function(fdef, src, child, _py_decorators(child, src)))
+    module = TypeDecl(name="module", kind="module", supertypes=[], annotations={},
+                      fields={}, methods=funcs, start=1, end=root.end_point[0] + 1)
+    return Module("", [module])

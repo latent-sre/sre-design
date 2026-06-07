@@ -50,8 +50,9 @@ offline** today (178 tests, ruff-clean). The vertical slice and the items earlie
 (Tier-B) collectors — lives in [`HYBRID-PLAN.md`](HYBRID-PLAN.md) (§8 tracks phase status).
 
 - **Engine** — deterministic `scan → scaffold → validate` for ~22 `kind`s. Collectors:
-  **Java/Spring on PCF** and **.NET/Steeltoe on PCF** (same normalized facts → same KB,
-  proving repo-neutrality). Code structure is read from a **tree-sitter AST** (Java + C#,
+  **Java/Spring on PCF**, **.NET/Steeltoe on PCF**, and a first-slice **Python/FastAPI**
+  collector (endpoints + egress + tech stack) — same normalized facts → same KB across stacks,
+  proving repo-neutrality. Code structure is read from a **tree-sitter AST** (Java, C#, Python —
   `parsing/code_model.py`), not line regexes — per-class scoping and receiver→field-type
   correlation. Confidence is signal-derived and BlastRadius risk is computed from impacted
   -flow breadth + containment, not type-keyed constants.
@@ -86,10 +87,11 @@ adjudicates (`challenge-worklist`), then `challenge-apply` re-gates monotonicall
 Copilot via the worklist, so the engine never calls a model.
 
 Landed as a spike: the fenced Tier-B LLM gap-finder collector (Phase 4, `collectors/llm/`,
-`ResiliencyGap` — see [`PHASE-4-GAP-FINDER.md`](PHASE-4-GAP-FINDER.md)). Not yet built: the
-remaining gap categories + integration into the main `run`; the full scan/publish credential
-split (deployment/infra) and supply-chain pinning; additional language collectors
-(Node/Python/Go) and observability backends beyond the Splunk/Prometheus emitters. See
+`ResiliencyGap` — see [`PHASE-4-GAP-FINDER.md`](PHASE-4-GAP-FINDER.md)) with four grounded probes
+(`missing-timeout`, `unguarded-critical-dependency`, `swallowed-failure`, `undocumented-job`), and a
+first-slice **Python/FastAPI** collector. Not yet built: the remaining judgment-call gap categories;
+the full scan/publish credential split (deployment/infra) and supply-chain pinning; further
+language collectors (Node/Go) and Python flow/resiliency parity beyond the endpoint slice. See
 [`HYBRID-PLAN.md`](HYBRID-PLAN.md) §8.
 
 ---

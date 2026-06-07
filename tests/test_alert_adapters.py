@@ -12,6 +12,7 @@ from sre_kb.render.alerts import (
     LogPatternIntent,
     render_burn_rate,
     render_log_pattern,
+    rendered_targets,
 )
 
 
@@ -81,3 +82,15 @@ def test_percentile_accepts_p_prefixed_or_bare():
     bare = render_burn_rate(BurnRateIntent("latency", 800, 0.005, "/x", 99), tools=("wavefront",))
     pfx = render_burn_rate(BurnRateIntent("latency", 800, 0.005, "/x", "p99"), tools=("wavefront",))
     assert bare["wavefront"]["query"] == pfx["wavefront"]["query"]
+
+
+def test_rendered_targets_reports_only_real_backends():
+    # burn-rate latency: Prometheus + Wavefront + AppDynamics render; Splunk has no burn-rate.
+    expr = render_burn_rate(BurnRateIntent("latency", 800, 0.005, "/x", "p99"))  # default tools
+    assert rendered_targets(render_burn_rate(BurnRateIntent("latency", 800, 0.005, "/x", "p99"),
+                                             tools=("prometheus", "splunk", "wavefront", "appdynamics"))) == [
+        "prometheus", "wavefront", "appdynamics"]
+    # log-pattern: Prometheus key is present but null (no metric), so it is NOT a render target.
+    lp = render_log_pattern(LogPatternIntent("boom", "svc"))
+    assert rendered_targets(lp) == ["splunk"]
+    assert "prometheus_fast" in expr  # sanity: default tools still produce Prometheus

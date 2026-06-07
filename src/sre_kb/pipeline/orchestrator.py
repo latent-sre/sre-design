@@ -36,6 +36,7 @@ from sre_kb.validation.provenance import verify_evidence
 from sre_kb.validation.report import write_report
 from sre_kb.validation.safety import lint_doc
 from sre_kb.validation.structural import validate_doc
+from sre_kb.validation.substance import check_substance
 from sre_kb.workspace import RunLayout
 
 STAGES = ("scan", "scaffold", "validate", "render", "publish")
@@ -125,6 +126,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         prov = verify_evidence(d, target_path)
         xref = crossref_problems.get(key, [])
         safety = lint_doc(d)
+        substance = check_substance(d)
         status = final_status(
             d,
             structural_ok=not struct,
@@ -133,14 +135,14 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
             min_confidence=gate.get("verified_min_confidence", 0.7),
             require_verified_provenance=gate.get("require_verified_provenance", True),
         )
-        if safety and status == "verified":  # dangerous content must get a human
+        if (safety or substance) and status == "verified":  # dangerous/empty content -> human
             status = "needs-review"
         verdicts = challenge_doc(d, ctx.read_lines, challenger)  # adversarial grounding pass
         status, challenge_notes = apply_challenge_gating(status, verdicts)
         staged.append(
             {"d": d, "key": key, "tier": artifact_tier(d), "status": status, "struct": struct,
-             "prov": prov, "xref": xref, "safety": safety, "verdicts": verdicts,
-             "challenge_notes": challenge_notes}
+             "prov": prov, "xref": xref, "safety": safety, "substance": substance,
+             "verdicts": verdicts, "challenge_notes": challenge_notes}
         )
 
     # Pass 2: status-aware crossref — downgrade any verified artifact that depends on a
@@ -170,6 +172,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         rec = {
             "artifact": key, "status": status, "tier": s["tier"], "structural": s["struct"],
             "provenance": s["prov"], "crossref": s["xref"], "safety": s["safety"],
+            "substance": s["substance"],
             "challenger": challenger.id, "challenge": [v.__dict__ for v in s["verdicts"]],
             "challengeNotes": s["challenge_notes"],
         }

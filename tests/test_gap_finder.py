@@ -167,6 +167,30 @@ def test_graduated_swallow_reaches_verified_through_the_gate(tmp_path):
     assert verify_evidence(doc, FIXTURE) == []         # cites the real swallowing catch block
 
 
+_REPORT_JOB = "public void emitDailyReconciliation() {"
+
+
+def test_undocumented_job_confirms_via_scheduled_signature():
+    # @Scheduled fires the `scheduled` signature at the pointer -> engine-confirmed -> Tier-A.
+    res = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("undocumented-job", _REPORT_JOB, target="report-job", severity="medium"),
+    ])
+    [out] = res.outcomes
+    assert out.result == "confirmed"
+    [fact] = res.facts
+    assert fact.evidence.source_tier == "ast"          # graduated like the swallow probe
+    assert fact.attrs["category"] == "undocumented-job"
+
+
+def test_undocumented_job_dropped_when_not_scheduled():
+    # A plain method with no scheduler annotation -> signature doesn't fire -> dropped.
+    res = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("undocumented-job", _NOTIFY, target="notifications", severity="medium"),
+    ])
+    assert res.facts == []
+    assert res.outcomes[0].result == "refuted"
+
+
 def test_no_proposals_file_is_a_quiet_no_op():
     # Self-gating: a target with no gap-proposals.json yields nothing (no crash, no noise).
     run = run_gap_finder(str(FIXTURE.parent / "sample-spring-pcf"), service="order")

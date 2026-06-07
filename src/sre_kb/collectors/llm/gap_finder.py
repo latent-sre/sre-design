@@ -36,8 +36,8 @@ from sre_kb.tiers import AST, LLM
 # Conventional location of the LLM's output inside the (untrusted) target repo.
 PROPOSALS_REL = ".sre/gap-proposals.json"
 
-_EXT_LANG = {".java": "java", ".cs": "csharp"}
-_SOURCE_GLOBS = ("*.java", "*.cs")
+_EXT_LANG = {".java": "java", ".cs": "csharp", ".py": "python"}
+_SOURCE_GLOBS = ("*.java", "*.cs", "*.py")
 # Config files the timeout refutation probe also searches (a timeout may live in config, not code).
 _CONFIG_GLOBS = ("application.yml", "application.yaml", "application*.properties",
                  "appsettings*.json", "bootstrap.yml")
@@ -69,6 +69,13 @@ _SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
 # facts for today (swallows outside messaging egress; scheduled jobs at all), which is the recall.
 _CONFIRMING_CATEGORIES = {"swallowed-failure", "undocumented-job"}
 _CONFIRMING_SIGNATURE = {"undocumented-job": "scheduled"}
+
+# Judgment-call categories (§7.9): no deterministic probe can ground these — "is this a data-loss
+# path / a non-idempotent retry / an unbounded resource?" is a reasoning call. We still GROUND the
+# citation (the anchor must locate), then surface them as Tier-B `needs-review` candidates routed to
+# the human/Copilot oracle — never auto-verified, and subject to the same noise budget. This is the
+# honest home for the categories the engine cannot re-derive.
+_JUDGMENT_CATEGORIES = {"data-loss-path", "missing-idempotency", "unbounded-resource"}
 
 
 @dataclass(frozen=True)
@@ -102,8 +109,12 @@ class GapResult:
     def confirmed(self) -> list[Outcome]:
         return [o for o in self.outcomes if o.result == "confirmed"]
 
+    def kept(self) -> list[Outcome]:
+        """Survivors that became facts — engine-`confirmed` plus judgment-`routed`."""
+        return [o for o in self.outcomes if o.result in ("confirmed", "routed")]
+
     def dropped(self) -> list[Outcome]:
-        return [o for o in self.outcomes if o.result != "confirmed"]
+        return [o for o in self.outcomes if o.result not in ("confirmed", "routed")]
 
 
 # --------------------------------------------------------------------------- loading
@@ -293,6 +304,21 @@ def collect_from_proposals(
             ))
             res.outcomes.append(Outcome(p, "confirmed", rel, span, (rel,),
                                         "graduated to Tier-A — engine re-derived the gap at the pointer"))
+            continue
+
+        if p.category in _JUDGMENT_CATEGORIES:
+            # No deterministic probe — locate-grounded only, routed to the oracle as needs-review.
+            target = p.target or Path(rel).stem
+            fact = Fact(
+                "resiliency.gap",
+                {"category": p.category, "target": target, "severity": p.severity,
+                 "rationale": p.rationale, "rederivation": "judgment", "checked": [rel],
+                 "note": "judgment call — no deterministic probe; routed to human/oracle review"},
+                ctx.evidence(rel, s, e, "llm.gap_finder", source_tier=LLM),
+                Symbol(f"{rel}:{s}-{e}", "gap"),
+            )
+            survivors.append((Outcome(p, "routed", rel, (s, e), (rel,),
+                                      "judgment call — routed to human/oracle review"), fact))
             continue
 
         if p.category not in _REFUTING_CONCERNS:

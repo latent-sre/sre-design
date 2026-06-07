@@ -39,7 +39,8 @@ def test_parser_reads_decorators_calls_and_spans():
 def test_endpoints_and_egress_are_extracted_with_provenance():
     fs, ctx = _facts()
     eps = {(f.attrs["method"], f.attrs["path"]) for f in fs.of("rest.endpoint")}
-    assert eps == {("GET", "/orders/{order_id}"), ("POST", "/orders"), ("GET", "/health")}
+    assert eps == {("GET", "/orders/{order_id}"), ("POST", "/orders"),
+                   ("POST", "/sync"), ("GET", "/health")}
     # every endpoint cites real bytes
     for f in fs.of("rest.endpoint"):
         assert f.evidence.path.endswith("main.py") and f.evidence.source_tier == "ast"
@@ -83,3 +84,19 @@ def test_fastapi_service_yields_a_validated_kb(tmp_path):
     from sre_kb.validation import validate_kb_tree
     bad = [x for x in validate_kb_tree(r.root / "kb") if not x.ok]
     assert not bad, [(x.path, x.errors) for x in bad]
+
+
+def test_python_swallow_is_confirmed_by_the_gap_finder():
+    # Python parity: the swallow detector now works on try/except, so the swallowed-failure
+    # confirmation probe grounds a Python swallow and graduates it to Tier-A.
+    from sre_kb.collectors.llm import gap_finder
+    from sre_kb.collectors.llm.gap_finder import Proposal
+
+    ctx = ScanContext(root=FIXTURE, repo="file://sample-fastapi", commit=LOCAL_COMMIT)
+    res = gap_finder.collect_from_proposals(ctx, [
+        Proposal("swallowed-failure", 'httpx.post(f"{INVENTORY}/sync", json=body)',
+                 target="inventory", severity="high"),
+    ])
+    [out] = res.outcomes
+    assert out.result == "confirmed"
+    assert res.facts[0].evidence.source_tier == "ast"  # graduated, cross-stack

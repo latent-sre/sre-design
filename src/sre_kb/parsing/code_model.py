@@ -342,18 +342,44 @@ def _py_decorators(deco_def: Node, src: bytes) -> dict[str, dict[str, str]]:
     return out
 
 
+def _py_call_rm(call: Node, src: bytes) -> tuple[str, str]:
+    fn = call.child_by_field_name("function")
+    if fn is not None and fn.type == "attribute":
+        obj, at = fn.child_by_field_name("object"), fn.child_by_field_name("attribute")
+        return (_last_ident(obj, src) if obj else "", _txt(at, src) if at else "")
+    return ("", _last_ident(fn, src) if fn is not None else "")
+
+
+def _py_enclosing_swallow(call: Node, src: bytes) -> Swallow | None:
+    """Python analogue of `_enclosing_swallow`: a `try` whose `except` clause logs but does not
+    re-`raise`. Same swallow semantics, different node names (except_clause / raise_statement)."""
+    node = call.parent
+    while node is not None:
+        if node.type == "try_statement":
+            body = node.child_by_field_name("body") or next((c for c in node.children if c.type == "block"), None)
+            if body and body.start_byte <= call.start_byte < body.end_byte:
+                for exc in (c for c in node.children if c.type == "except_clause"):
+                    eblock = next((c for c in exc.children if c.type == "block"), exc)
+                    if next(_descend(eblock, {"raise_statement"}), None) is not None:
+                        continue  # this except re-raises -> not swallowed here
+                    for c in _descend(eblock, {"call"}):
+                        recv, meth = _py_call_rm(c, src)
+                        if _is_log_call(recv, meth):
+                            a = _py_str_args(c.child_by_field_name("arguments"), src)
+                            return Swallow(meth, a[0] if a else "",
+                                           exc.start_point[0] + 1, exc.end_point[0] + 1)
+                return None
+        node = node.parent
+    return None
+
+
 def _py_calls(body: Node | None, src: bytes) -> list[Call]:
     out = []
     for call in _descend(body, {"call"}):
-        fn = call.child_by_field_name("function")
-        recv, meth = "", ""
-        if fn is not None and fn.type == "attribute":
-            obj, at = fn.child_by_field_name("object"), fn.child_by_field_name("attribute")
-            recv, meth = (_last_ident(obj, src) if obj else ""), (_txt(at, src) if at else "")
-        elif fn is not None:
-            meth = _last_ident(fn, src)
+        recv, meth = _py_call_rm(call, src)
         out.append(Call(recv, meth, call.start_point[0] + 1,
-                        _py_str_args(call.child_by_field_name("arguments"), src), None))
+                        _py_str_args(call.child_by_field_name("arguments"), src),
+                        _py_enclosing_swallow(call, src)))
     return out
 
 

@@ -11,11 +11,11 @@ and a phased plan to combine their strengths.
 > finding turned out to encode *tested intent* rather than a bug, that is called out.
 
 > **Status authority (consolidated 2026-06-07).** This doc is the **single source of truth** for the
-> plan + live status: **§8** is the implementation-status tracker, **§9** the rolling reassessment.
-> The other docs are scoped and subordinate — `DESIGN.md` (architecture), `PHASE-4-GAP-FINDER.md`
-> (the gap-finder spike), and the **dated review snapshots** (`REASSESSMENT-2026-06.md`,
-> `REASSESSMENT-2026-06-07-round3.md`, `RESILIENCY-SKILLS-REVIEW-2026-06.md`) whose actionable
-> findings are folded into §8/§9. **When a review and §8 disagree, §8 wins.**
+> plan + live status: **§8** is the implementation-status tracker, **§9** the rolling reassessment
+> (incl. **§9.7**, the open backlog). The only other docs are `DESIGN.md` (architecture) and
+> `PHASE-4-GAP-FINDER.md` (the gap-finder spike). The separate review/reassessment snapshots
+> (Rounds 1–3 + the parallel competitive review) were **folded in here and retired** — their
+> reasoning remains in git history. **When anything disagrees with §8, §8 wins.**
 
 ---
 
@@ -628,8 +628,8 @@ flags jobs *no* collector reaches — so as this collector grows, that probe's r
 
 ### Adopted kind — `Criticality` + the deterministic severity floor (Round-3 R1–R3)
 
-The reliability model behind `resiliency-skills`' breadth that the §9.6 audit had not mined (see
-[`REASSESSMENT-2026-06-07-round3.md`](REASSESSMENT-2026-06-07-round3.md)). Their `criticality`
+The reliability model behind `resiliency-skills`' breadth that the §9.6 audit had not mined (the
+Round-3 review, now folded here). Their `criticality`
 schema + `TIER_SEVERITY_FLOOR` → a grounded **criticality reliability spine** on our envelope:
 
 - **R1 — `Criticality` kind + collector** (`collectors/common/criticality.py`,
@@ -689,7 +689,7 @@ re-verification of every §8 claim, and (b) a strategic re-read of the plan now 
 
 The whole plan was sequenced around one make-or-break experiment — the fenced Tier-B gap-finder
 (§6.3, §7.9). If the *non-circular contract* couldn't be made to work, "just extend
-`resiliency-skills`" was the rational alternative (the framing in `REASSESSMENT-2026-06.md`). The
+`resiliency-skills`" was the rational alternative (the earlier reassessment's framing). The
 spike resolved it: its recall eval **surfaces a planted gap, refutes a false positive** (a timeout
 *is* present → the shared signature fires → the gap is dropped), and **drops a hallucinated citation**
 (anchor not found verbatim) — and the probe generalizes across Java *and* .NET. The architecture is
@@ -844,3 +844,29 @@ output, not source grounding). Our byte-grounding differentiator holds.
 
 **Caveats:** their engine tests didn't run in the audit env (deps), so their suite's green state is
 unverified; their "reliability model" batch was not deep-read.
+
+### 9.7 Open backlog (folded from the retired review docs)
+
+The single live list of what's left, consolidated from the now-retired Round-3 / competitive
+reviews. Completion is tracked in the §8 table; the rationale lives here.
+
+- **R6 — `observability-coverage` Tier-B skill + refutation probe.** A gap-finder skill that scores
+  metrics/logs/traces/synthetics `covered|partial|missing` and proposes coverage gaps; the engine
+  refutes against our existing `Observability` facts (a claimed-missing signal the facts show is
+  present is dropped). Logging posture folds in as an input signal, not a separate skill.
+- **R7 — `grafana` + `thousandeyes` alert adapters.** Backend parity (4/6 → 6/6) via the existing
+  neutral-intent → adapter seam: lift their template *structure*, feed our deterministically generated
+  query (never their LLM-supplied `signal.query`). See §9.6 lift action #2.
+- **R8 — supply-chain hardening.** `--require-hashes` lockfile + Renovate digest-pin of Actions + an
+  independent `detect-secrets` second gate + an offline wheel for air-gapped PCF. See §9.6 #3 / §9.3
+  #5. Gate before any live (`--no-dry-run`) publish.
+- **N4 — central vocabulary + severity reconciliation.** A single `taxonomy.yaml` the schemas draw
+  their enums from, with a consistency test, to kill enum drift (our `critical/high/medium/low` vs
+  their `sev1/sev2/sev3`). Deliberately not adopted yet — revisit if enum drift bites.
+- **N5 — lower priority.** `load-shed`/`backpressure` vocab + judgment probes; declarative inventory
+  signatures (tech-stack/messaging/datastore, incl. Node/Go) as a data-driven breadth path; an
+  LLM-authored narrative over the `findings` digest (advisory, Tier-B); lifting the `AGENTS.md`-hijack
+  + app-name-polyglot fixtures as regression tests (defenses exist via the fence + `_mm()`; named
+  fixtures don't).
+- **Infra — full scan/publish credential split** (§9.3 #5): the no-credential scan role + scoped
+  publish role + CI wiring. Becomes a real safety bug the moment we publish live.

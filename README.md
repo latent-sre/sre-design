@@ -95,3 +95,9 @@ sre-kb run --target tests/fixtures/sample-dotnet-steeltoe --run net --to-stage v
 # cross-service co-tenancy blast radius
 sre-kb estate --target tests/fixtures/sample-spring-pcf --target tests/fixtures/sample-billing-pcf
 ```
+
+### Dev container
+
+VS Code / Codespaces can also open this repo in the included dev container. It uses Python 3.12 and
+runs `pip install -e ".[dev]"` after creation, so `pytest -q` and `ruff check src tests` work from a
+clean container without local Python setup.

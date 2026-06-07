@@ -1,0 +1,26 @@
+{
+  "_comment": "Simulated output of Copilot running the sre-gap-finder (assess-resiliency) skill in gap-mode. Anchors are verbatim excerpts; the engine locates, stamps source_tier=llm, and re-derives each via the shared signature library. See tests/test_gap_finder.py.",
+  "proposals": [
+    {
+      "category": "missing-timeout",
+      "target": "payments-api",
+      "severity": "high",
+      "anchor": "return restTemplate.postForObject(baseUrl + \"/charge\", new Charge(orderId, amountCents), Receipt.class);",
+      "rationale": "the payments charge call is behind a circuit breaker but has no timeout; a hung connection stalls the caller"
+    },
+    {
+      "category": "missing-timeout",
+      "target": "shipping-api",
+      "severity": "high",
+      "anchor": "return restTemplate.getForObject(baseUrl + \"/quote?order=\" + orderId, Quote.class);",
+      "rationale": "FALSE POSITIVE on purpose: this call already carries @TimeLimiter; the engine must refute it"
+    },
+    {
+      "category": "missing-timeout",
+      "target": "refunds-api",
+      "severity": "high",
+      "anchor": "return restTemplate.postForObject(baseUrl + \"/refund\", new Refund(orderId), Receipt.class);",
+      "rationale": "HALLUCINATED on purpose: no such call exists in the source; the engine must drop it as unlocatable"
+    }
+  ]
+}

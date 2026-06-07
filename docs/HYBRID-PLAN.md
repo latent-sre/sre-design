@@ -234,7 +234,7 @@ trap `validation/challenge.py:9-13` warns about). Instead:
 | **1. Adopt `resiliency-skills`' hardening wholesale** ✅ | Architectural scan/publish split (no-credential scan role; scoped publish credential), sandboxed/`json.dumps` renderers, `redact` + second gate, fan-out cap, `needs-human-review` const. | This *is* `sre-design`'s own deferred roadmap. Closes the textual-fence and publish-path weaknesses **before** any LLM breadth is added. |
 | **2. Make the trust spine status-aware** ✅ | Fix `crossref`/`readiness`/gating to require `verified` referents; confine provenance paths (`is_relative_to`). | Or Tier-B facts will silently inflate "verified" graphs. |
 | **3. Challenge loop (Copilot oracle)** ✅ | Judgment-call claims → worklist; Copilot adjudicates; `challenge-apply` re-gates monotonically. In-process `LLMChallenger` superseded by the worklist (engine stays model-free). | Prerequisite for Tier-B — deterministic grounding is circular for LLM judgment claims. |
-| **4. LLM collectors: gap-finders + pointer-generators** ⬜ | `collectors/llm/`. The LLM reads the engine's facts + the cited code and proposes **(a) gaps the engine missed on code we already cover** (the recall payoff — §7.9) and **(b) pointers for stacks no AST grammar reaches** (breadth). The engine re-derives or *refutes* each (§6.3, §7.9); nothing it proposes can auto-`verify`. | Recall on covered estates **and** breadth, both safely fenced. |
+| **4. LLM collectors: gap-finders + pointer-generators** 🟡 (gap-finder spike) | `collectors/llm/`. The LLM reads the engine's facts + the cited code and proposes **(a) gaps the engine missed on code we already cover** (the recall payoff — §7.9) and **(b) pointers for stacks no AST grammar reaches** (breadth). The engine re-derives or *refutes* each (§6.3, §7.9); nothing it proposes can auto-`verify`. | Recall on covered estates **and** breadth, both safely fenced. |
 | **5. Render-adapter breadth** ⬜ | Generalize `render/` to neutral-intent → adapter; add Wavefront/AppDynamics. | Independent; can run in parallel. |
 
 Phases 0→1→2 are the trust/security spine and are low-risk extensions of existing code; they land
@@ -412,7 +412,7 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ## 8. Implementation status (2026-06-07)
 
-Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **166 tests
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **172 tests
 passing, ruff-clean.**
 
 ### Phase 0 — Fact contract & trust tiers ✅
@@ -501,6 +501,24 @@ model (the founding invariant). The §7.3 adversarial-LLM corpus is the regressi
 > Verified live: on `sample-spring-pcf` the loop routed the `create-order-latency-burn-rate` Alert
 > `verified → needs-review` when its burn-rate expr didn't measure the latency SLI it cited (now fixed).
 
-### Phases 4–5 ⬜
+### Phase 4 — Tier-B LLM gap-finder 🟡 (spike)
 
-Not started: Tier-B LLM collectors / gap-finder (Phase 4, §7.9), render-adapter breadth (Phase 5).
+The first Tier-B collector, as a spike (`docs/PHASE-4-GAP-FINDER.md`). Copilot proposes resiliency
+gaps the AST missed (§7.9 recall mode), quoting verbatim excerpts; the engine — never the LLM —
+locates each (`collectors/llm/gap_finder.py`), stamps `path:line:hash` with `source_tier=llm`, and
+runs a deterministic *refutation probe* via the shared `signatures.py` (§7.4): a `missing-timeout`
+gap survives only if the `timeout` signature fires nowhere the engine `checked`. Survivors scaffold
+to a `ResiliencyGap` artifact (new kind, golden-corpus + `additionalProperties:false`), forced to
+`needs-review` / `unverifiedAgainstLive` — nothing it proposes can auto-verify. The recall eval
+(`tests/test_gap_finder.py`, the dual of §7.3) plants a gap, a false positive, and a hallucination,
+and asserts the engine surfaces the first and drops the other two. Prompt: the vendored
+`assess-resiliency` skill (`.github/skills/sre-gap-finder/`). CLI: `sre-kb gap-finder`.
+
+Deferred from §7.9/§7.10: refutation probes for the other gap categories (only `missing-timeout`
+today), target-scoped (not whole-file) config probing, the noise-budget ranking/cap, the
+graduation-to-Tier-A loop, and integration into the main `run` pipeline (the spike is a standalone
+opt-in path).
+
+### Phase 5 ⬜
+
+Not started: render-adapter breadth (Wavefront / AppDynamics emitters beyond Splunk + Prometheus).

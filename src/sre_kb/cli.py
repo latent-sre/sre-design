@@ -251,6 +251,36 @@ def challenge_apply(
     typer.echo(f"applied verdicts to {len(summary)} artifact(s).")
 
 
+@app.command("gap-finder")
+def gap_finder_cmd(
+    target: str = typer.Option(..., "--target", help="Local path of the target repo."),
+    proposals: Path = typer.Option(
+        None, "--proposals", help="LLM gap proposals JSON (default: <target>/.sre/gap-proposals.json)."
+    ),
+    service: str = typer.Option(None, "--service", help="Service name (default: target dir name)."),
+) -> None:
+    """Tier-B LLM gap-finder (HYBRID-PLAN §7.9): ingest Copilot's gap proposals, re-ground each
+    (locate -> stamp path:line:hash source_tier=llm -> re-derive via the signature library), and
+    emit ResiliencyGap artifacts.
+
+    The engine never calls a model — it ingests proposals Copilot already wrote by running the
+    sre-gap-finder (assess-resiliency) skill. Nothing proposed can auto-verify.
+    """
+    from sre_kb.pipeline.gap_finder import run_gap_finder
+
+    run = run_gap_finder(target, proposals_path=proposals, service=service)
+    conf = run.result.confirmed()
+    typer.echo(
+        f"gap-finder: {len(run.result.outcomes)} proposal(s) -> {len(conf)} confirmed gap(s), "
+        f"{len(run.result.dropped())} dropped"
+    )
+    for o in run.result.outcomes:
+        where = f" @ {o.path}:{o.lines[0]}-{o.lines[1]}" if o.lines else ""
+        typer.echo(f"  [{o.result:<12}] {o.proposal.category} on {o.proposal.target}{where}  — {o.note}")
+    for status, n in sorted(run.by_status.items()):
+        typer.echo(f"  {status}: {n}")
+
+
 @app.command("secret-scan")
 def secret_scan(directory: Path = typer.Argument(..., help="Directory to scan for secrets.")) -> None:
     """Scan a directory tree for secrets (the publish gate uses the same rules)."""

@@ -1,0 +1,16 @@
+# Canonical Tier-B skill pipeline (DEEP-COMPARISON R6 / HYBRID-PLAN §9.6).
+#
+# Every skill directory under .github/skills/ must appear here exactly once, and vice-versa.
+# tools/lint_skills.py + tests/test_lint_skills.py enforce it (CI-blocking), so the skill suite and
+# this manifest can't drift. Phases follow the classify -> map -> assess -> generate shape of the
+# resiliency-skills suite; `generate` is empty until the first generate-* skills land (DEEP R7).
+apiVersion: sre.kb/v1alpha1
+kind: SkillPipeline
+phases:
+  classify:
+    - sre-criticality
+  map:
+    - sre-flow-analysis
+  assess:
+    - sre-gap-finder
+  generate: []

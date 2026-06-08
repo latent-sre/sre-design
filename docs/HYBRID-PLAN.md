@@ -423,8 +423,8 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ## 8. Implementation status (2026-06-08)
 
-Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **343 tests
-passing, ruff-clean** (re-verified at `main` `c360af9`). Every claim below was re-verified at
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **380 tests
+passing, ruff-clean** (review-tail hardening + R6 observability-coverage gap-finder). Every claim below was re-verified at
 file:line — no drift; corrections were *additions* for behaviors the code had but this section
 under-documented (folded in where they belong).
 
@@ -444,7 +444,7 @@ status-authority note at the top):
 | N1 | secret-scan non-UTF-8 fail-open (**bug**) | ✅ | #26 |
 | N2 | multi-window/multi-burn-rate alerts (long **and** short window) | ✅ | #26 |
 | N3 | `bulkhead` / `rate-limit` / `idempotency` signatures | ✅ | #26 |
-| R6 | observability-coverage Tier-B skill + refutation probe | ⬜ | |
+| R6 | observability-coverage Tier-B skill + fact-based refutation probe | ✅ | |
 | R7 | grafana + thousandeyes adapters | ✅ 6/6 | |
 | R8 | supply-chain (`--require-hashes` + Renovate digest-pin + `detect-secrets`) | 🟡 offline wheel done; rest open | |
 | N4 | central `taxonomy.yaml` + severity-vocab reconciliation | ✅ | #37 |
@@ -881,10 +881,20 @@ unverified; their "reliability model" batch was not deep-read.
 The single live list of what's left, consolidated from the now-retired Round-3 / competitive
 reviews. Completion is tracked in the §8 table; the rationale lives here.
 
-- **R6 — `observability-coverage` Tier-B skill + refutation probe.** A gap-finder skill that scores
-  metrics/logs/traces/synthetics `covered|partial|missing` and proposes coverage gaps; the engine
-  refutes against our existing `Observability` facts (a claimed-missing signal the facts show is
-  present is dropped). Logging posture folds in as an input signal, not a separate skill.
+- **R6 — `observability-coverage` Tier-B skill + refutation probe. ✅ Done.** The
+  `sre-observability-coverage` skill (`.github/skills/`) scores metrics/logs/traces/synthetics
+  `covered|partial|missing` and proposes the missing pillar as a byte-anchored gap; the gap-finder
+  adds four categories (`missing-metrics`/`-tracing`/`-structured-logging`/`-synthetic-monitoring`)
+  that **refute against the engine's own facts** — a claimed-missing pillar dropped when the facts
+  already prove it present (`config.actuator`/`config.slo` or a micrometer/actuator/prometheus dep →
+  metrics; a sleuth/OTel/zipkin/brave dep → tracing; a JSON/correlation `observability.logging` fact →
+  structured logging; synthetics has no engine signal, so it always routes). Unlike the §7.4 code
+  signatures, the refutation reads the **fact set** the deterministic collectors already produced, so
+  it can't drift; survivors land Tier-B `needs-review` (reusing the `resiliency.gap` → `ResiliencyGap`
+  path, anchored on the config/build line). Logging posture folds in as the structured-logging signal,
+  not a separate skill. The orchestrator threads its fact set into the gap-finder; the standalone CLI
+  runs without one (grounds + routes, no fact-refute). *(NB: `readiness.py` still hard-codes
+  `tracing-enabled: False`; wiring it to the same dependency check is a small follow-up.)*
 - **R7 — `grafana` + `thousandeyes` alert adapters. ✅ Done.** Backend parity reached 6/6 via the
   neutral-intent → adapter seam (`render/alerts.py` `_grafana_burn`/`_grafana_log`/`_thousandeyes_burn`):
   the engine lifts each backend's template *structure* and feeds its own deterministically generated

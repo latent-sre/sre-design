@@ -45,12 +45,14 @@ TIER_SEVERITY_FLOOR = {"tier0": "critical", "tier1": "high", "tier2": "medium", 
 
 
 def effective_severity(declared: str, tier: str | None) -> str:
-    """Raise `declared` to the floor implied by `tier` (never lower it). Unknown/None tier or an
-    unrankable declared severity is a no-op — so an unscored service keeps its declared severity."""
+    """Raise `declared` to the floor implied by `tier` (never lower it). An unknown/None tier is a
+    no-op. An unrankable `declared` sorts LAST (mirrors taxonomy.severity_rank), so the floor always
+    applies rather than letting a garbage severity slip past paging."""
     floor = TIER_SEVERITY_FLOOR.get(tier or "")
     if floor is None:
         return declared
-    return declared if SEVERITY_RANK.get(declared, 1) <= SEVERITY_RANK[floor] else floor
+    # default rank = len(scale): an unknown declared severity never outranks a real floor.
+    return declared if SEVERITY_RANK.get(declared, len(SEVERITY_RANK)) <= SEVERITY_RANK[floor] else floor
 
 
 def _le(threshold_ms: float | int) -> str:

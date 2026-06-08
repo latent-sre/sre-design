@@ -35,6 +35,7 @@ FIXTURE = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
         ("critical", "tier3", "critical"),  # never LOWERED below a declared severity
         ("high", None, "high"),  # unscored service -> no-op
         ("high", "unknown", "high"),  # unknown tier -> no-op
+        ("bogus", "tier1", "high"),  # unrankable declared sorts last -> floored, not slipped past
     ],
 )
 def test_effective_severity_floors_up_only(declared, tier, expected):

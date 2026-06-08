@@ -30,7 +30,6 @@ from pathlib import Path
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
-from sre_kb.parsing import parse
 from sre_kb.signatures import fires
 from sre_kb.taxonomy import severity_rank
 from sre_kb.tiers import AST, LLM
@@ -192,7 +191,7 @@ def _enclosing_type(ctx: ScanContext, rel: str, start: int, end: int):
     lang = _EXT_LANG.get(Path(rel).suffix)
     if lang is None:
         return None
-    module = parse(lang, ctx.read_text(rel))
+    module = ctx.module(rel, lang)
     typedecl = next((t for t in module.types if t.start <= start and t.end >= end), None)
     if typedecl is None:
         return None

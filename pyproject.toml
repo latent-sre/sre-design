@@ -7,6 +7,8 @@ name = "sre-kb"
 version = "0.0.1"
 description = "Deterministic engine that turns a code repo into a populated, validated SRE knowledge base + GitHub Copilot skills."
 readme = "README.md"
+# Floor stays 3.11 for now (no 3.12+ syntax is used yet); 3.13 is the working/dev base and is
+# tested in CI. Intent is to raise this floor to >=3.13 once we adopt 3.12+ features (PEP 695, etc.).
 requires-python = ">=3.11"
 dependencies = [
     "jsonschema>=4.21",

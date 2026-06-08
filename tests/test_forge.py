@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import subprocess
+
 import pytest
 
 from sre_kb.publish.forge import get_forge
 from sre_kb.publish.forge.base import ForgePublishError
-from sre_kb.publish.forge.github import GitHubForge, _redact, parse_repo
+from sre_kb.publish.forge.github import GitHubForge, _default_post, _default_run, _redact, parse_repo
 
 
 def test_parse_repo_variants():
@@ -62,6 +64,36 @@ def test_open_pr_drives_git_and_rest(tmp_path):
 def test_redact_hides_token():
     red = " ".join(_redact(["git", "clone", "https://x-access-token:SECRET@github.com/o/r.git", "d"]))
     assert "SECRET" not in red and "x-access-token:***@" in red
+
+
+def test_default_post_wraps_http_error_without_leaking_token(monkeypatch):
+    """A non-2xx GitHub response must surface as ForgePublishError (the Forge contract), and the
+    token must not appear in the surfaced error."""
+    import urllib.error
+
+    from sre_kb.publish.forge import github
+
+    def boom(req, *a, **k):
+        raise urllib.error.HTTPError(req.full_url, 422, "Unprocessable Entity", {}, None)
+
+    monkeypatch.setattr(github.urllib.request, "urlopen", boom)
+    with pytest.raises(ForgePublishError) as ei:
+        _default_post("https://api.github.com/repos/o/r/pulls", {"title": "t"}, "SECRETTOKEN")
+    assert "422" in str(ei.value)
+    assert "SECRETTOKEN" not in str(ei.value)
+
+
+def test_default_run_times_out_as_forge_error(monkeypatch):
+    """A stalled git subprocess is bounded and surfaced as ForgePublishError, not an indefinite hang."""
+    from sre_kb.publish.forge import github
+
+    def slow(cmd, *a, **k):
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=k.get("timeout"))
+
+    monkeypatch.setattr(github.subprocess, "run", slow)
+    with pytest.raises(ForgePublishError) as ei:
+        _default_run(["git", "clone", "--depth", "1", "https://github.com/o/r.git", "d"])
+    assert "timed out" in str(ei.value)
 
 
 def test_get_forge_defaults_to_local_for_unknown():

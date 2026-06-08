@@ -12,9 +12,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from sre_kb.models.envelope import Evidence, Lines
+from sre_kb.parsing import parse
 
 if TYPE_CHECKING:
     from sre_kb.models.facts import Fact, FactSet
+    from sre_kb.parsing import Module
 
 LOCAL_COMMIT = "0" * 40  # sentinel commit for local working-tree scans
 _SKIP_DIRS = {".git", ".venv", "venv", "target", "build", "node_modules", "__pycache__"}
@@ -33,6 +35,7 @@ class ScanContext:
     repo: str
     commit: str = LOCAL_COMMIT
     _lines: dict[str, list[str]] = field(default_factory=dict)
+    _modules: dict[tuple[str, str], Module] = field(default_factory=dict)
 
     def read_lines(self, rel: str) -> list[str]:
         if rel not in self._lines:
@@ -42,6 +45,15 @@ class ScanContext:
 
     def read_text(self, rel: str) -> str:
         return "".join(self.read_lines(rel))
+
+    def module(self, rel: str, language: str) -> Module:
+        """Parsed AST for `rel`, memoized per (path, language). Parsing is pure on the file text, so
+        the cache lets every collector share one parse instead of re-parsing the same file (the Java
+        collectors alone parsed each *.java up to ~5x per scan)."""
+        key = (rel, language)
+        if key not in self._modules:
+            self._modules[key] = parse(language, self.read_text(rel))
+        return self._modules[key]
 
     def rel(self, path: Path) -> str:
         return str(path.relative_to(self.root)).replace("\\", "/")

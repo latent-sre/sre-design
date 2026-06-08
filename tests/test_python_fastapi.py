@@ -47,6 +47,25 @@ def test_endpoints_and_egress_are_extracted_with_provenance():
     assert any(f.attrs.get("client") == "httpx" for f in fs.of("http.egress"))
 
 
+def test_generic_receivers_do_not_over_match_as_http_egress(tmp_path):
+    """Regression: a DB/ORM `session.get(...)` or cache `client.get(...)` must NOT become an
+    http.egress fact — only real HTTP client modules (httpx/requests/aiohttp) count."""
+    from sre_kb.collectors.python_fastapi import endpoints
+
+    (tmp_path / "svc.py").write_text(
+        "import httpx\n"
+        "def handler(session, client):\n"
+        "    session.get(123)\n"          # DB/ORM session — not HTTP
+        "    client.send(123)\n"          # generic client — not HTTP
+        "    httpx.get('http://x')\n",    # the only real egress
+        encoding="utf-8",
+    )
+    ctx = ScanContext(root=tmp_path, repo="file://x", commit=LOCAL_COMMIT)
+    egress = endpoints.collect(ctx)
+    clients = {f.attrs["client"] for f in egress if f.type == "http.egress"}
+    assert clients == {"httpx"}          # session/client did not over-match
+
+
 def test_tech_stack_facts_are_python():
     fs, _ = _facts()
     fw = fs.first("tech.framework")

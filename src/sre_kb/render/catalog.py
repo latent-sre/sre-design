@@ -19,7 +19,7 @@ def catalog_info(service: str, docs: list[dict]) -> dict:
         "spec": {
             "type": spec.get("type", "service"),
             "lifecycle": spec.get("lifecycle", "production"),
-            "owner": "unknown",
+            "owner": spec.get("owner", "unknown"),
             "providesApis": provides,
             "dependsOn": depends_on,
         },

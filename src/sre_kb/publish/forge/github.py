@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import tempfile
+import urllib.error
 import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
@@ -23,6 +24,7 @@ from sre_kb.publish.forge.base import ForgePublishError
 from sre_kb.publish.manifest import merge_tree
 
 _GIT_USER = ["-c", "user.email=sre-kb@users.noreply.github.com", "-c", "user.name=sre-kb"]
+_GIT_TIMEOUT_S = 300  # bound each git subprocess so a stalled clone/push can't hang the engine in CI
 
 
 def parse_repo(spec: str) -> tuple[str, str]:
@@ -70,7 +72,12 @@ def _git_auth_env(token: str):
 
 
 def _default_run(cmd: list[str]) -> str:
-    res = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=_GIT_TIMEOUT_S)  # noqa: S603
+    except subprocess.TimeoutExpired:
+        raise ForgePublishError(
+            f"git timed out after {_GIT_TIMEOUT_S}s: {' '.join(_redact(cmd))}"
+        ) from None
     if res.returncode != 0:
         stderr = _redact([res.stderr.strip()])[0]  # git may echo the tokenized remote URL
         raise ForgePublishError(f"git failed ({res.returncode}): {' '.join(_redact(cmd))}\n{stderr}")
@@ -89,8 +96,16 @@ def _default_post(url: str, payload: dict, token: str) -> dict:
             "User-Agent": "sre-kb",
         },
     )
-    with urllib.request.urlopen(req) as r:  # noqa: S310
-        return json.loads(r.read().decode())
+    # `urlopen` raises HTTPError on any non-2xx (422 PR exists, 401 bad token, 403 rate-limit). Wrap
+    # it as ForgePublishError per the Forge contract, and `from None` so the token-bearing request in
+    # the original exception's context isn't surfaced in tracebacks/logs.
+    try:
+        with urllib.request.urlopen(req) as r:  # noqa: S310
+            return json.loads(r.read().decode())
+    except urllib.error.HTTPError as exc:
+        raise ForgePublishError(f"GitHub API {exc.code} opening PR: {exc.reason}") from None
+    except urllib.error.URLError as exc:
+        raise ForgePublishError(f"GitHub API request failed: {exc.reason}") from None
 
 
 class GitHubForge:

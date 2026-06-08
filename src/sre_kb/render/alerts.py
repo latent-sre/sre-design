@@ -132,6 +132,15 @@ class BurnRateIntent:
     route: str | None
     percentile: int | float | None = None
 
+    def __post_init__(self) -> None:
+        if not 0 < self.budget_frac < 1:
+            # A non-positive (target>=100%) or >=1 (target<=0%) budget makes every backend's
+            # threshold `mult * budget` <= 0, i.e. "fire on any request". Reject rather than emit a
+            # pager-storm alert; the scaffolder guards this before constructing the intent.
+            raise ValueError(
+                f"budget_frac must be a fractional error budget in (0, 1), got {self.budget_frac!r}"
+            )
+
     @property
     def is_latency(self) -> bool:
         return self.sli == "latency" and self.threshold_ms is not None

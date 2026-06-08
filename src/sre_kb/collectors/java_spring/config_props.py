@@ -54,7 +54,10 @@ def collect(ctx: ScanContext) -> list[Fact]:
         if isinstance(tl, dict):
             for inst, val in tl.items():
                 if isinstance(val, dict) and "timeoutDuration" in val:
-                    ln = find_line(lines, "timeoutDuration") or 1
+                    # Anchor on this instance first, then find its timeoutDuration — otherwise every
+                    # instance cites the first timeoutDuration in the file (mirrors the client path).
+                    inst_ln = find_line(lines, str(inst)) or 1
+                    ln = find_line(lines, "timeoutDuration", inst_ln) or inst_ln
                     facts.append(
                         Fact(
                             "config.timelimiter",

@@ -79,6 +79,15 @@ def _staged_files(staged: Path) -> list[str]:
     )
 
 
+def _within(base: Path, target: Path) -> bool:
+    """True if `target` resolves inside `base`. The recorded manifest keys come from the (untrusted)
+    target repo, so a key like ``../../etc/x`` must not let a prune/unlink escape the cloned repo."""
+    try:
+        return target.resolve().is_relative_to(base.resolve())
+    except OSError:
+        return False
+
+
 def merge_tree(staged: Path, dest: Path) -> MergeResult:
     """Merge the `staged` tree into `dest` (the target repo working copy) under clobber-protection,
     tracked by `dest/.sre/manifest.yaml`. Returns the changes; the new manifest is written to `dest`."""
@@ -90,6 +99,8 @@ def merge_tree(staged: Path, dest: Path) -> MergeResult:
         if rel == MANIFEST_REL:
             continue  # never let a staged file masquerade as the manifest
         src, target = staged / rel, dest / rel
+        if not _within(dest, target):
+            continue  # never write outside the target repo (defense in depth)
         if target.is_file() and rel in recorded and content_hash(target) != recorded[rel]:
             # an operator edited a file we wrote -> preserve the live file, offer the draft alongside.
             proposed = dest / ".proposed" / rel
@@ -105,6 +116,9 @@ def merge_tree(staged: Path, dest: Path) -> MergeResult:
             res.written.append(rel)
     for rel in sorted(set(recorded) - set(produced)):
         target = dest / rel
+        if not _within(dest, target):
+            hashes.pop(rel, None)  # a manifest path escaping dest is a traversal attempt: never unlink
+            continue
         if not target.is_file():
             hashes.pop(rel, None)  # already gone
         elif content_hash(target) == recorded[rel]:

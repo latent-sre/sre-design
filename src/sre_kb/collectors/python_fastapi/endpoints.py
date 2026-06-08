@@ -15,12 +15,14 @@ import re
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
-from sre_kb.parsing import parse
 from sre_kb.util import find_line
 
 _HTTP_VERBS = {"get", "post", "put", "delete", "patch", "options", "head"}
-# Outbound HTTP clients whose <receiver>.<verb>(...) is a dependency call (httpx / requests).
-_EGRESS_RECEIVERS = {"httpx", "requests", "client", "session", "aiohttp"}
+# Outbound HTTP clients whose <receiver>.<verb>(...) is a dependency call. Only unambiguous HTTP
+# client modules — NOT generic names like `client`/`session`, which also name DB/ORM sessions, cache
+# clients, and message clients and produced false `http.egress` facts. (Python locals aren't
+# type-resolved here, so a `client = httpx.Client()` alias is a known recall gap, not a false hit.)
+_EGRESS_RECEIVERS = {"httpx", "requests", "aiohttp"}
 _EGRESS_METHODS = _HTTP_VERBS | {"request", "send"}
 _REQ_LINE = re.compile(r"^\s*([A-Za-z0-9._-]+)")
 
@@ -50,7 +52,7 @@ def collect(ctx: ScanContext) -> list[Fact]:
     for path in py_files:
         rel = ctx.rel(path)
         text = ctx.read_text(rel)
-        module = parse("python", text)
+        module = ctx.module(rel, "python")
         for t in module.types:
             for m in t.methods:
                 for ann, args in m.annotations.items():

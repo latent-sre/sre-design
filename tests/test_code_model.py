@@ -6,6 +6,29 @@ from __future__ import annotations
 from sre_kb.parsing import parse
 
 
+def test_scancontext_module_is_parsed_once_and_shared(tmp_path, monkeypatch):
+    """Every collector shares one parse per (file, language) via ctx.module — the Java collectors
+    alone otherwise re-parse each *.java up to ~5x per scan."""
+    import sre_kb.collectors.base as base
+
+    (tmp_path / "A.java").write_text("package p; class A { void go() {} }", encoding="utf-8")
+    ctx = base.ScanContext(root=tmp_path, repo="file://x")
+
+    calls = 0
+    real = base.parse
+
+    def counting(language, text):
+        nonlocal calls
+        calls += 1
+        return real(language, text)
+
+    monkeypatch.setattr(base, "parse", counting)
+    first = ctx.module("A.java", "java")
+    again = ctx.module("A.java", "java")
+    assert first is again      # same parsed object handed back
+    assert calls == 1          # parsed once despite repeated requests
+
+
 def test_java_scopes_each_class_separately():
     # the old _TYPE first-match bug attributed everything to the first class; the AST does not.
     src = """

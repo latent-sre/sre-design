@@ -213,8 +213,11 @@ def assemble_pr(
 
     findings = enforce_secret_gate(tree, allow=allow_secrets, skip_prefixes=(".sre/schemas",))
     if findings and allow_secrets:
-        # Explicit operator override: redact regex-detectable secrets rather than publish them raw.
+        # Explicit operator override: redact detected secrets rather than publish them raw, then
+        # re-gate. If anything survives redaction (e.g. a future detector with no redactor), fail
+        # closed — block the publish rather than leak a residual secret.
         redact_tree(tree)
+        enforce_secret_gate(tree, skip_prefixes=(".sre/schemas",))
     if dry_run:
         return tree, f"dry-run: staged PR tree at {tree} (would target {sre_repo})"
     ref = get_forge(forge, allowed_repos=allowed_repos).open_pr(

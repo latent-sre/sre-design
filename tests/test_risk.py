@@ -29,6 +29,18 @@ def test_severity_scales_with_breadth():
     assert assess(impacted_flows=3, data_loss=False, contained=True).severity == "high"
 
 
+def test_low_severity_is_never_emitted():
+    """A modelled dependency floors at medium (uncontained adds 3, contained adds 1), so 'low' is
+    unreachable by design — pin it so the dead branch can't silently reappear."""
+    severities = {
+        assess(impacted_flows=n, data_loss=dl, contained=c).severity
+        for n in (1, 2, 5)
+        for dl in (False, True)
+        for c in (False, True)
+    }
+    assert severities == {"medium", "high"}
+
+
 def test_rationale_is_explainable():
     r = assess(impacted_flows=2, data_loss=False, contained=False)
     assert "2 impacted flows" in r.rationale and "no bulkhead" in r.rationale

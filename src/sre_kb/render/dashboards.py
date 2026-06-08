@@ -9,6 +9,8 @@ those backends have no faithful RED dashboard dialect.
 
 from __future__ import annotations
 
+from sre_kb.render.alerts import _label_match
+
 _BURN_METRIC = "http_server_requests_seconds"  # Micrometer/Prometheus HTTP server timer base name
 
 
@@ -33,7 +35,7 @@ def red_panels(route: str | None, *, percentile=None, source: str = "prometheus"
     `query` for Prometheus, Grafana (Prometheus datasource), and Wavefront (WQL); a source without a
     faithful RED dialect yields panels with the metric but no query (honest: no fabricated dialect).
     """
-    uri = f'uri="{route}"' if route else ""
+    uri = _label_match("uri", route) if route else ""  # escaped, like the alert adapters
     phi = _pctl(percentile, 0.99)
     rate_q = err_q = dur_q = None
     if source in ("prometheus", "grafana"):
@@ -47,7 +49,7 @@ def red_panels(route: str | None, *, percentile=None, source: str = "prometheus"
             f"/ sum(rate({_BURN_METRIC}_count{tot_sel}[5m]))"
         )
     elif source == "wavefront":
-        flt = f'uri="{route}"' if route else ""
+        flt = _label_match("uri", route) if route else ""
 
         def _ts(metric: str, extra: str = "") -> str:
             clauses = " and ".join(c for c in (flt, extra) if c)

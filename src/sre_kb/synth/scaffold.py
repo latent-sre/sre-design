@@ -386,11 +386,17 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
     # error rate) and be scoped to the flow's own route, not measured service-wide.
     sli = (objective.attrs.get("sli") if objective else None) or "latency"
     threshold_ms = objective.attrs.get("thresholdMs") if objective else None
-    # A latency objective needs a concrete threshold to derive a bucket-based expr; without one
-    # we cannot form a correct alert, so skip rather than burn on the wrong signal.
-    if objective and slo_ref and flow and (sli != "latency" or threshold_ms is not None):
-        target = objective.attrs.get("target")
-        budget_frac = round((100 - float(target)) / 100, 6) if target is not None else 0.01
+    target = objective.attrs.get("target") if objective else None
+    budget_frac = round((100 - float(target)) / 100, 6) if target is not None else 0.01
+    # A latency objective needs a concrete threshold to derive a bucket-based expr, AND the SLO must
+    # leave a positive error budget — a 100% (or out-of-range) target yields budget <= 0, whose
+    # burn-rate threshold would be `> 0` and page on a single request. Skip rather than emit a
+    # wrong-signal or pager-storm alert.
+    if (
+        objective and slo_ref and flow
+        and (sli != "latency" or threshold_ms is not None)
+        and 0 < budget_frac < 1
+    ):
         uri = (flow.attrs.get("trigger") or {}).get("path")
         pct = objective.attrs.get("percentile")
         expr, numerator = burn_rate_expr(sli, threshold_ms, budget_frac, uri, alert_tools, pct)

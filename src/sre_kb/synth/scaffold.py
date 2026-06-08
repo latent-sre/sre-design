@@ -6,6 +6,7 @@ from sre_kb.collectors.base import ScanContext
 from sre_kb.config import load_config
 from sre_kb.models.facts import FactSet
 from sre_kb.render.alerts import (
+    BURN_WINDOWS,
     BurnRateIntent,
     LogPatternIntent,
     effective_severity,
@@ -21,6 +22,26 @@ from sre_kb.synth.emit import emit as _doc
 from sre_kb.synth.inventory import inventory_docs
 from sre_kb.tiers import AST
 from sre_kb.util import member_of, slug
+
+
+def _burn_rate_summary(slo_ref: str, sli: str, budget_frac: float) -> dict:
+    """Human-readable burn-rate summary for the Alert spec. Windows and multipliers are derived from
+    the single source of truth (alerts.BURN_WINDOWS) so this summary can't desync from the rendered
+    PromQL — the multipliers used to be re-typed (14.4/6) here (#M3). shortWindow/longWindow are the
+    fast (short-term) and slow (long-term) rate windows; each factor is that rate's multiplier scaled
+    by the error budget."""
+    rates = {key: (long_w, short_w, mult) for key, long_w, short_w, mult in BURN_WINDOWS}
+    fast_long, _, fast_mult = rates["fast"]
+    slow_long, _, slow_mult = rates["slow"]
+    return {
+        "sloRef": slo_ref,
+        "sli": "latency" if sli == "latency" else "availability",
+        "shortWindow": fast_long,
+        "longWindow": slow_long,
+        "shortFactor": round(fast_mult * budget_frac, 6),
+        "longFactor": round(slow_mult * budget_frac, 6),
+        "budgetFraction": budget_frac,
+    }
 
 
 def _configured_alert_tools() -> tuple[str, ...] | None:
@@ -433,15 +454,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                         "metric": "http_server_requests_seconds",
                         "description": numerator,
                     },
-                    "burnRate": {
-                        "sloRef": slo_ref,
-                        "sli": "latency" if sli == "latency" else "availability",
-                        "shortWindow": "1h",
-                        "longWindow": "6h",
-                        "shortFactor": round(14.4 * budget_frac, 6),
-                        "longFactor": round(6 * budget_frac, 6),
-                        "budgetFraction": budget_frac,
-                    },
+                    "burnRate": _burn_rate_summary(slo_ref, sli, budget_frac),
                     "renderTargets": rendered_targets(expr),
                 },
                 [objective.evidence] + ([slo.evidence] if slo else []),

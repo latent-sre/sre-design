@@ -68,7 +68,10 @@ _SIGNATURES: dict[str, Signature] = {
                 r"\bTimeout(?:Async)?\s*\(",
                 r"\b(?:connect|read|response)Timeout\b",
                 r"resilience4j\.timelimiter",
-                r"\btimeout\s*=",  # Python httpx/requests kwarg; also Polly/Java fluent `Timeout =`
+                # Python httpx/requests kwarg; Polly/Java fluent `Timeout =`. Must denote an ENABLED
+                # timeout: a refute is a silent drop, so firing on a *disabled* `timeout = 0/None/
+                # null/false` would hide a real missing-timeout gap. `0.5`/`30`/`Duration...` fire.
+                r"\btimeout\s*=\s*(?!0(?![.\d])|none\b|null\b|false\b)\S",
             ),
         ),
         Signature(

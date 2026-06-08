@@ -54,6 +54,7 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
         roots[ctx.repo] = root
 
     docs = build_estate(services)
+    layout.reset_kb()  # re-run under the same run-id must not leak stale estate artifacts
     by_status: dict[str, int] = {}
     records = []
     for d in docs:

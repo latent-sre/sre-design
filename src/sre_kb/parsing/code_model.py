@@ -116,6 +116,24 @@ def _descend(n: Node | None, types: set[str]):
         yield from _descend(c, types)
 
 
+_NESTED_TRY = {"try_statement"}
+
+
+def _descend_outside(n: Node | None, types: set[str], stop: set[str]):
+    """Like `_descend`, but never recurse into a subtree whose root type is in `stop`. Used so a
+    nested try/catch's throw or log statement isn't attributed to the *enclosing* catch — judging an
+    outer catch's rethrow/log on an inner catch's statements both missed real swallows and
+    mis-cited others (#M6)."""
+    if n is None:
+        return
+    if n.type in types:
+        yield n
+    for c in n.children:
+        if c.type in stop:
+            continue
+        yield from _descend_outside(c, types, stop)
+
+
 def _last_ident(node: Node, src: bytes) -> str:
     if node.type == "identifier":
         return _txt(node, src)
@@ -151,9 +169,9 @@ def _enclosing_swallow(inv: Node, src: bytes) -> Swallow | None:
                     cbody = catch.child_by_field_name("body") or next(
                         (c for c in catch.children if c.type == "block"), catch
                     )
-                    if next(_descend(cbody, _THROW), None) is not None:
-                        continue  # this catch rethrows -> not swallowed here
-                    for c in _descend(cbody, _INVOKE):
+                    if next(_descend_outside(cbody, _THROW, _NESTED_TRY), None) is not None:
+                        continue  # this catch rethrows -> not swallowed here (ignore nested try/catch)
+                    for c in _descend_outside(cbody, _INVOKE, _NESTED_TRY):
                         recv, meth = _call_rm(c, src)
                         if _is_log_call(recv, meth):
                             a = _str_args(c.child_by_field_name("arguments"), src)
@@ -275,7 +293,9 @@ def _cs_anns(node: Node, src: bytes) -> dict[str, dict[str, str]]:
 
 def _cs_fields(body: Node, src: bytes) -> dict[str, str]:
     fields: dict[str, str] = {}
-    for fd in _descend(body, {"field_declaration"}):
+    # Direct children only (like the Java collector): a nested class's fields belong to the nested
+    # TypeDecl that the top-level descent yields separately, not to this enclosing type (#M5).
+    for fd in (c for c in body.children if c.type == "field_declaration"):
         vd = next((c for c in fd.children if c.type == "variable_declaration"), None)
         if not vd:
             continue
@@ -302,8 +322,8 @@ def _parse_csharp(root: Node, src: bytes) -> Module:
             name=_txt(name, src) if name else "?", kind=t.type.split("_")[0],
             supertypes=[_txt(b, src) for b in _descend(bases, {"identifier", "generic_name"})] if bases else [],
             annotations=_cs_anns(t, src), fields=_cs_fields(body, src) if body else {},
-            methods=[_method(m, src, _cs_anns)
-                     for m in _descend(body, {"method_declaration", "constructor_declaration"})] if body else [],
+            methods=[_method(m, src, _cs_anns) for m in body.children
+                     if m.type in ("method_declaration", "constructor_declaration")] if body else [],
             start=t.start_point[0] + 1, end=t.end_point[0] + 1,
         ))
     return Module(ns, types)
@@ -360,9 +380,9 @@ def _py_enclosing_swallow(call: Node, src: bytes) -> Swallow | None:
             if body and body.start_byte <= call.start_byte < body.end_byte:
                 for exc in (c for c in node.children if c.type == "except_clause"):
                     eblock = next((c for c in exc.children if c.type == "block"), exc)
-                    if next(_descend(eblock, {"raise_statement"}), None) is not None:
-                        continue  # this except re-raises -> not swallowed here
-                    for c in _descend(eblock, {"call"}):
+                    if next(_descend_outside(eblock, {"raise_statement"}, _NESTED_TRY), None) is not None:
+                        continue  # this except re-raises -> not swallowed here (ignore nested try)
+                    for c in _descend_outside(eblock, {"call"}, _NESTED_TRY):
                         recv, meth = _py_call_rm(c, src)
                         if _is_log_call(recv, meth):
                             a = _py_str_args(c.child_by_field_name("arguments"), src)

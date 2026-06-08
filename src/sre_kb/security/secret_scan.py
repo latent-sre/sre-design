@@ -70,8 +70,11 @@ _SUPPRESSIBLE = {
     "azure-storage-key",
 }
 _PLACEHOLDER = re.compile(
-    r"(?i)(your[-_ ]|placeholder|example|change[-_ ]?me|x{4,}|\.\.\.|replace|"
-    r"<[a-z._-]+>|\$\{|\{\{|todo|dummy|sample|redacted|\*{3,}|here)"
+    # Marker words are delimited by non-letters (so REPLACE_ME / a digit-suffixed marker still
+    # count) but must NOT sit inside a longer word — `exampleButRealToken` is a real secret, not a
+    # placeholder. `here` was removed: far too common to suppress a real value ending in it (#H1).
+    r"(?i)(your[-_ ]|change[-_ ]?me|x{4,}|\.\.\.|<[a-z._-]+>|\$\{|\{\{|\*{3,}|"
+    r"(?<![a-z])(?:placeholder|example|replace|todo|dummy|sample|redacted)(?![a-z]))"
 )
 _SECRETISH_MARKERS = (
     "password",
@@ -147,9 +150,13 @@ def scan_text(text: str, path: str) -> list[dict]:
     findings: list[dict] = []
     for i, line in enumerate(text.splitlines(), 1):
         for rule, pat in _RULES:
-            if not pat.search(line):
+            m = pat.search(line)
+            if not m:
                 continue
-            if rule in _SUPPRESSIBLE and _PLACEHOLDER.search(line):
+            # Suppress only when the placeholder marker is inside the matched secret itself — not
+            # merely elsewhere on the line. A comment or key word ("...change me later") must never
+            # mask a real value, and a value containing a common word ("...Here") is not a placeholder.
+            if rule in _SUPPRESSIBLE and _PLACEHOLDER.search(m.group()):
                 continue
             findings.append({"path": path, "line": i, "rule": rule})
 
@@ -285,6 +292,22 @@ def _redact_secretish_values(core: str) -> tuple[str, int]:
     return _KV_RE.sub(repl, core), count
 
 
+def _redact_suppressible(pat: re.Pattern, core: str) -> tuple[str, int]:
+    """Redact each match of a suppressible rule unless the matched secret is itself a placeholder —
+    match-scoped, so a placeholder word elsewhere on the line can't shield a real value (mirrors
+    the suppression scope in scan_text)."""
+    n = 0
+
+    def repl(m: re.Match) -> str:
+        nonlocal n
+        if _PLACEHOLDER.search(m.group()):
+            return m.group()
+        n += 1
+        return _REDACTION
+
+    return pat.sub(repl, core), n
+
+
 def redact_text(text: str) -> tuple[str, int]:
     """Replace detected secrets with a placeholder, preserving line structure.
 
@@ -301,11 +324,11 @@ def redact_text(text: str) -> tuple[str, int]:
             core, eol = core[:-2], "\r\n"
         elif core.endswith("\n"):
             core, eol = core[:-1], "\n"
-        suppress = bool(_PLACEHOLDER.search(core))
         for rule, pat in _RULES:
-            if rule in _SUPPRESSIBLE and suppress:
-                continue
-            core, n = pat.subn(_REDACTION, core)
+            if rule in _SUPPRESSIBLE:
+                core, n = _redact_suppressible(pat, core)
+            else:
+                core, n = pat.subn(_REDACTION, core)
             count += n
         core, n = _redact_entropy_tokens(core)
         count += n

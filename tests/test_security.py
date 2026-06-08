@@ -217,3 +217,40 @@ def test_render_guardrails_sanitize_injected_values():
     rb = runbook_markdown(
         {"metadata": {"name": "r"}, "spec": {"remediation": ["step one\n- rm -rf / now", "two"]}}, None)
     assert "\n- rm -rf / now" not in rb           # newline-injected fake list item flattened
+
+
+# --------------------------------------------------------------- recall: placeholder must not bypass
+
+
+def test_secret_scan_recall_value_containing_common_word():
+    """Regression for the placeholder-substring bypass (#H1): a real secret whose VALUE merely
+    contains a common word ('here'/'example'/'sample' as a substring) must still be flagged — the
+    publish gate is fail-closed, so a missed positive is a leak."""
+    for value in ("RealSecretValueHere", "exampleButRealToken99", "MyS4mpleLookingRealKey"):
+        findings = scan_text(f'password = "{value}"', "app.yml")
+        assert any(f["rule"] == "assigned-secret" for f in findings), value
+
+
+def test_placeholder_elsewhere_on_line_does_not_mask_real_value():
+    """A placeholder word in a comment/key must not suppress a real secret in the value — suppression
+    is scoped to the matched secret span, not the whole line."""
+    findings = scan_text('password = "hunter2RealValue"  # TODO: change me later', "app.yml")
+    assert any(f["rule"] == "assigned-secret" for f in findings)
+
+
+def test_genuine_placeholders_still_suppressed():
+    """Real placeholder values still produce no finding, so reviewers aren't flooded with noise."""
+    for line in ('password = "<your-password-here>"', 'token = "xxxxxxxx"',
+                 'api_key = "REPLACE_ME"', 'secret = "changeme"'):  # pragma: allowlist secret
+        assert scan_text(line, "app.yml") == [], line
+
+
+def test_redaction_scrubs_value_with_common_word_and_is_idempotent():
+    """The H1 value is actually scrubbed by redact (the --allow-secrets path), and re-redacting a
+    redacted line is a no-op (the redaction marker is itself placeholder-shaped)."""
+    from sre_kb.security.secret_scan import redact_text
+
+    redacted, n = redact_text('password = "RealSecretValueHere"')
+    assert n >= 1 and "RealSecretValueHere" not in redacted
+    again, n2 = redact_text(redacted)
+    assert again == redacted and n2 == 0

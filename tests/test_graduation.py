@@ -136,3 +136,27 @@ def test_cli_graduation_candidates_empty(tmp_path):
     r = runner.invoke(app, ["graduation-candidates", "--target", str(tmp_path)])
     assert r.exit_code == 0
     assert "no gap confirmations recorded yet" in r.stdout
+
+
+def test_save_is_atomic_and_preserves_prior_on_failure(tmp_path, monkeypatch):
+    """#M7: a crash mid-save must not truncate the tracker (load treats a corrupt file as empty,
+    silently discarding the tally). The prior file stays intact and no temp file leaks."""
+    import sre_kb.graduation.state as st
+
+    t = GraduationTracker()
+    t.confirm("missing-timeout")
+    t.save(tmp_path)
+
+    def boom(*a, **k):
+        raise RuntimeError("disk full mid-write")
+
+    monkeypatch.setattr(st.yaml, "safe_dump", boom)
+    t.confirm("missing-timeout")  # in-memory now 2
+    try:
+        t.save(tmp_path)
+    except RuntimeError:
+        pass
+
+    reloaded = GraduationTracker.load(tmp_path)
+    assert reloaded.categories["missing-timeout"].confirmed == 1  # prior tally intact, not lost
+    assert not list((tmp_path / ".sre").glob(".graduation-*.tmp"))  # no temp leak

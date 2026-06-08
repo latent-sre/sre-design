@@ -98,7 +98,11 @@ def test_burn_rate_alert_carries_adopted_intent(result):
     assert spec["signal"]["type"] == "metric" and spec["signal"]["route"]
     br = spec["burnRate"]
     assert br["sli"] == "latency" and br["sloRef"] == "create-order-latency"
+    # #M3: short/long windows (fast/slow rate) and factors are derived from BURN_WINDOWS, not
+    # re-typed magic numbers — so the summary can't desync from the rendered PromQL.
     assert br["shortWindow"] == "1h" and br["longWindow"] == "6h"
+    assert br["shortFactor"] == round(14.4 * br["budgetFraction"], 6)
+    assert br["longFactor"] == round(6.0 * br["budgetFraction"], 6)
     # renderTargets honestly reflects only the backends that actually rendered (Splunk has no
     # burn-rate, so it's excluded).
     assert "prometheus" in spec["renderTargets"] and "splunk" not in spec["renderTargets"]

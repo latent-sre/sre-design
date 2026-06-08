@@ -76,3 +76,19 @@ def test_apply_reports_unknown_artifact(tmp_path):
     _run(tmp_path)
     summary = apply_verdicts(_layout(tmp_path), {"verdicts": [{"artifact": "Runbook/ghost", "verdict": "supported"}]})
     assert summary[0]["result"] == "not-found"
+
+
+def test_apply_verdicts_is_idempotent_on_rerun(tmp_path):
+    """#M2: challenge-apply is a re-runnable step; re-applying the same verdict must not duplicate
+    the persisted challengeVerdicts audit trail."""
+    _run(tmp_path)
+    layout = _layout(tmp_path)
+    data = {"verdicts": [{"artifact": ALERT, "claimId": "alert/appropriate",
+                          "verdict": "supported", "reason": "ok"}]}
+    apply_verdicts(layout, data)
+    apply_verdicts(layout, data)  # re-run
+    doc = yaml.safe_load(
+        (layout.root / "kb" / "needs-review" / "Alert" / "order-created-publish-failures.yaml").read_text()
+    )
+    entries = [e for e in doc["challengeVerdicts"] if e["claimId"] == "alert/appropriate"]
+    assert len(entries) == 1, "re-running challenge-apply duplicated the verdict"

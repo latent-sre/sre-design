@@ -41,9 +41,13 @@ def apply_verdicts(layout: RunLayout, data: dict) -> list[dict]:
         path, doc = entry
         old = doc.get("status", "needs-review")
         new, notes = apply_challenge_gating(old, verdicts)
-        doc.setdefault("challengeVerdicts", []).extend(
-            {"claimId": v.claim_id, "verdict": v.verdict, "reason": v.reason} for v in verdicts
-        )
+        # Idempotent: challenge-apply is a re-runnable human-in-the-loop step, so merge verdicts by
+        # claimId (latest wins) instead of blindly appending — re-running must not duplicate the
+        # audit trail. Gating is monotonic regardless; this keeps the persisted record honest.
+        merged = {e.get("claimId"): e for e in doc.get("challengeVerdicts", [])}
+        for v in verdicts:
+            merged[v.claim_id] = {"claimId": v.claim_id, "verdict": v.verdict, "reason": v.reason}
+        doc["challengeVerdicts"] = list(merged.values())
         doc["status"] = new
         dest = _dest_dir(layout, new, kind) / f"{name}.yaml"
         dest.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8")

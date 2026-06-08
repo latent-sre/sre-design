@@ -241,7 +241,7 @@ def test_placeholder_elsewhere_on_line_does_not_mask_real_value():
 def test_genuine_placeholders_still_suppressed():
     """Real placeholder values still produce no finding, so reviewers aren't flooded with noise."""
     for line in ('password = "<your-password-here>"', 'token = "xxxxxxxx"',
-                 'api_key = "REPLACE_ME"', 'secret = "changeme"'):
+                 'api_key = "REPLACE_ME"', 'secret = "changeme"'):  # pragma: allowlist secret
         assert scan_text(line, "app.yml") == [], line
 
 

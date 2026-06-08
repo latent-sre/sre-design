@@ -407,4 +407,10 @@ def collect(
     path = proposals_path or (ctx.root / PROPOSALS_REL)
     if not path.exists():
         return GapResult()
-    return collect_from_proposals(ctx, load_proposals(path), max_candidates=max_candidates)
+    try:
+        proposals = load_proposals(path)
+    except (json.JSONDecodeError, OSError):
+        return GapResult()  # a malformed proposals file is self-gated to "no proposals", like the
+        # YAML collectors — it must not abort the whole scan (load_proposals stays strict for the
+        # validate CLI, which wants to surface a broken file).
+    return collect_from_proposals(ctx, proposals, max_candidates=max_candidates)

@@ -293,7 +293,9 @@ def _cs_anns(node: Node, src: bytes) -> dict[str, dict[str, str]]:
 
 def _cs_fields(body: Node, src: bytes) -> dict[str, str]:
     fields: dict[str, str] = {}
-    for fd in _descend(body, {"field_declaration"}):
+    # Direct children only (like the Java collector): a nested class's fields belong to the nested
+    # TypeDecl that the top-level descent yields separately, not to this enclosing type (#M5).
+    for fd in (c for c in body.children if c.type == "field_declaration"):
         vd = next((c for c in fd.children if c.type == "variable_declaration"), None)
         if not vd:
             continue
@@ -320,8 +322,8 @@ def _parse_csharp(root: Node, src: bytes) -> Module:
             name=_txt(name, src) if name else "?", kind=t.type.split("_")[0],
             supertypes=[_txt(b, src) for b in _descend(bases, {"identifier", "generic_name"})] if bases else [],
             annotations=_cs_anns(t, src), fields=_cs_fields(body, src) if body else {},
-            methods=[_method(m, src, _cs_anns)
-                     for m in _descend(body, {"method_declaration", "constructor_declaration"})] if body else [],
+            methods=[_method(m, src, _cs_anns) for m in body.children
+                     if m.type in ("method_declaration", "constructor_declaration")] if body else [],
             start=t.start_point[0] + 1, end=t.end_point[0] + 1,
         ))
     return Module(ns, types)

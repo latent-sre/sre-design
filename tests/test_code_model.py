@@ -159,3 +159,27 @@ def test_nested_try_catch_not_attributed_to_enclosing_catch():
     )
     save = next(c for m in parse("java", src_b).types[0].methods for c in m.calls if c.method == "save")
     assert save.swallow is None
+
+
+def test_csharp_nested_class_members_not_attributed_to_outer():
+    """#M5: C# method/field extraction is direct-children-only (like Java), so a nested class's
+    members belong to the nested TypeDecl, not the enclosing one (was double-attributed via _descend)."""
+    from sre_kb.parsing import parse
+
+    src = (
+        "namespace A {\n"
+        "  public class Outer {\n"
+        "    private readonly Foo foo;\n"
+        "    public void Handle() { foo.Do(); }\n"
+        "    class Nested {\n"
+        "      private readonly Bar bar;\n"
+        "      public void Inner() { bar.Go(); }\n"
+        "    }\n"
+        "  }\n"
+        "}\n"
+    )
+    types = {t.name: t for t in parse("csharp", src).types}
+    assert [m.name for m in types["Outer"].methods] == ["Handle"]
+    assert list(types["Outer"].fields) == ["foo"]
+    assert [m.name for m in types["Nested"].methods] == ["Inner"]
+    assert list(types["Nested"].fields) == ["bar"]

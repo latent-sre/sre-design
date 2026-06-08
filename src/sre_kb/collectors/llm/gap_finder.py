@@ -78,6 +78,21 @@ _CONFIRMING_SIGNATURE = {"undocumented-job": "scheduled"}
 _JUDGMENT_CATEGORIES = {"data-loss-path", "missing-idempotency", "unbounded-resource",
                         "missing-backpressure", "missing-load-shedding"}
 
+# Judgment-call gaps reason about CROSS-STACK mechanisms — the backpressure/load-shed vocab in
+# `signatures.py` fires on Go buffered channels (`make(chan …, n)`), Node `highWaterMark`, and
+# nginx/envoy `limit_req`/`limit_conn`. Those anchors live outside the Java/C#/Python source globs,
+# so without widening the locate universe a real cross-stack gap is dropped `unlocatable` before it
+# ever reaches the oracle (#42). Re-derivation stays safe for these stacks: the engine can't parse
+# them into types, so the judgment refuter abstains (`_enclosing_type` returns None) and the gap
+# routes to human/oracle review rather than risking a false refute that silently drops a real gap
+# (§9.5 ⑤). Confirmation/refutation categories keep the parseable-only globs — they need an AST probe
+# at the pointer, so locating an anchor they can't re-derive would only locate-then-drop.
+_JUDGMENT_GLOBS = _SOURCE_GLOBS + (
+    "*.go",                                              # Go (buffered channels, semaphores)
+    "*.js", "*.mjs", "*.cjs", "*.ts", "*.tsx", "*.jsx",  # Node / TypeScript (stream highWaterMark)
+    "*.conf",                                            # nginx / envoy directives (limit_req/limit_conn)
+)
+
 # A judgment call can't be CONFIRMED by a probe, but if its mechanism is already PRESENT in scope the
 # gap plainly doesn't hold — these categories refute (drop, never reaching the oracle) when the shared
 # signature fires at the cited location. Only categories with a deterministic positive signature
@@ -358,7 +373,12 @@ def collect_from_proposals(
     res = GapResult()
     survivors: list[tuple[Outcome, Fact]] = []
     for p in proposals:
-        globs = _OBSERVABILITY_GLOBS if p.category in _OBSERVABILITY_CATEGORIES else _SOURCE_GLOBS
+        if p.category in _OBSERVABILITY_CATEGORIES:
+            globs = _OBSERVABILITY_GLOBS  # coverage lives in config/build files
+        elif p.category in _JUDGMENT_CATEGORIES:
+            globs = _JUDGMENT_GLOBS  # cross-stack mechanisms (Go/Node/nginx), #42
+        else:
+            globs = _SOURCE_GLOBS  # confirm/refute probes need a parseable AST at the pointer
         loc = _locate(ctx, p.anchor, globs)
         if loc is None:
             res.outcomes.append(Outcome(p, "unlocatable", note="anchor not found verbatim in the source"))

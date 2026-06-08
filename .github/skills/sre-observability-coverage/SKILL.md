@@ -1,12 +1,14 @@
 ---
 name: sre-observability-coverage
-version: 0.1.0
 description: >-
   Tier-B (LLM) observability-coverage gap-finder (HYBRID-PLAN R6). Score a service's
   metrics / logs / traces / synthetics posture covered|partial|missing and propose the missing
   pillars as byte-anchored gaps; the engine refutes each against its own observability facts (a
   pillar the facts already prove present is dropped) and routes survivors to review. Nothing
   auto-verifies.
+allowed-tools: ["codebase", "search", "editFiles"]
+metadata:
+  version: 0.1.0
 ---
 
 # sre-observability-coverage

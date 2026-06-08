@@ -1,12 +1,14 @@
 ---
 name: sre-gap-finder
-version: 0.1.0
 description: >-
   Tier-B (LLM) gap-finder — the recall booster of HYBRID-PLAN §7.9. Read the engine's resiliency
   facts + the code and propose resiliency gaps the AST missed (e.g. a critical client call with no
   timeout), as byte-anchored pointers the engine then locates, stamps, and re-derives, refutes, or
   routes to review. Refutation/judgment proposals never auto-verify; confirmation proposals can
   graduate only when the engine reproduces the rule at the pointer.
+allowed-tools: ["codebase", "search", "editFiles"]
+metadata:
+  version: 0.1.0
 ---
 
 # sre-gap-finder

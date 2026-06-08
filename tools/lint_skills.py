@@ -5,6 +5,13 @@ Rules (small on purpose — the schemas/engine do the heavy lifting):
   * every skill dir has a SKILL.md with a YAML frontmatter block,
   * `name` is present and equals the directory name,
   * `description` is present and 10..1024 chars,
+  * `allowed-tools` is present and is an inline list of known tool names. The skills
+    process untrusted target repos, so every skill declares its tool surface explicitly
+    (least privilege). This is a house rule stricter than the GitHub spec (where
+    `allowed-tools` is optional); it keeps the read-only consumer skills and the
+    command-capable authoring skills from drifting into an undeclared tool surface.
+  * a `version`, if present, lives under `metadata` (`metadata: {version: ...}`), never
+    as a top-level key, matching docs/DESIGN.md and the GitHub Agent Skills shape,
   * every skill appears exactly once in skills/pipeline.yaml, and vice versa.
 
 stdlib only; exits non-zero on any problem so CI/tests block.
@@ -12,6 +19,7 @@ stdlib only; exits non-zero on any problem so CI/tests block.
 
 from __future__ import annotations
 
+import json
 import pathlib
 import sys
 
@@ -19,6 +27,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 SKILLS = ROOT / ".github" / "skills"
 PIPELINE = SKILLS / "pipeline.yaml"
 _RESERVED = {"_shared"}
+
+# VS Code / Copilot built-in tool names the skills may request. Tight on purpose: an
+# allowlist catches typos (`runCommand` vs `runCommands`) and forces a conscious edit here
+# when a skill genuinely needs a new capability.
+_KNOWN_TOOLS = {"codebase", "search", "editFiles", "runCommands"}
 
 
 def _frontmatter(text: str) -> dict[str, str]:
@@ -61,6 +74,24 @@ def _pipeline_skills() -> set[str]:
     return out
 
 
+def _lint_tools(name: str, raw: str | None) -> list[str]:
+    """Validate a skill's `allowed-tools` declaration (required, inline list, known names)."""
+    if raw is None:
+        return [f"{name}: missing `allowed-tools` -- declare the tool surface explicitly, "
+                f"e.g. allowed-tools: [\"codebase\", \"search\"]"]
+    try:
+        tools = json.loads(raw)
+    except json.JSONDecodeError:
+        return [f"{name}: allowed-tools must be an inline list, e.g. [\"codebase\", \"search\"]"]
+    if not isinstance(tools, list) or not tools:
+        return [f"{name}: allowed-tools must be a non-empty inline list"]
+    unknown = [t for t in tools if t not in _KNOWN_TOOLS]
+    if unknown:
+        return [f"{name}: unknown tool(s) {sorted(unknown)} in allowed-tools "
+                f"(known: {sorted(_KNOWN_TOOLS)})"]
+    return []
+
+
 def lint() -> list[str]:
     problems: list[str] = []
     if not SKILLS.is_dir():
@@ -79,6 +110,12 @@ def lint() -> list[str]:
         desc = fm.get("description", "")
         if not (10 <= len(desc) <= 1024):
             problems.append(f"{d.name}: description must be 10..1024 chars (got {len(desc)})")
+        if "version" in fm:
+            problems.append(
+                f"{d.name}: top-level `version` is not allowed -- nest it under `metadata` "
+                "(`metadata:` then `  version: ...`)"
+            )
+        problems.extend(_lint_tools(d.name, fm.get("allowed-tools")))
     pipeline = _pipeline_skills()
     if not PIPELINE.is_file():
         if names:  # the manifest is canonical and required once any skill exists

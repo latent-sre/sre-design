@@ -1,6 +1,5 @@
 ---
 name: sre-criticality
-version: 0.1.0
 description: >-
   Tier-B (LLM) criticality assessor — the prompt half of the Criticality reliability spine
   (HYBRID-PLAN Round-3 R1–R3). Propose a service's criticality tier, business criticality, and data
@@ -8,6 +7,9 @@ description: >-
   is re-derived deterministically from PII/PCI signatures; tier/businessCriticality are judgment and
   land needs-review. A proposed tier never feeds the deterministic alert severity floor — only a
   byte-grounded declaration does.
+allowed-tools: ["codebase", "search", "editFiles"]
+metadata:
+  version: 0.1.0
 ---
 
 # sre-criticality

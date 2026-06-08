@@ -45,7 +45,7 @@ network/synthetic).
 ## Implementation status (June 2026)
 
 The design below is the full intent; this section records what is **built and tested
-offline** today (261 tests, ruff-clean). The vertical slice and the items earlier marked
+offline** today (343 tests, ruff-clean). The vertical slice and the items earlier marked
 "deferred to P3/P4" are now implemented. The forward roadmap — trust tiers and fenced LLM
 (Tier-B) collectors — lives in [`HYBRID-PLAN.md`](HYBRID-PLAN.md), the **single source of truth for
 live status** (§8 the tracker, §9 the rolling reassessment); this summary is high-level — when it and

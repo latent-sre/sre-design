@@ -421,10 +421,10 @@ A concrete first Tier-B collector, so Phase 4 has an instance, not just a catego
 
 ---
 
-## 8. Implementation status (2026-06-07)
+## 8. Implementation status (2026-06-08)
 
-Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **261 tests
-passing, ruff-clean** (re-verified at `main` `1dec77d`). Every claim below was re-verified at
+Tracked against the §6 phase table. Legend: ✅ done · 🟡 partial · ⬜ not started. **343 tests
+passing, ruff-clean** (re-verified at `main` `c360af9`). Every claim below was re-verified at
 file:line — no drift; corrections were *additions* for behaviors the code had but this section
 under-documented (folded in where they belong).
 
@@ -436,7 +436,7 @@ status-authority note at the top):
 |---|---|---|---|
 | Phases 0–3 | trust tiers · hardening · status-aware spine · challenge loop | ✅ | |
 | Phase 4 | Tier-B gap-finder, wired into `run` | ✅ | |
-| Phase 5 | render-adapter breadth | 🟡 4/6 backends (prom/splunk/wavefront/appd) | |
+| Phase 5 | render-adapter breadth | ✅ 6/6 backends (prom/splunk/wavefront/appd/grafana/thousandeyes) | |
 | §7.1–7.6 | tier-conflict findings · tier-aware guardrails · adversarial corpus · shared signatures · trust surfacing · schema governance | ✅ | |
 | R1–R3 | `Criticality` kind · severity floor · `sre-criticality` skill | ✅ | #24 |
 | R5 | Tier-A parameter-completeness gaps | ✅ | #24 |
@@ -445,10 +445,11 @@ status-authority note at the top):
 | N2 | multi-window/multi-burn-rate alerts (long **and** short window) | ✅ | #26 |
 | N3 | `bulkhead` / `rate-limit` / `idempotency` signatures | ✅ | #26 |
 | R6 | observability-coverage Tier-B skill + refutation probe | ⬜ | |
-| R7 | grafana + thousandeyes adapters | ⬜ | |
-| R8 | supply-chain (`--require-hashes` + Renovate digest-pin + `detect-secrets`) | ⬜ | |
-| N4 | central `taxonomy.yaml` + severity-vocab reconciliation | ⬜ | |
-| infra | full scan/publish credential split (§9.3 #5) | ⬜ | gate before live publish |
+| R7 | grafana + thousandeyes adapters | ✅ 6/6 | |
+| R8 | supply-chain (`--require-hashes` + Renovate digest-pin + `detect-secrets`) | 🟡 offline wheel done; rest open | |
+| N4 | central `taxonomy.yaml` + severity-vocab reconciliation | ✅ | #37 |
+| N5 | inventory signatures · load-shed/backpressure probes · findings narrative | ✅ | #38–41 |
+| infra | full scan/publish credential split (§9.3 #5) | 🟡 scan role done; publish role + CI open | gate before live publish |
 
 The per-phase detail below remains the authoritative narrative for each ✅.
 
@@ -580,7 +581,7 @@ Integration into the main `run` pipeline is **done** (§9.3 item 1): `run` auto-
 `.sre/gap-proposals.json` and routes survivors through the shared gate; the standalone
 `sre-kb gap-finder` CLI remains for proposals-only runs.
 
-### Phase 5 🟡 (render-adapter breadth, started)
+### Phase 5 ✅ (render-adapter breadth)
 
 The neutral-intent → adapter seam is in (`render/alerts.py`): an `Alert`'s `spec.expr` is built from a
 tool-neutral `BurnRateIntent`/`LogPatternIntent` and rendered through per-backend adapters, selected
@@ -884,9 +885,10 @@ reviews. Completion is tracked in the §8 table; the rationale lives here.
   metrics/logs/traces/synthetics `covered|partial|missing` and proposes coverage gaps; the engine
   refutes against our existing `Observability` facts (a claimed-missing signal the facts show is
   present is dropped). Logging posture folds in as an input signal, not a separate skill.
-- **R7 — `grafana` + `thousandeyes` alert adapters.** Backend parity (4/6 → 6/6) via the existing
-  neutral-intent → adapter seam: lift their template *structure*, feed our deterministically generated
-  query (never their LLM-supplied `signal.query`). See §9.6 lift action #2.
+- **R7 — `grafana` + `thousandeyes` alert adapters. ✅ Done.** Backend parity reached 6/6 via the
+  neutral-intent → adapter seam (`render/alerts.py` `_grafana_burn`/`_grafana_log`/`_thousandeyes_burn`):
+  the engine lifts each backend's template *structure* and feeds its own deterministically generated
+  query, never an LLM-supplied `signal.query`. See §9.6 lift action #2.
 - **R8 — supply-chain hardening.** ✅ **offline wheel landed** — `make offline-wheel` /
   `scripts/build-offline.sh` builds a self-contained wheelhouse (engine + every runtime dep; schemas +
   config ship as package data). Still open: `--require-hashes` lockfile + Renovate digest-pin of

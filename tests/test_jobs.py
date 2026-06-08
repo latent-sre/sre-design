@@ -45,6 +45,19 @@ def test_both_scheduled_jobs_detected(result):
     assert poll["jobType"] == "scheduled" and poll["schedule"] == "fixedRate=60000"
 
 
+def test_positional_scheduled_value_is_cron_only_when_cron_shaped():
+    """A bare positional @Scheduled("...") is meaningful only as a cron expr; anything else carries
+    no usable schedule rather than being mislabelled as a fixed rate."""
+    from sre_kb.collectors.java_spring.jobs import _schedule
+
+    assert _schedule({"": "0 0 2 * * *"}) == ("cron", "0 0 2 * * *")  # cron-shaped -> cron
+    assert _schedule({"": "everyNight"}) == ("scheduled", "")          # not cron -> no schedule
+    assert _schedule({"": ""}) == ("scheduled", "")                    # empty -> no schedule
+    # named attributes still win
+    assert _schedule({"cron": "* * * * * *"}) == ("cron", "* * * * * *")
+    assert _schedule({"fixedRate": "60000"}) == ("scheduled", "fixedRate=60000")
+
+
 def test_scheduled_jobs_are_tier_a_verified_and_grounded(result):
     jobs = _jobs(result.root)
     cron = jobs["invoice-jobs-nightly-invoice-run"]

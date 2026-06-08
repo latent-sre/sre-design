@@ -8,11 +8,20 @@ signature) so this collector is self-contained.
 
 from __future__ import annotations
 
+import re
+
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
 from sre_kb.util import fqn
 
 _RATE_KEYS = ("fixedRate", "fixedDelay", "fixedRateString", "fixedDelayString")
+_CRON_FIELD = re.compile(r"^[\d*?/,\-LW#]+$", re.I)
+
+
+def _looks_like_cron(value: str) -> bool:
+    """A Spring cron expression is 5-7 whitespace-separated fields of cron tokens."""
+    fields = value.split()
+    return 5 <= len(fields) <= 7 and all(_CRON_FIELD.match(f) for f in fields)
 
 
 def _schedule(args: dict) -> tuple[str, str]:
@@ -22,7 +31,13 @@ def _schedule(args: dict) -> tuple[str, str]:
     for k in _RATE_KEYS:
         if k in args:
             return "scheduled", f"{k}={args[k]}"
-    return "scheduled", args.get("", "")
+    # A bare positional `@Scheduled("...")` is only meaningful as a cron expression; anything else
+    # carries no usable schedule, so drop it (an empty schedule is not recorded) rather than label
+    # garbage as a fixed rate.
+    positional = args.get("", "")
+    if _looks_like_cron(positional):
+        return "cron", positional
+    return "scheduled", ""
 
 
 def collect(ctx: ScanContext) -> list[Fact]:

@@ -70,11 +70,15 @@ class CopilotGapValidation:
     by_status: dict[str, int]
 
     @property
-    def proposal_recall(self) -> float:
+    def proposal_recall(self) -> float | None:
+        if not self.expected:
+            return None
         return len(self.proposed & self.expected) / len(self.expected)
 
     @property
-    def kept_recall(self) -> float:
+    def kept_recall(self) -> float | None:
+        if not self.expected:
+            return None
         return len(self.kept & self.expected) / len(self.expected)
 
     @property
@@ -96,8 +100,9 @@ class CopilotGapValidation:
         return len(self.grounded) / len(self.proposed)
 
     def passes(self, *, min_recall: float, min_kept_precision: float) -> bool:
-        if self.kept_recall < min_recall:
-            return False
+        kept_recall = self.kept_recall
+        if kept_recall is None or kept_recall < min_recall:
+            return False  # no expected gaps -> recall is undefined; conservatively not a pass
         kept_precision = self.kept_precision
         return kept_precision is not None and kept_precision >= min_kept_precision
 

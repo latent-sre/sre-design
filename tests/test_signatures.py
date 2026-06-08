@@ -59,6 +59,29 @@ def test_bulkhead_rate_limit_idempotency_signatures() -> None:
         assert c in concerns()
 
 
+def test_load_shed_and_backpressure_signatures() -> None:
+    """N5: the resilience vocabulary gains load-shed + backpressure — fire on the mechanism across
+    stacks (Reactor/RxJava, JDK bounded queues, Go channels, .NET, nginx), silent on prose."""
+    assert fires("backpressure", "flux.onBackpressureBuffer(256).subscribe(this::handle);")        # Reactor
+    assert fires("backpressure", "source.onBackpressureDrop().observeOn(scheduler)")               # RxJava
+    assert fires("backpressure", "private final Queue<Task> q = new ArrayBlockingQueue<>(1000);")  # bounded JDK
+    assert fires("backpressure", "var q = new LinkedBlockingQueue<Event>(500);")                   # capacity-bounded
+    assert fires("backpressure", "ch := make(chan Job, 128)")                                      # Go buffered channel
+    assert fires("backpressure", "const rs = new Readable({ highWaterMark: 16384 });")             # Node stream
+    assert fires("load-shed", "if (!semaphore.tryAcquire()) return Response.status(503).build();")  # shed on full
+    assert fires("load-shed", "if !sem.TryAcquire(ctx, 1) { return errBusy }")                     # Go semaphore
+    assert fires("load-shed", "options.RejectionStatusCode = 503;")                                # ASP.NET limiter
+    assert fires("load-shed", "limit_req zone=api burst=20 nodelay;")                              # nginx
+    # silent on prose / unbounded forms (a false fire here would silently drop a real gap, §9.5 ⑤)
+    assert not fires("backpressure", "// TODO: add backpressure to this stream")
+    assert not fires("backpressure", "events := make(chan Job)")          # unbuffered channel: no bound
+    assert not fires("backpressure", "queue = new LinkedBlockingQueue<>()")  # unbounded queue
+    assert not fires("load-shed", "// we should shed load when overwhelmed")
+    assert not fires("load-shed", "public Inventory reserve(String sku) { return lookup(sku); }")
+    for c in ("backpressure", "load-shed"):
+        assert c in concerns()
+
+
 def test_unknown_concern_never_fires() -> None:
     assert not fires("not-a-concern", "@CircuitBreaker")
     assert "circuit-breaker" in concerns()

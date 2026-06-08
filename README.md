@@ -114,6 +114,6 @@ pip install --no-index --find-links dist/wheels sre-kb
 
 ### Dev container
 
-VS Code / Codespaces can also open this repo in the included dev container. It uses Python 3.12 and
-runs `pip install -e ".[dev]"` after creation, so `pytest -q` and `ruff check src tests` work from a
-clean container without local Python setup.
+VS Code / Codespaces can also open this repo in the included dev container. It uses Python 3.13 (the
+working base; the supported floor is still 3.11) and runs `pip install -e ".[dev]"` after creation,
+so `pytest -q` and `ruff check src tests` work from a clean container without local Python setup.

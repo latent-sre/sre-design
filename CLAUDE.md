@@ -12,7 +12,9 @@ make lint      # ruff check src tests   — must be clean
 make fmt       # ruff format src tests
 ```
 
-Python ≥ 3.11. CLI entrypoint is `sre-kb`. Tests live in `tests/`.
+Python ≥ 3.11 (supported floor; CI tests 3.11–3.13). 3.13 is the working/dev base — intent is to
+raise the floor to ≥ 3.13 once 3.12+ features are adopted. CLI entrypoint is `sre-kb`. Tests live in
+`tests/`.
 
 ## Branching & commits — use the standards
 

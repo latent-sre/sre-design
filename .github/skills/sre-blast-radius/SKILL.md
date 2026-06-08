@@ -28,13 +28,16 @@ narrative and verify the severity is justified — never invent impact.
    underlying `BlastRadius` artifacts. See [references/blast-fields.md](./references/blast-fields.md)
    for what each field means.
 2. For each node, state the impact in operator terms: **impactedFlows** (which request paths
-   fail), **impactedServices**, what `containment` (breaker/fallback/bulkhead) absorbs, and —
-   for a datastore — `stateful.dataLossRisk` plus RPO/RTO if present.
-3. **Verify the severity, don't restate it.** Cross-check `severityHint` against the facts:
-   a `critical` node with empty `containment` and high fan-out earns it; a `high` node behind
-   a working breaker is "broad but contained." Cite the `path:line` of the breaker/fallback
-   (per [references/provenance-rules.md](./references/provenance-rules.md)) when you claim
-   something is contained.
+   fail), **impactedServices**, what `containment` (breaker/fallback) absorbs, and — for a
+   datastore/broker — `stateful.dataLossRisk` plus RPO/RTO if present.
+3. **Verify the risk, don't restate it.** The engine reports two axes (see
+   [references/blast-fields.md](./references/blast-fields.md)): `dependencyCriticality`
+   (`critical` = no bulkhead / data loss, `degraded` = continues degraded) and `severityHint`
+   (`low|medium|high`, scaling with breadth + irreversibility). Quote the engine's
+   `riskRationale` and cross-check it against the facts; cite the breaker/fallback location
+   from the artifact's top-level `evidence[]` (per
+   [references/provenance-rules.md](./references/provenance-rules.md)) when you call something
+   contained — the `containment` entries are cross-refs (`{kind, name}`), not the evidence.
 4. Translate to action: the highest-impact uncontained node is where a breaker/fallback or an
    outbox/retry should go. Tie each recommendation to the node and its evidence.
 5. For judgment calls the facts can't settle (is this severity *appropriate*?), use the
@@ -42,9 +45,10 @@ narrative and verify the severity is justified — never invent impact.
 
 ## Severity discipline
 
-- **`critical`** — on a critical path, no containment, a failure reaches the user directly.
-- **`high`** — broad impact (many flows) even if behind a bulkhead; an outage degrades several
-  flows at once.
+- **`dependencyCriticality: critical`** — no bulkhead: a failure fails the flow or loses data.
+  This is the launch-blocking axis.
+- **`severityHint: high`** — broad/irreversible blast: many flows hit, or data lost, even if a
+  bulkhead is present. The cross-service co-tenancy path can raise it to `critical`.
 - **data-loss beats availability.** A swallowed publish/write failure (`dataLossRisk: true`)
   is the worst case even if the node looks "up" — surface it first; it never silently heals.
 

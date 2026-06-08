@@ -5,26 +5,29 @@ facts of several repos.
 
 ## `Topology`
 
-The cross-service graph: services, the datastores/brokers they bind to, and the edges
-between them. Rendered to `projections/diagrams/topology.mmd` (Mermaid). Read it to spot
-**shared infrastructure** — any datastore/broker node with more than one inbound service.
+The cross-service graph: services, the datastores/brokers they bind to (and external deps
+they call), and the edges between them. Rendered to `projections/diagrams/topology.mmd`
+(Mermaid). Read it to spot **shared infrastructure** — any datastore/broker node with more
+than one inbound service.
 
 ```yaml
 kind: Topology
 spec:
-  nodes: [ { type: service|datastore|broker, name: ... }, ... ]
-  edges: [ { from: orders, to: orders-postgres, kind: db }, ... ]
+  nodes: [ { type: service|datastore|broker|external, name: orders-postgres }, ... ]
+  edges: [ { from: order-service, to: orders-postgres, relation: binds }, ... ]  # relation: binds | calls
+  pcfSpaces: []
 ```
 
 ## Cross-service `BlastRadius`
 
 Like the single-service `BlastRadius`, but `impactedServices` and `coTenancy` are populated
-across repos:
+across repos (and `impactedFlows` is typically empty — the impact is expressed per service):
 
-- **`coTenancy`** — the other services co-located on this shared resource. A non-empty list
-  means a failure here is a *simultaneous* multi-service event.
+- **`coTenancy`** — a list of `{ sharedBy: [services] }`: the services co-located on this
+  shared resource. A non-empty list means a failure here is a *simultaneous* multi-service event.
 - **`impactedServices`** — every service that degrades if this node is down.
-- **`stateful.dataLossRisk`** — for a shared datastore, whether a tenant loses in-flight data.
+- **`stateful.dataLossRisk`** — for a shared datastore/broker, whether a tenant loses in-flight
+  data. The co-tenancy path can raise `severityHint` to `critical`.
 
 ## Prioritizing fleet risk
 

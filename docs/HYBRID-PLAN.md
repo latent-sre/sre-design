@@ -900,9 +900,9 @@ reviews. Completion is tracked in the §8 table; the rationale lives here.
   new schema/code enum drift.
 - **N5 — lower priority.** `load-shed`/`backpressure` vocab + judgment probes; declarative inventory
   signatures (tech-stack/messaging/datastore, incl. Node/Go) as a data-driven breadth path; an
-  LLM-authored narrative over the `findings` digest (advisory, Tier-B); lifting the `AGENTS.md`-hijack
-  + app-name-polyglot fixtures as regression tests (defenses exist via the fence + `_mm()`; named
-  fixtures don't).
+  LLM-authored narrative over the `findings` digest (advisory, Tier-B). ✅ The `AGENTS.md`-hijack +
+  app-name-polyglot defenses are now pinned by **named regression fixtures**
+  (`tests/test_injection_regression.py`, `tests/fixtures/injection/`); the rest of N5 remains open.
 - **Infra — full scan/publish credential split** (§9.3 #5): the no-credential scan role **landed**
   (read-only `sre-target-scan` agent); the scoped publish role + CI wiring remain. Becomes a real
   safety bug the moment we publish live.

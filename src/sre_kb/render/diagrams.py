@@ -57,9 +57,15 @@ def mermaid_topology(topology: dict) -> str:
 
     out = ["graph LR"]
     for node in spec.get("nodes", []):
-        label = _SHAPE.get(node.get("type", "service"), '["{}"]').format(_mm(node["name"]))
-        out.append(f"  {nid(node['name'])}{label}")
+        name = node.get("name")
+        if not name:
+            continue  # a node with no name can't be rendered; skip rather than KeyError
+        label = _SHAPE.get(node.get("type", "service"), '["{}"]').format(_mm(name))
+        out.append(f"  {nid(name)}{label}")
     for e in spec.get("edges", []):
+        src, dst = e.get("from"), e.get("to")
+        if not src or not dst:
+            continue  # an edge missing an endpoint can't be drawn
         rel = _mm(e.get("relation", ""))
-        out.append(f"  {nid(e['from'])} -->|{rel}| {nid(e['to'])}")
+        out.append(f"  {nid(src)} -->|{rel}| {nid(dst)}")
     return "\n".join(out)

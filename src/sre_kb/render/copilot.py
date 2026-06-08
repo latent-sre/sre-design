@@ -126,7 +126,8 @@ def runbook_markdown(runbook: dict, flow: dict | None) -> str:
     ]
     lines += [f"- {_inline(s)}" for s in spec.get("symptoms", [])] or ["- (none)"]
     lines += ["", "## Diagnosis"]
-    lines += [f"1. {_inline(d.get('step', d))}" for d in spec.get("diagnosis", [])] or ["1. (none)"]
+    lines += [f"1. {_inline(d.get('step', '') if isinstance(d, dict) else d)}"
+              for d in spec.get("diagnosis", [])] or ["1. (none)"]
     lines += ["", "## Remediation"]
     lines += [f"1. {_inline(r)}" for r in spec.get("remediation", [])] or ["1. (none)"]
     if flow is not None:

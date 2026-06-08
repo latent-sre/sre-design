@@ -15,7 +15,6 @@ import re
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
-from sre_kb.parsing import parse
 from sre_kb.util import find_line
 
 _HTTP_VERBS = {"get", "post", "put", "delete", "patch", "options", "head"}
@@ -53,7 +52,7 @@ def collect(ctx: ScanContext) -> list[Fact]:
     for path in py_files:
         rel = ctx.rel(path)
         text = ctx.read_text(rel)
-        module = parse("python", text)
+        module = ctx.module(rel, "python")
         for t in module.types:
             for m in t.methods:
                 for ann, args in m.annotations.items():

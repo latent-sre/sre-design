@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
-from sre_kb.parsing import parse
 from sre_kb.signatures import signature
 from sre_kb.util import fqn
 
@@ -19,7 +18,7 @@ def collect(ctx: ScanContext) -> list[Fact]:
     facts: list[Fact] = []
     for path in ctx.files("*.java"):
         rel = ctx.rel(path)
-        module = parse("java", ctx.read_text(rel))
+        module = ctx.module(rel, "java")
         ns = module.namespace
         for t in module.types:
             for m in t.methods:

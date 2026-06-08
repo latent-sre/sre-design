@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
-from sre_kb.parsing import parse
 from sre_kb.util import fqn
 
 _HTTP = {"[HttpGet]": "GET", "[HttpPost]": "POST", "[HttpPut]": "PUT", "[HttpDelete]": "DELETE", "[HttpPatch]": "PATCH"}
@@ -16,7 +15,7 @@ def collect(ctx: ScanContext) -> list[Fact]:
     facts: list[Fact] = []
     for path in ctx.files("*.cs"):
         rel = ctx.rel(path)
-        module = parse("csharp", ctx.read_text(rel))
+        module = ctx.module(rel, "csharp")
         ns = module.namespace
         for t in module.types:
             tfqn = fqn(ns, t.name)

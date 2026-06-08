@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, FactSet, Symbol
-from sre_kb.parsing import parse
 from sre_kb.util import member_of, slug
 
 _SAVE = {"save", "saveAll", "Save", "SaveAsync"}
@@ -64,13 +63,10 @@ def collect(ctx: ScanContext, fs: FactSet) -> list[Fact]:
     pubs = fs.of("message.egress")
     swallowed = {s.attrs.get("channel"): s for s in fs.of("swallowed.failure")}
 
-    modules: dict[str, object] = {}
     flows: list[Fact] = []
     for ep in endpoints:
         rel = ep.evidence.path
-        if rel not in modules:
-            modules[rel] = parse(_language_of(rel), ctx.read_text(rel))
-        module = modules[rel]
+        module = ctx.module(rel, _language_of(rel))
         handler = ep.attrs.get("handler", "")
         tdecl = next((t for t in module.types if t.name == _short(handler)), None)
         mdecl = next((m for m in tdecl.methods if m.name == handler.split("#")[-1]), None) if tdecl else None

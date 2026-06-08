@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
-from sre_kb.parsing import parse
 from sre_kb.signatures import signature
 from sre_kb.util import fqn
 
@@ -25,7 +24,7 @@ def collect(ctx: ScanContext) -> list[Fact]:
     facts: list[Fact] = []
     for path in ctx.files("*.cs"):
         rel = ctx.rel(path)
-        module = parse("csharp", ctx.read_text(rel))
+        module = ctx.module(rel, "csharp")
         ns = module.namespace
         for t in module.types:
             cb_lines = [c.line for m in t.methods for c in m.calls if _is_breaker(c.method)]

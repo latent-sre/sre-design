@@ -45,7 +45,7 @@ network/synthetic).
 ## Implementation status (June 2026)
 
 The design below is the full intent; this section records what is **built and tested
-offline** today (343 tests, ruff-clean). The vertical slice and the items earlier marked
+offline** today (ruff-clean). The vertical slice and the items earlier marked
 "deferred to P3/P4" are now implemented. The forward roadmap — trust tiers and fenced LLM
 (Tier-B) collectors — lives in [`HYBRID-PLAN.md`](HYBRID-PLAN.md), the **single source of truth for
 live status** (§8 the tracker, §9 the rolling reassessment); this summary is high-level — when it and
@@ -66,8 +66,15 @@ live status** (§8 the tracker, §9 the rolling reassessment); this summary is h
   path confinement**), **status-aware** cross-ref (a verified artifact can't depend on an
   unverified one), gating, and an **adversarial challenge pass** (deterministic grounding +
   an LLM hook; monotonic downgrade-only). Nothing is silently dropped.
-- **Copilot driver** — `sre-analyst` agent + `sre-flow-analysis` skill, including the
-  challenge protocol. The engine emits a worklist; `challenge-apply` re-gates verdicts.
+- **Copilot driver** — split **authoring** vs **consumer**. Authoring: the `sre-analyst` +
+  read-only `sre-target-scan` agents and the `sre-flow-analysis`, `sre-blast-radius`,
+  `sre-prr-review`, `sre-estate`, `sre-criticality`, `sre-gap-finder`,
+  `sre-observability-coverage` skills that build the KB. Consumer: the `sre-oncall` agent +
+  `sre-incident-response` skill that use a *published* KB during an incident (read-only). The
+  challenge loop is automatable end-to-end: the engine emits a worklist, `sre-kb
+  challenge-run --oracle '<llm-cli>'` drives it through an external model on stdin (the engine
+  embeds none), and `challenge-apply` re-gates the verdicts (monotonic, downgrade-only); with
+  no oracle it defers to a human.
 - **Render** — Mermaid sequence + topology diagrams, runbooks, and Copilot reliability
   guardrails that are **tier-aware** (Tier-B findings are advisory, never hard rules) with
   untrusted values sanitized into the output.

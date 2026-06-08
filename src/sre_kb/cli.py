@@ -381,6 +381,58 @@ def challenge_worklist(
     typer.echo(f"{len(data['items'])} claim(s) for review — see {path}")
 
 
+@app.command("challenge-run")
+def challenge_run(
+    run_id: str = typer.Option(..., "--run"),
+    oracle: str = typer.Option(
+        None,
+        "--oracle",
+        envvar="SRE_KB_ORACLE",
+        help="External LLM-oracle command (e.g. 'copilot -p'). Prompt is fed on stdin. "
+        "If unset, the loop stays deferred (no verdicts written) — same as offline.",
+    ),
+    timeout: float = typer.Option(120.0, "--timeout", help="Per-claim oracle timeout (seconds)."),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Drive the challenge worklist through an external LLM oracle and write verdicts.
+
+    The engine embeds no model — it execs the operator-configured `--oracle` command (the
+    Copilot/Claude CLI), exactly the LLM seam the design reserves. With no oracle the loop
+    defers to a human. Verdicts only ever downgrade via `challenge-apply`; an oracle can
+    never raise confidence. Then run `sre-kb challenge-apply --run <id>`.
+    """
+    import json
+
+    from sre_kb.pipeline.challenge_run import SubprocessOracle, run_worklist
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    wpath = layout.root / "challenge" / "worklist.json"
+    if not wpath.exists():
+        typer.echo("no worklist (no review claims, or run not validated yet)")
+        raise typer.Exit(code=0)
+    if not oracle:
+        typer.echo(
+            "no --oracle configured (or SRE_KB_ORACLE unset): loop deferred to a human.\n"
+            "Point --oracle at a Copilot/Claude CLI to adjudicate end-to-end, or write "
+            f"{layout.root / 'challenge' / 'verdicts.json'} by hand."
+        )
+        raise typer.Exit(code=0)
+
+    worklist = json.loads(wpath.read_text())
+    client = SubprocessOracle(oracle, timeout=timeout)
+    result = run_worklist(worklist, client, oracle_id=client.id)
+    vpath = layout.root / "challenge" / "verdicts.json"
+    vpath.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    by_verdict: dict[str, int] = {}
+    for v in result["verdicts"]:
+        by_verdict[v["verdict"]] = by_verdict.get(v["verdict"], 0) + 1
+    for verdict in ("contradicted", "unsupported", "indeterminate", "supported"):
+        if by_verdict.get(verdict):
+            typer.echo(f"  {verdict}: {by_verdict[verdict]}")
+    typer.echo(f"wrote {len(result['verdicts'])} verdict(s) → {vpath}  (now: sre-kb challenge-apply --run {run_id})")
+
+
 @app.command("challenge-apply")
 def challenge_apply(
     run_id: str = typer.Option(..., "--run"),

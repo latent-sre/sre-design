@@ -55,9 +55,15 @@ Implemented:
   override), non-escapable untrusted-input context packs, sanitized renderers, publish-repo
   allowlist with the token kept out of `git` argv, fan-out cap, dangerous-pattern output lint,
   engine resource limits, and a read-only `sre-target-scan` agent for untrusted repos.
-- **Copilot driver** under `.github/` (sre-analyst + read-only sre-target-scan agents, sre-flow-analysis skill) with the
-  challenge loop: the engine emits a worklist, Copilot adjudicates, `sre-kb challenge-apply`
-  re-gates the verdicts (monotonic, downgrade-only).
+- **Copilot driver** under `.github/` split into an **authoring** side (the `sre-analyst` +
+  read-only `sre-target-scan` agents, and the `sre-flow-analysis`, `sre-blast-radius`,
+  `sre-prr-review`, `sre-estate`, `sre-criticality`, `sre-gap-finder`, `sre-observability-coverage`
+  skills that *build* the KB) and a **consumer** side (the `sre-oncall` agent +
+  `sre-incident-response` skill that *use* a published KB during an incident).
+- **Challenge loop, automatable end-to-end:** the engine emits a worklist, an oracle
+  adjudicates, `sre-kb challenge-apply` re-gates (monotonic, downgrade-only). `sre-kb
+  challenge-run --oracle '<llm-cli>'` drives the loop through an external LLM CLI on stdin —
+  the engine embeds no model; with no oracle it defers to a human, exactly as offline.
 
 ## What's next
 
@@ -77,6 +83,12 @@ into `sre-kb run`** (a `.sre/gap-proposals.json` is auto-detected and routed thr
 - **Render-adapter breadth** (Phase 5) — a tool-neutral alert-intent → adapter seam emits
   Prometheus, Splunk, Wavefront, AppDynamics, Grafana, and ThousandEyes from one intent (config
   `render.alert_tools`); dashboard panels render for Prometheus, Grafana, and Wavefront.
+- **Live oracle in CI** — run `challenge-run --oracle '<llm-cli>'` against a hosted Copilot/
+  Claude CLI so the judgment-call gate runs unattended.
+
+Recently landed: the broader **authoring skill set** (`sre-blast-radius` / `sre-prr-review` /
+`sre-estate`) and a **consumer side** (`sre-incident-response` skill + `sre-oncall` agent), and
+the **live challenge loop** (`sre-kb challenge-run`).
 
 Known limitations (documented, not bugs): variable-topic egress (non-literal Kafka topics)
 and cross-file call-graph beyond a single handler body are out of scope for the per-file

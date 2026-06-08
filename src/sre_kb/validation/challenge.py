@@ -127,6 +127,23 @@ def build_worklist(run_id: str, docs: list[dict], pack_for: Callable[[dict], str
     return {"schema": "challenge.worklist/v1", "runId": run_id, "items": items}
 
 
+def parse_verdict_reply(raw: str) -> tuple[str, str]:
+    """Map a free-text LLM/oracle reply to (verdict, reason). Safe by construction: only a
+    reply whose first token *is* a verdict counts. Negations and prose ("not supported",
+    "un-supported", "the claim is unsupported by ...") and anything unparseable become
+    `indeterminate` (deferred to a human) — never a false `supported`. This is the single
+    parser shared by the offline `LLMChallenger` hook and the live `challenge-run` loop, so
+    both adjudicate replies identically; the startswith anchor prevents the substring trap a
+    plain search ("not supported" → "supported") would fall into."""
+    text = (raw or "").strip()
+    first = next((ln.strip() for ln in text.splitlines() if ln.strip()), "")
+    token = first.lstrip("*_#>-•· \t").lower()  # tolerate markdown/bullet prefixes
+    for verdict in ("contradicted", "unsupported", "supported"):
+        if token.startswith(verdict):
+            return verdict, (first[:200] or "oracle adjudication")
+    return "indeterminate", "unparseable reply; deferred to human"
+
+
 def parse_verdicts(data: dict) -> dict[str, list[Verdict]]:
     """Group Copilot-returned verdicts by artifact key 'Kind/name'."""
     out: dict[str, list[Verdict]] = {}
@@ -184,11 +201,8 @@ class LLMChallenger:
     def adjudicate(self, claim: Claim, excerpt: str) -> Verdict:
         if self._client is None:
             return Verdict(claim.id, "indeterminate", "no LLM client configured; deferred to human")
-        raw = self._client(self.build_prompt(claim, excerpt)).strip().lower()
-        for v in ("contradicted", "unsupported", "supported"):
-            if raw.startswith(v):
-                return Verdict(claim.id, v, "LLM adjudication")
-        return Verdict(claim.id, "indeterminate", "unparseable LLM response; deferred to human")
+        verdict, reason = parse_verdict_reply(self._client(self.build_prompt(claim, excerpt)))
+        return Verdict(claim.id, verdict, reason)
 
 
 def challenge_doc(doc: dict, read_lines: Callable[[str], list[str]], challenger: Challenger) -> list[Verdict]:

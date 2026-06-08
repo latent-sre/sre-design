@@ -318,6 +318,62 @@ def test_judgment_gap_lands_needs_review_never_verified(tmp_path):
     assert validate_doc(doc) == []
 
 
+# --------------------------------------------------------------- #42: cross-stack anchor locating
+
+def _cross_stack_repo(tmp_path: Path) -> Path:
+    """A repo whose resiliency mechanisms live in Go/Node/nginx files — outside the Java/C#/Python
+    source globs. The judgment vocab (backpressure/load-shed) reasons about exactly these."""
+    (tmp_path / "svc.go").write_text(
+        "package svc\n"
+        "func produce(in chan Job) {\n"
+        "\tout := make(chan Job)\n"          # unbounded channel -> a real backpressure gap
+        "\tfor j := range in { out <- j }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "stream.js").write_text(
+        "const { Readable } = require('stream');\n"
+        "const src = new Readable();\n"      # no highWaterMark -> unbounded
+        "src.on('data', (c) => sink.write(c));\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "api.conf").write_text(
+        "location /api {\n"
+        "    proxy_pass http://backend;\n"   # no limit_req -> no load shedding
+        "}\n",
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def test_judgment_anchor_in_go_node_nginx_is_located_not_dropped(tmp_path):
+    """#42: a judgment-call gap whose anchor lives in a Go/Node/nginx file must locate and route to
+    the oracle. Before widening the locate globs these were always dropped `unlocatable`, so the
+    cross-stack judgment categories silently did nothing."""
+    ctx = ScanContext(root=_cross_stack_repo(tmp_path), repo="file://x", commit=LOCAL_COMMIT)
+    cases = [
+        ("missing-backpressure", "out := make(chan Job)"),   # Go
+        ("unbounded-resource", "const src = new Readable();"),  # Node
+        ("missing-load-shedding", "proxy_pass http://backend;"),  # nginx
+    ]
+    for category, anchor in cases:
+        res = gap_finder.collect_from_proposals(ctx, [Proposal(category, anchor, target="svc", severity="high")])
+        [out] = res.outcomes
+        assert out.result == "routed", f"{category} @ {anchor!r} -> {out.result} (expected routed)"
+        [fact] = res.facts
+        assert fact.evidence.source_tier == "llm" and fact.attrs["rederivation"] == "judgment"
+
+
+def test_confirmation_category_stays_parseable_only(tmp_path):
+    """Confirm/refute probes need an AST at the pointer, so they keep the Java/C#/Python globs — a
+    Go anchor stays unlocatable rather than locating only to be dropped (the engine can't re-derive)."""
+    ctx = ScanContext(root=_cross_stack_repo(tmp_path), repo="file://x", commit=LOCAL_COMMIT)
+    res = gap_finder.collect_from_proposals(
+        ctx, [Proposal("undocumented-job", "out := make(chan Job)", target="svc", severity="medium")]
+    )
+    assert res.outcomes[0].result == "unlocatable"
+
+
 def test_no_proposals_file_is_a_quiet_no_op():
     # Self-gating: a target with no gap-proposals.json yields nothing (no crash, no noise).
     run = run_gap_finder(str(FIXTURE.parent / "sample-spring-pcf"), service="order")

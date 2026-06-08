@@ -3,7 +3,7 @@
 # Every skill directory under .github/skills/ must appear here exactly once, and vice-versa.
 # tools/lint_skills.py + tests/test_lint_skills.py enforce it (CI-blocking), so the skill suite and
 # this manifest can't drift. Phases follow the classify -> map -> assess -> generate shape of the
-# resiliency-skills suite; `generate` is empty until the first generate-* skills land (DEEP R7).
+# resiliency-skills suite; `generate` opens with sre-generate-slos (DEEP R7).
 # `consume` is the post-publish, read-only operator side (an incident responder reads the KB the
 # authoring phases produced) — listed here so the manifest stays exhaustive.
 apiVersion: sre.kb/v1alpha1
@@ -19,6 +19,7 @@ phases:
     - sre-observability-coverage
     - sre-blast-radius
     - sre-prr-review
-  generate: []
+  generate:
+    - sre-generate-slos
   consume:
     - sre-incident-response

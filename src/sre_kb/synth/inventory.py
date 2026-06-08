@@ -5,21 +5,31 @@ ConfigManagement. Same envelope/validation machinery as the P1 kinds."""
 from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
+from sre_kb.inventory_signatures import (
+    StackSig,
+    all_manifests,
+    datastore_engine,
+    is_broker,
+    is_datastore,
+    is_manifest_of,
+    stack_for_manifests,
+)
 from sre_kb.models.facts import FactSet
 from sre_kb.scoring.confidence import Signal, confidence
 from sre_kb.synth.emit import emit
 
-_DATASTORE_HINTS = ("postgres", "mysql", "oracle", "mssql", "sqlserver", "db2", "mongo",
-                    "redis", "cassandra", "sql", "db")
-_BROKER_HINTS = ("kafka", "rabbit", "amqp", "jms", "mq", "pubsub")
 
-
-def _is_datastore(name: str) -> bool:
-    return any(h in name.lower() for h in _DATASTORE_HINTS)
-
-
-def _is_broker(name: str) -> bool:
-    return any(h in name.lower() for h in _BROKER_HINTS)
+def _detect_stack(ctx: ScanContext) -> tuple[StackSig | None, str | None]:
+    """The repo's primary tech stack from its manifest files (the data-driven breadth path), with the
+    relpath of the manifest to cite. Used only as a fallback when no collector emitted a `tech.runtime`
+    fact — e.g. a Node or Go service the AST collectors don't parse yet — so coverage widens without a
+    new collector (HYBRID-PLAN §9.7 N5)."""
+    present = {ctx.rel(p): p.name for p in ctx.files(*all_manifests())}
+    stack = stack_for_manifests(present.values())
+    if stack is None:
+        return None, None
+    rel = next((r for r, name in present.items() if is_manifest_of(stack, name)), None)
+    return stack, rel
 
 
 def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
@@ -29,22 +39,33 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
     has_cb = bool(fs.first("resiliency.circuitbreaker"))
 
     # --- TechStack ---
-    if framework or app:
+    # Language/runtime come from a `tech.runtime` fact when a collector emits one (e.g. Python); the
+    # JVM stacks don't, so they keep the historical java/jvm/maven defaults. When no collector ran
+    # (Node/Go), fall back to the declarative manifest stack so the roll-up still covers the repo.
+    rt = fs.first("tech.runtime")
+    stack, stack_rel = (None, None) if rt else _detect_stack(ctx)
+    if framework or app or (stack and stack_rel):
         deps = [f.attrs["name"] for f in fs.of("tech.dependency")]
-        # Language/runtime come from a `tech.runtime` fact when a collector emits one (e.g. Python);
-        # the JVM stacks don't, so they keep the historical java/jvm/maven defaults.
-        rt = fs.first("tech.runtime")
         spec = {
-            "languages": [rt.attrs["language"]] if rt else ["java"],
+            "languages": [rt.attrs["language"]] if rt else ([stack.language] if stack else ["java"]),
             "frameworks": [framework.attrs] if framework else [],
-            "runtime": rt.attrs.get("runtime") if rt else "jvm",
-            "buildTool": rt.attrs.get("buildTool") if rt else ("maven" if ctx.files("pom.xml") else "gradle"),
+            "runtime": rt.attrs.get("runtime") if rt else (stack.runtime if stack else "jvm"),
+            "buildTool": (rt.attrs.get("buildTool") if rt
+                          else stack.build_tool if stack
+                          else ("maven" if ctx.files("pom.xml") else "gradle")),
             "notableLibraries": deps[:20],
         }
         if app:
             spec["pcf"] = {"buildpacks": app.attrs.get("buildpacks", []), "stack": app.attrs.get("stack")}
-        docs.append(emit("TechStack", service, spec, [framework.evidence] if framework else [app.evidence],
-                         "verified", confidence(Signal.DIRECT), service))
+        # Cite the framework/app declaration when we have one; a manifest-only stack is DERIVED
+        # (presence-based — the manifest declares the runtime, the framework isn't parsed).
+        if framework:
+            ev, sig = [framework.evidence], Signal.DIRECT
+        elif app:
+            ev, sig = [app.evidence], Signal.DIRECT
+        else:
+            ev, sig = [ctx.evidence(stack_rel, 1, 1, "inventory.stack")], Signal.DERIVED
+        docs.append(emit("TechStack", service, spec, ev, "verified", confidence(sig), service))
 
     # --- Architecture (components / layers / patterns) ---
     comps: list[dict] = []
@@ -105,7 +126,7 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
     # --- Dependency (runtime service deps: bindings + downstream HTTP) ---
     for sb in fs.of("pcf.service-binding"):
         name = sb.attrs["name"]
-        dtype = "datastore" if _is_datastore(name) else "broker" if _is_broker(name) else "service-binding"
+        dtype = "datastore" if is_datastore(name) else "broker" if is_broker(name) else "service-binding"
         docs.append(emit("Dependency", name, {
             "name": name,
             "type": dtype,
@@ -144,10 +165,10 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
     repo = fs.first("db.repository")
     for sb in fs.of("pcf.service-binding"):
         name = sb.attrs["name"]
-        if not _is_datastore(name):
+        if not is_datastore(name):
             continue
         docs.append(emit("DataStore", name, {
-            "engine": next((h for h in _DATASTORE_HINTS if h in name.lower()), "unknown"),
+            "engine": datastore_engine(name) or "unknown",
             "name": name,
             "accessedBy": [repo.attrs["name"]] if repo else [],
             "migrations": [],  # no Flyway/Liquibase detected

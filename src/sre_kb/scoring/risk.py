@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class NodeRisk:
-    severity: str  # low | medium | high
+    severity: str  # medium | high — a dependency big enough to model is never "low" blast (see below)
     criticality: str  # critical | degraded
     rationale: str
 
@@ -39,7 +39,9 @@ def assess(*, impacted_flows: int, data_loss: bool, contained: bool) -> NodeRisk
         score += 1  # a degraded flow is still a concern
     score += min(2, flows - 1)  # breadth: +1 at 2 flows, +2 at 3+
 
-    severity = "high" if score >= 3 else "medium" if score >= 1 else "low"
+    # score is always >= 1 (an uncontained dep adds 3, a contained one adds 1), so a modelled
+    # dependency floors at "medium" by design — "low" is unreachable and intentionally not emitted.
+    severity = "high" if score >= 3 else "medium"
 
     why = [f"{flows} impacted flow{'s' if flows != 1 else ''}"]
     if data_loss:

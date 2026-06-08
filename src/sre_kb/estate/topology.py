@@ -3,8 +3,8 @@ facts. A resource bound by >1 service is shared — its failure spans all tenant
 
 from __future__ import annotations
 
+from sre_kb.inventory_signatures import is_broker, is_datastore
 from sre_kb.synth.emit import emit
-from sre_kb.synth.inventory import _is_broker, _is_datastore
 
 
 def build_estate(services: list[dict]) -> list[dict]:
@@ -24,7 +24,7 @@ def build_estate(services: list[dict]) -> list[dict]:
             topo_evidence.append(app.evidence)
         for sb in fs.of("pcf.service-binding"):
             res = sb.attrs["name"]
-            nodes[res] = "datastore" if _is_datastore(res) else "broker" if _is_broker(res) else "resource"
+            nodes[res] = "datastore" if is_datastore(res) else "broker" if is_broker(res) else "resource"
             edges.append({"from": name, "to": res, "relation": "binds"})
             owners.setdefault(res, {})[name] = sb.evidence
         for c in fs.of("config.client"):

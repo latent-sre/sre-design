@@ -31,6 +31,17 @@ def test_red_panels_are_deterministic_prometheus_queries():
     assert all(p["signal"]["source"] == "prometheus" for p in panels)
 
 
+def test_dashboard_queries_escape_route_values():
+    """Repo-derived route values are escaped (same posture as the alert adapters), so a quote can't
+    break out of the generated query string."""
+    from sre_kb.render.alerts import _query_string
+
+    route = '/x"; evil'
+    for src in ("prometheus", "wavefront"):
+        q = next(p["signal"]["query"] for p in red_panels(route, source=src) if p["title"] == "Request rate")
+        assert _query_string(route) in q          # the value is quote-escaped, not interpolated raw
+
+
 def test_source_without_red_dialect_emits_no_fabricated_query():
     panels = red_panels("/x", source="splunk")  # logs backend: no faithful RED dashboard query
     assert all("query" not in p["signal"] for p in panels)  # honest: no dialect we can't generate

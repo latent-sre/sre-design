@@ -50,3 +50,11 @@ def slug(text: str) -> str:
 def member_of(symbol_fqn: str) -> str:
     """Return the member portion of 'pkg.Type#member', else the type name."""
     return symbol_fqn.split("#")[-1] if symbol_fqn else "x"
+
+
+def swallow_level(log_method: str) -> str:
+    """Normalize a catch/except log call to a bare level so the swallowed.failure `level` is
+    consistent across stacks: strip a leading `log` (C# `LogError` -> error) and lowercase
+    (slf4j `error` -> error). Without this, the same fact kind carried `LogError` vs `error`."""
+    core = log_method[3:] if log_method[:3].lower() == "log" else log_method
+    return core.lower()

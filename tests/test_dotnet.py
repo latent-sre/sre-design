@@ -42,6 +42,23 @@ def test_flow_from_csharp(kb):
     assert any(fm.get("dataLossRisk") for fm in pub["failureModes"])
 
 
+def test_csharp_swallow_level_is_normalized_like_java():
+    """swallowed.failure `level` must be consistent across stacks — C# `LogError` and slf4j `error`
+    both normalize to `error` (lowercase, no `log` prefix)."""
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.collectors.dotnet_steeltoe import annotations
+    from sre_kb.util import swallow_level
+
+    assert swallow_level("LogError") == "error" == swallow_level("error")
+
+    ctx = ScanContext(root=FIXTURE, repo="file://x")
+    swallows = [f for f in annotations.collect(ctx) if f.type == "swallowed.failure"]
+    assert swallows
+    for f in swallows:
+        level = f.attrs["level"]
+        assert level == level.lower() and not level.startswith("log")  # normalized, not raw LogError
+
+
 def test_swallowed_alert_and_runbook_from_csharp(kb):
     docs, _ = kb
     alert = docs[("Alert", "orders-created-publish-failures")]

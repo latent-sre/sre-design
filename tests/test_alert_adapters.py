@@ -35,6 +35,44 @@ def test_log_pattern_default_emits_splunk_and_null_prometheus():
     assert expr["splunk"] == 'index=app sourcetype=orders "order.created failed" | stats count by host'
 
 
+def test_alert_query_literals_are_escaped_across_backends():
+    route = '/orders/"} or vector(1) #\nnext'
+    search = 'failed "event"\n| delete'
+    service = 'orders svc" | noop'
+
+    prom = render_burn_rate(BurnRateIntent("availability", None, 0.005, route), tools=("prometheus",))[
+        "prometheus_fast"
+    ]
+    assert 'uri="/orders/\\"} or vector(1) #\\nnext"' in prom
+    assert "\\nnext" in prom and "#\nnext" not in prom
+
+    wf = render_burn_rate(BurnRateIntent("availability", None, 0.005, route), tools=("wavefront",))[
+        "wavefront_fast"
+    ]
+    assert 'uri="/orders/\\"} or vector(1) #\\nnext"' in wf
+
+    spl = render_log_pattern(LogPatternIntent(search=search, service=service), tools=("splunk",))["splunk"]
+    assert 'sourcetype="orders svc\\" | noop"' in spl
+    assert '"failed \\"event\\"\\n| delete"' in spl
+
+    logql = render_log_pattern(LogPatternIntent(search=search, service=service), tools=("grafana",))[
+        "grafana"
+    ]["query"]
+    assert 'service="orders svc\\" | noop"' in logql
+    assert '|= "failed \\"event\\"\\n| delete"' in logql
+
+    bad_group = 'host) or ignoring() vector(1'
+    spl_bad_group = render_log_pattern(
+        LogPatternIntent(search="boom", service="orders", group_by=bad_group), tools=("splunk",)
+    )["splunk"]
+    assert spl_bad_group.endswith("| stats count by host")
+
+    logql_bad_group = render_log_pattern(
+        LogPatternIntent(search="boom", service="orders", group_by=bad_group), tools=("grafana",)
+    )["grafana"]["query"]
+    assert logql_bad_group.startswith("sum by (host) ")
+
+
 def test_log_pattern_tool_selection():
     expr = render_log_pattern(LogPatternIntent("boom", "svc"), tools=("prometheus",))
     assert expr == {"prometheus": None}  # Prometheus selected only -> no splunk key

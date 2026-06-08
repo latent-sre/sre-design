@@ -55,6 +55,15 @@ class RunResult:
     pr: Path | None = None
 
 
+def _dest_dir(layout: RunLayout, status: str, kind: str) -> Path:
+    """Where a finalized artifact is written: rejected -> reports/rejected, else the KB status dir.
+    Shared by the main persist loop and the readiness recompute so they can't diverge (a rejected
+    ReadinessScore must not also land in kb/needs-review via kb_dir's non-verified mapping)."""
+    base = (layout.reports / "rejected" if status == "rejected" else layout.kb_dir(status)) / kind
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
 def _dump_yaml(path: Path, doc: dict) -> None:
     path.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
@@ -157,6 +166,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     )
 
     # Pass 3: finalize status, persist artifacts, and build the report records.
+    layout.reset_kb()  # clear any prior run's KB so re-runs (diff's fixed ids) can't leak stale docs
     by_status: dict[str, int] = {}
     by_tier: dict[str, int] = {}
     records = []
@@ -165,11 +175,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         if key in downgrades:
             status = "needs-review"
         d["status"] = status
-        if status == "rejected":
-            out = layout.reports / "rejected" / d["kind"]
-        else:
-            out = layout.kb_dir(status) / d["kind"]
-        out.mkdir(parents=True, exist_ok=True)
+        out = _dest_dir(layout, status, d["kind"])
         _dump_yaml(out / f"{d['metadata']['name']}.yaml", d)
         by_status[status] = by_status.get(status, 0) + 1
         by_tier[s["tier"]] = by_tier.get(s["tier"], 0) + 1
@@ -193,7 +199,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         if d.get("kind") == "ReadinessScore":
             d["spec"] = readiness_spec(fs, others, fs.of("budget.finding"))
             _dump_yaml(
-                layout.kb_dir(d["status"]) / "ReadinessScore" / f"{d['metadata']['name']}.yaml", d
+                _dest_dir(layout, d["status"], "ReadinessScore") / f"{d['metadata']['name']}.yaml", d
             )
 
     report = {

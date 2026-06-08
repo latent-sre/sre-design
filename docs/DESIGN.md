@@ -342,7 +342,8 @@ do high-quality, grounded work.
 ```
 .github/skills/sre-flow-analysis/
 ├── SKILL.md            # frontmatter: name, description (WHAT/WHEN/KEYWORDS),
-│                       #   optional allowed-tools, metadata{version}
+│                       #   allowed-tools (required house rule: declare the tool
+│                       #   surface for least privilege), optional metadata{version}
 │                       # body (<500 lines, imperative): the workflow + a Gotchas
 │                       #   section, linking the references below
 ├── scripts/

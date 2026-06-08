@@ -19,9 +19,9 @@ The full design lives in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Status
 
-Working engine, tested offline (261 tests, ruff-clean) against bundled **Java/Spring**,
-**.NET/Steeltoe**, and **Python/FastAPI** fixtures — the same collectors emit the same KB across
-stacks (repo-neutrality). See [`docs/DESIGN.md`](docs/DESIGN.md) for the full
+Working engine, tested offline (450 tests, ruff-clean) against bundled **Java/Spring**,
+**.NET/Steeltoe**, **Python/FastAPI**, and **Node/Express** fixtures — the same collectors emit the
+same KB across stacks (repo-neutrality). See [`docs/DESIGN.md`](docs/DESIGN.md) for the full
 design and a current implementation-status section.
 
 Implemented:
@@ -29,7 +29,8 @@ Implemented:
   try/catch) is read from a tree-sitter model (Java, C#, and Python — `parsing/code_model.py`)
   with per-class scoping and receiver→field-type call correlation; only config files use
   direct parsing. Python/FastAPI emits the same facts (endpoints, egress, tech stack) so the
-  unchanged scaffolder produces the same KB. Confidence is signal-derived; risk from breadth.
+  unchanged scaffolder produces the same KB; Node/Express adds a `package.json` tech-stack slice
+  (framework + runtime + deps) by direct parse — no new dependency. Confidence is signal-derived.
 - **Trust tiers (provenance)** — every evidence item carries a `source_tier` (`ast`
   deterministic | `llm`), rolled up per artifact in the validation report. Tier-B proposals stay
   fenced unless the engine independently confirms them with a deterministic rule at the cited bytes.

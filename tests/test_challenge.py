@@ -47,6 +47,16 @@ def test_gating_is_monotonic_downgrade_only():
     assert apply_challenge_gating("rejected", [Verdict("x", "supported", "")])[0] == "rejected"
 
 
+def test_unknown_verdict_is_indeterminate_not_lenient():
+    """An out-of-vocab verdict must not be treated as the lenient 'supported' (a silent false pass);
+    it is normalized to indeterminate (non-blocking), and a real contradiction still drives the worst
+    case."""
+    assert apply_challenge_gating("verified", [Verdict("x", "banana", "")])[0] == "verified"
+    assert apply_challenge_gating(
+        "verified", [Verdict("x", "banana", ""), Verdict("y", "contradicted", "")]
+    )[0] == "rejected"
+
+
 def test_challenge_doc_reads_evidence_and_flags_tamper():
     doc = {"kind": "Flow", "spec": {"trigger": {"entrypoint": "a.b.C#createOrder"}},
            "evidence": [{"path": "X.java", "lines": {"start": 1, "end": 1}}]}

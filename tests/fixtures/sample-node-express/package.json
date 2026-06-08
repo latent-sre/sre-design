@@ -1,0 +1,20 @@
+{
+  "name": "orders-node",
+  "version": "1.2.0",
+  "description": "Sample Express order service for the node_express collector fixture.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.11.5",
+    "axios": "^1.6.8",
+    "pino": "^9.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "eslint": "^9.1.0"
+  }
+}

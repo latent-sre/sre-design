@@ -23,6 +23,7 @@ from sre_kb.collectors.java_spring import (
     observability,
     resiliency,
 )
+from sre_kb.collectors.node_express import package_json as node_package_json
 from sre_kb.collectors.python_fastapi import endpoints as python_endpoints
 from sre_kb.flow import budget_check
 from sre_kb.models.facts import FactSet
@@ -44,6 +45,8 @@ _FILE_COLLECTORS: list[CollectorProtocol] = [
     dotnet_resiliency.collect,
     # Python / FastAPI (self-gating: no *.py -> emit nothing)
     python_endpoints.collect,
+    # Node.js (self-gating: no package.json -> emit nothing)
+    node_package_json.collect,
 ]
 
 # Derivers: (ctx, FactSet) -> list[Fact]

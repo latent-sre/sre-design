@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import yaml
 
-from sre_kb.collectors.base import ScanContext
+from sre_kb.collectors.base import ScanContext, parse_error_fact
 from sre_kb.models.facts import Fact, Symbol
 from sre_kb.util import dig, fqn
 
@@ -78,18 +78,19 @@ def _configured(data: dict, section: str, name: str, tokens: tuple[str, ...]) ->
 
 
 def collect(ctx: ScanContext) -> list[Fact]:
+    facts: list[Fact] = []
     configs: list[tuple[str, dict]] = []
     for path in ctx.files(*_CONFIG_GLOBS):
         rel = ctx.rel(path)
         try:
             data = yaml.safe_load(ctx.read_text(rel)) or {}
-        except yaml.YAMLError:
+        except yaml.YAMLError as exc:
+            facts.append(parse_error_fact(ctx, rel, "java_spring.resiliency_params", exc))
             continue
         if isinstance(data, dict):
             configs.append((rel, data))
     checked = [rel for rel, _ in configs]
 
-    facts: list[Fact] = []
     for path in ctx.files("*.java"):
         rel = ctx.rel(path)
         module = ctx.module(rel, "java")

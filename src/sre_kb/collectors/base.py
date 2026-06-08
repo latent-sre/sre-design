@@ -86,6 +86,19 @@ class ScanContext:
         )
 
 
+def parse_error_fact(ctx: ScanContext, rel: str, detector: str, message: object) -> Fact:
+    """A grounded record that a config file couldn't be parsed. Collectors that tolerate a malformed
+    file (``except yaml.YAMLError``) emit this instead of silently dropping it, so a coverage gap is
+    itself auditable rather than invisible. Cites the file's first line."""
+    from sre_kb.models.facts import Fact
+
+    return Fact(
+        "collector.parse_error",
+        {"detector": detector, "message": str(message)[:200]},
+        ctx.evidence(rel, 1, 1, detector),
+    )
+
+
 @runtime_checkable
 class CollectorProtocol(Protocol):
     """The contract every collector satisfies — Tier-A (AST) and Tier-B (LLM) alike.

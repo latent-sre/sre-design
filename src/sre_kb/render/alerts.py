@@ -229,8 +229,9 @@ def _wavefront_burn(intent: BurnRateIntent) -> dict:
                 "query": f"{series} > {_le(intent.threshold_ms)}",
                 "mechanism": (
                     f"static p{pct} latency threshold in seconds (requires Micrometer "
-                    f"publishPercentiles); Wavefront has no le-bucket series, so this is a "
-                    f"p{pct} <= {intent.threshold_ms}ms check, NOT a multi-window budget burn-rate"
+                    f"publishPercentiles); Wavefront has no le-bucket series, so this fires when "
+                    f"p{pct} > {_le(intent.threshold_ms)}s (SLO: p{pct} <= {intent.threshold_ms}ms), "
+                    f"NOT a multi-window budget burn-rate"
                 ),
             }
         }
@@ -287,11 +288,10 @@ def _grafana_burn(intent: BurnRateIntent) -> dict:
     The faithful, deterministic mapping is to run the Prometheus multi-window burn-rate against a
     Prometheus datasource — so we reuse that engine-generated PromQL verbatim and let the reviewer
     bind the datasource UID. Fidelity therefore equals the Prometheus adapter, not a fabrication."""
-    prom = _prometheus_burn(intent)
+    prom = _prometheus_burn(intent)  # always populates prometheus_<key> for every BURN_WINDOWS entry
     rules = {
         key: {"expr": prom[f"prometheus_{key}"], "for": short_w}
         for key, _long_w, short_w, _mult in BURN_WINDOWS
-        if f"prometheus_{key}" in prom
     }
     return {
         "grafana": {

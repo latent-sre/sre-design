@@ -12,10 +12,13 @@ _TYPE_RANK = {"data-loss-risk": 0, "uncontained-critical-dep": 1, "broad-impact-
 
 def _first_evidence(doc: dict) -> str | None:
     ev = (doc.get("evidence") or [{}])[0]
-    if ev.get("path"):
-        lines = ev.get("lines") or {}
-        return f"{ev['path']}:{lines.get('start')}-{lines.get('end')}"
-    return None
+    if not ev.get("path"):
+        return None
+    lines = ev.get("lines") or {}
+    start, end = lines.get("start"), lines.get("end")
+    if start is None or end is None:
+        return ev["path"]  # no line range -> just the path, not "path:None-None"
+    return f"{ev['path']}:{start}-{end}"
 
 
 def collect_findings(docs: list[dict]) -> list[dict]:

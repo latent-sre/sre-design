@@ -61,6 +61,16 @@ def test_value_shape_catches_secret_in_later_pair():
     assert any(f["rule"] == "value-shape" for f in findings)
 
 
+def test_scan_budget_counts_bytes_not_characters(tmp_path):
+    """The byte budget must count bytes, not decoded characters — else a multibyte tree (each char
+    >1 byte) silently overshoots the DoS guard."""
+    from sre_kb.security.secret_scan import SecretScanBudgetError, scan_tree
+
+    (tmp_path / "a.txt").write_text("é" * 100, encoding="utf-8")  # 100 chars, 200 bytes
+    with pytest.raises(SecretScanBudgetError):  # 200 bytes > 150; char-count (100) would not trip
+        scan_tree(tmp_path, max_bytes=150)
+
+
 def test_scan_tree_enforces_file_budget(tmp_path):
     """DoS guard: a tree exceeding the file budget is refused rather than scanned unbounded."""
     from sre_kb.security.secret_scan import SecretScanBudgetError, scan_tree

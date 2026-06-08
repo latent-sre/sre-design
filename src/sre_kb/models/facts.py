@@ -33,13 +33,25 @@ class FactSet:
     """Container with small query helpers used by derivers and the scaffolder."""
 
     facts: list[Fact] = field(default_factory=list)
+    _index: dict[str, list[Fact]] | None = field(default=None, repr=False, compare=False)
 
     def add(self, *facts: Fact) -> None:
         self.facts.extend(facts)
+        self._index = None  # invalidate the type index; rebuilt lazily on next query
+
+    def _by_type(self) -> dict[str, list[Fact]]:
+        if self._index is None:
+            idx: dict[str, list[Fact]] = {}
+            for f in self.facts:  # insertion order preserved per type
+                idx.setdefault(f.type, []).append(f)
+            self._index = idx
+        return self._index
 
     def of(self, *types: str) -> list[Fact]:
+        if len(types) == 1:  # the common case: O(k) on the indexed bucket, not O(n) over all facts
+            return list(self._by_type().get(types[0], ()))
         wanted = set(types)
-        return [f for f in self.facts if f.type in wanted]
+        return [f for f in self.facts if f.type in wanted]  # multi-type keeps global fact order
 
     def first(self, *types: str) -> Fact | None:
         found = self.of(*types)

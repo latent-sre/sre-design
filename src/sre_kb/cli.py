@@ -307,6 +307,59 @@ def findings(
         raise typer.Exit(code=1)  # non-zero so CI can gate on high-severity findings
 
 
+@app.command("findings-narrative")
+def findings_narrative(
+    run_id: str = typer.Option(..., "--run"),
+    narrative: Path = typer.Option(
+        None, "--narrative", help="LLM narrative file to validate (omit to emit the brief for Copilot)."
+    ),
+    fmt: str = typer.Option(None, "--format", help="brief: json (default) | text; validate: md (default) | json"),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Advisory Tier-B narrative over the findings digest (HYBRID-PLAN §9.7 N5).
+
+    With no --narrative, emit the deterministic brief (ranked findings + the closed set of artifact
+    references) for Copilot to summarize. With --narrative, ground the returned prose against the
+    digest: every `Kind/name` reference must resolve to an artifact in the run, else it is flagged
+    ungrounded (exit 1). The engine never calls a model — it emits the brief and ingests what Copilot
+    wrote, and the narrative always renders as a needs-review advisory.
+    """
+    import json
+
+    from sre_kb.render import load_kb
+    from sre_kb.render.project import service_name
+    from sre_kb.reporting import collect_findings, narrative_brief, render_narrative, validate_narrative
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    docs = load_kb(layout.root)
+    found = collect_findings(docs)
+    service = service_name(docs)
+
+    if narrative is None:
+        brief = narrative_brief(service, run_id, found, docs)
+        if fmt == "text":
+            typer.echo(brief["instruction"])
+            typer.echo("\nallowed references:")
+            for ref in brief["allowedRefs"]:
+                typer.echo(f"  - {ref}")
+        else:
+            typer.echo(json.dumps(brief, indent=2))
+        return
+
+    text = narrative.read_text(encoding="utf-8")
+    check = validate_narrative(text, found, docs)
+    if fmt == "json":
+        typer.echo(json.dumps({
+            "service": service, "runId": run_id, "grounded": check.grounded,
+            "citedRefs": check.cited_refs, "unknownRefs": check.unknown_refs, "note": check.note,
+        }, indent=2))
+    else:
+        typer.echo(render_narrative(service, text, check))
+    if not check.grounded:
+        raise typer.Exit(code=1)  # a narrative citing an artifact not in the run is a defect
+
+
 @app.command("challenge-worklist")
 def challenge_worklist(
     run_id: str = typer.Option(..., "--run"),

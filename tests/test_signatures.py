@@ -111,3 +111,14 @@ def test_resiliency_claim_re_derives_via_signature() -> None:
     c = GroundingChallenger()
     assert c.adjudicate(claim, "@CircuitBreaker(name=x) public Foo call() {").verdict == "supported"
     assert c.adjudicate(claim, "public Inventory reserve() { return lookup(); }").verdict == "unsupported"
+
+
+def test_timeout_signature_does_not_fire_on_disabled_timeout() -> None:
+    """#H2: `timeout` is a refuting concern (a fire silently drops a gap), so a *disabled* timeout
+    must NOT fire — else a real missing-timeout risk is hidden. Enabled values still fire."""
+    assert not fires("timeout", "timeout = 0")        # disabled
+    assert not fires("timeout", "timeout = None")     # disabled (Python)
+    assert not fires("timeout", "self.timeout = null")
+    assert fires("timeout", "timeout=30")             # real values still detected
+    assert fires("timeout", "timeout = 0.5")
+    assert fires("timeout", "self.timeout = httpx.Timeout(5.0)")

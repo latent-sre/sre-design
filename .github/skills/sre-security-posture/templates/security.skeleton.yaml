@@ -10,7 +10,7 @@ spec:
   authn: none-found       # oauth2 | oidc | mtls | basic | none-found
   authz: none-found       # role-based | abac | method-level | none-found
   encryption: none-found  # tls-in-transit | kms-at-rest | none-found
-  secrets: needs-review   # externalized | vault | env | hardcoded-RISK
+  secrets: needs-review   # externalized | vault | env | hardcoded-RISK  # pragma: allowlist secret
   openRisks: []           # expected-but-unevidenced controls a reviewer must close
 status: needs-review
 crossRefs:

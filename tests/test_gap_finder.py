@@ -219,6 +219,70 @@ def test_judgment_category_is_routed_not_dropped():
     assert fact.evidence.source_tier == "llm" and fact.attrs["rederivation"] == "judgment"
 
 
+_BPRESS = "events.onBackpressureBuffer(256).subscribe(this::process);"
+
+
+def test_load_shed_backpressure_are_known_judgment_categories():
+    # N5: the new vocab is registered so the graduation loop's confirm-gap accepts a verdict on it.
+    assert {"missing-backpressure", "missing-load-shedding"} <= gap_finder.gap_categories()
+
+
+def test_missing_backpressure_routes_when_unbounded_and_refutes_when_present(tmp_path):
+    # Routed: the cited type has no backpressure mechanism -> judgment, surfaced to the oracle.
+    routed = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("missing-backpressure", _CHARGE, target="payments", severity="high"),
+    ])
+    [out] = routed.outcomes
+    assert out.result == "routed"
+    [fact] = routed.facts
+    assert fact.evidence.source_tier == "llm" and fact.attrs["rederivation"] == "judgment"
+
+    # Refuted: a type that already bounds the stream -> the backpressure signature fires in scope ->
+    # dropped, never spent on the oracle (the same shared-signature seam the refutation probes use).
+    (tmp_path / "Ingest.java").write_text(
+        "package com.acme;\n"
+        "public class Ingest {\n"
+        "    public void run(reactor.core.publisher.Flux<Job> events) {\n"
+        f"        {_BPRESS}\n"
+        "    }\n"
+        "    void process(Job j) {}\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    ctx = ScanContext(root=tmp_path, repo="file://bp", commit=LOCAL_COMMIT)
+    refuted = gap_finder.collect_from_proposals(ctx, [
+        Proposal("missing-backpressure", _BPRESS, target="ingest", severity="high"),
+    ])
+    [r] = refuted.outcomes
+    assert r.result == "refuted"
+    assert refuted.facts == []
+
+
+def test_missing_load_shedding_refuted_when_shedder_present(tmp_path):
+    # A semaphore tryAcquire that returns busy IS a load-shedder -> the gap doesn't hold -> refuted.
+    anchor = "if (!permits.tryAcquire()) return Resp.busy();"
+    (tmp_path / "Gate.java").write_text(
+        "package com.acme;\n"
+        "import java.util.concurrent.Semaphore;\n"
+        "public class Gate {\n"
+        "    private final Semaphore permits = new Semaphore(100);\n"
+        "    public Resp handle(Req r) {\n"
+        f"        {anchor}\n"
+        "        return serve(r);\n"
+        "    }\n"
+        "    Resp serve(Req r) { return Resp.ok(); }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    ctx = ScanContext(root=tmp_path, repo="file://ls", commit=LOCAL_COMMIT)
+    res = gap_finder.collect_from_proposals(ctx, [
+        Proposal("missing-load-shedding", anchor, target="gate", severity="high"),
+    ])
+    [out] = res.outcomes
+    assert out.result == "refuted"
+    assert res.facts == []
+
+
 def test_judgment_gap_lands_needs_review_never_verified(tmp_path):
     import json
     props = tmp_path / "g.json"

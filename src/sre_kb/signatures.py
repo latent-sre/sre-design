@@ -123,6 +123,32 @@ _SIGNATURES: dict[str, Signature] = {
                 r"@repeat_every\b",                                          # fastapi-utils
             ),
         ),
+        Signature(
+            "backpressure",  # bounding an unbounded producer/queue — reactive operators or a bounded buffer
+            # No annotation/call-token: no AST collector keys off these yet. The patterns ride
+            # re-derivation, challenge grounding, and the gap-finder's judgment refuter. They fire on a
+            # mechanism, never a bare word — a false fire here silently drops a real gap (§9.5 ⑤).
+            patterns=_p(
+                r"\.onBackpressure(?:Buffer|Drop|Latest|Error)\s*\(",  # Reactor / RxJava operators
+                r"\.limitRate\s*\(",                                   # Reactor demand cap
+                r"\bBackpressureStrategy\.",                           # RxJava strategy enum
+                r"\bOverflowStrategy\.",                               # Akka/Pekko stream buffer strategy
+                r"\bnew\s+ArrayBlockingQueue\b",                       # always-bounded JDK queue
+                r"\bnew\s+LinkedBlocking(?:Queue|Deque)\s*(?:<[^>]*>)?\s*\(\s*\w",  # capacity-bounded JDK queue
+                r"\bChannel\.CreateBounded\b", r"\bBoundedChannelOptions\b",        # .NET bounded channel
+                r"\bmake\s*\(\s*chan\b[^,)]*,\s*\w",                   # Go buffered (bounded) channel
+                r"\bhighWaterMark\s*[:=]",                             # Node stream backpressure knob
+            ),
+        ),
+        Signature(
+            "load-shed",  # rejecting/dropping excess load when overloaded (vs. queueing it unboundedly)
+            patterns=_p(
+                r"\btryAcquire\s*\(",            # Semaphore non-blocking/timed acquire (Java/Go/.NET) -> shed on full
+                r"\bConcurrencyLimit(?:er)?\b",  # Netflix concurrency-limits / adaptive concurrency limiter
+                r"\bRejectionStatusCode\b",      # ASP.NET Core / Polly rate-limiter rejection (sheds excess)
+                r"\blimit_(?:req|conn)\b",       # nginx / envoy load-shedding directives
+            ),
+        ),
     )
 }
 

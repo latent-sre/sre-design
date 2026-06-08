@@ -76,7 +76,15 @@ _CONFIRMING_SIGNATURE = {"undocumented-job": "scheduled"}
 # citation (the anchor must locate), then surface them as Tier-B `needs-review` candidates routed to
 # the human/Copilot oracle — never auto-verified, and subject to the same noise budget. This is the
 # honest home for the categories the engine cannot re-derive.
-_JUDGMENT_CATEGORIES = {"data-loss-path", "missing-idempotency", "unbounded-resource"}
+_JUDGMENT_CATEGORIES = {"data-loss-path", "missing-idempotency", "unbounded-resource",
+                        "missing-backpressure", "missing-load-shedding"}
+
+# A judgment call can't be CONFIRMED by a probe, but if its mechanism is already PRESENT in scope the
+# gap plainly doesn't hold — these categories refute (drop, never reaching the oracle) when the shared
+# signature fires at the cited location. Only categories with a deterministic positive signature
+# appear here; the refute reads the same `signatures` library Tier-A keys off, so it can't drift
+# (HYBRID-PLAN §7.4/§9.4). The load-shed/backpressure vocab (N5) is the first to use this seam.
+_JUDGMENT_REFUTERS = {"missing-backpressure": "backpressure", "missing-load-shedding": "load-shed"}
 
 
 def gap_categories() -> set[str]:
@@ -333,6 +341,17 @@ def collect_from_proposals(
             continue
 
         if p.category in _JUDGMENT_CATEGORIES:
+            # No probe can CONFIRM a judgment call (does this path *need* backpressure? a reasoning
+            # call) — so it grounds the citation and routes to the oracle as needs-review. But if the
+            # category has a positive signature and that mechanism already fires in scope, the gap
+            # doesn't hold — refute it rather than spend the oracle's attention on it.
+            refuter = _JUDGMENT_REFUTERS.get(p.category)
+            if refuter:
+                parsed = _enclosing_type(ctx, rel, s, e)
+                if parsed is not None and fires(refuter, parsed[2]):
+                    res.outcomes.append(Outcome(p, "refuted", rel, (s, e), (rel,),
+                                                f"the {refuter} signature fires in scope — the gap does not hold"))
+                    continue
             # No deterministic probe — locate-grounded only, routed to the oracle as needs-review.
             target = p.target or Path(rel).stem
             fact = Fact(

@@ -9,7 +9,7 @@ those backends have no faithful RED dashboard dialect.
 
 from __future__ import annotations
 
-from sre_kb.render.alerts import _label_match
+from sre_kb.render.alerts import _label_match, _pctl
 
 _BURN_METRIC = "http_server_requests_seconds"  # Micrometer/Prometheus HTTP server timer base name
 
@@ -17,15 +17,6 @@ _BURN_METRIC = "http_server_requests_seconds"  # Micrometer/Prometheus HTTP serv
 def _sel(*selectors: str) -> str:
     parts = [s for s in selectors if s]
     return "{" + ",".join(parts) + "}" if parts else ""
-
-
-def _pctl(percentile, default: float) -> float:
-    if percentile is None:
-        return default
-    try:
-        return float(str(percentile).lstrip("pP")) / 100
-    except ValueError:
-        return default
 
 
 def red_panels(route: str | None, *, percentile=None, source: str = "prometheus") -> list[dict]:
@@ -36,7 +27,7 @@ def red_panels(route: str | None, *, percentile=None, source: str = "prometheus"
     faithful RED dialect yields panels with the metric but no query (honest: no fabricated dialect).
     """
     uri = _label_match("uri", route) if route else ""  # escaped, like the alert adapters
-    phi = _pctl(percentile, 0.99)
+    phi = _pctl(percentile, 99) / 100  # one shared percentile normalizer; dashboards want a fraction
     rate_q = err_q = dur_q = None
     if source in ("prometheus", "grafana"):
         # Grafana dashboards query a Prometheus datasource, so reuse the deterministic PromQL.

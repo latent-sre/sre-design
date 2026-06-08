@@ -898,11 +898,24 @@ reviews. Completion is tracked in the §8 table; the rationale lives here.
   (sevN/pN/blocker/numeric → our `critical/high/medium/low`). The severity-rank/floor constants are
   derived from it, and `tests/test_taxonomy.py` sanctions the known severity shapes and fails on any
   new schema/code enum drift.
-- **N5 — lower priority.** `load-shed`/`backpressure` vocab + judgment probes; declarative inventory
-  signatures (tech-stack/messaging/datastore, incl. Node/Go) as a data-driven breadth path; an
-  LLM-authored narrative over the `findings` digest (advisory, Tier-B); lifting the `AGENTS.md`-hijack
-  + app-name-polyglot fixtures as regression tests (defenses exist via the fence + `_mm()`; named
-  fixtures don't).
+- **N5 — lower priority. ✅ Done.** Three data-driven breadth paths plus the named injection fixtures:
+  - **Declarative inventory signatures** (`sre_kb/inventory_signatures.py`, #39) — an ordered catalog
+    mapping a dependency name → datastore engine / message-broker kind, and a repo's manifest files →
+    (language, runtime, buildTool). Detection is data, not code (same philosophy as `signatures.py`), so
+    the `TechStack` roll-up now covers a Node or Go service the AST collectors don't parse, citing its
+    manifest; `synth/inventory.py` and `estate/topology.py` consume the shared catalog.
+  - **`load-shed`/`backpressure` vocab + judgment probes** (#40) — two cross-stack signatures
+    (mechanism-shaped, never a bare word, so a false fire can't silently drop a real gap, §9.5 ⑤), with
+    `missing-backpressure`/`missing-load-shedding` routed through the gap-finder's judgment path (Tier-B
+    `needs-review`) and refuted when the mechanism already fires in scope — the same shared-signature
+    seam, so no drift.
+  - **LLM findings narrative** (`sre_kb/reporting/narrative.py`, #41) — the engine emits a closed-world
+    brief and grounds Copilot's returned prose against the digest: a `Kind/name` citation that doesn't
+    resolve to a run artifact is flagged ungrounded, so a hallucinated risk can't pose as a finding.
+    Advisory, `needs-review`, never gates (CLI `findings-narrative`).
+  - The `AGENTS.md`-hijack + app-name-polyglot defenses are pinned by **named regression fixtures**
+    (`tests/test_injection_regression.py`, #38) — the fence + `_mm()`/`_inline()` sanitizers existed;
+    the named fixtures lock them against regression.
 - **Infra — full scan/publish credential split** (§9.3 #5): the no-credential scan role **landed**
   (read-only `sre-target-scan` agent); the scoped publish role + CI wiring remain. Becomes a real
   safety bug the moment we publish live.

@@ -88,6 +88,24 @@ def test_operator_edited_orphan_is_left_in_place(tmp_path):
     assert (dest / "catalog/old.yaml").read_text() == "operator kept this\n"
 
 
+def test_merge_tree_ignores_manifest_paths_escaping_dest(tmp_path):
+    """A hostile/corrupt .sre/manifest.yaml in the target repo must not drive an unlink outside the
+    cloned repo via a `../` key (path-traversal guard)."""
+    staged, dest = tmp_path / "staged", tmp_path / "dest"
+    staged.mkdir()
+    dest.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("precious\n", encoding="utf-8")
+    # the manifest claims a prior AI output at ../outside.txt, whose hash matches the live file —
+    # so the prune path WOULD unlink it without containment.
+    dump_manifest(dest, {"../outside.txt": content_hash(outside)})
+
+    res = merge_tree(staged, dest)
+    assert outside.exists()                          # not unlinked
+    assert "../outside.txt" not in res.removed
+    assert "../outside.txt" not in load_manifest(dest)  # the hostile entry is dropped from the manifest
+
+
 # --------------------------------------------------------------------------- wired into the forge
 
 

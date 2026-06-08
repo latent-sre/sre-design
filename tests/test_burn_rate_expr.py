@@ -1,6 +1,16 @@
 """Unit tests for the burn-rate expression builder (latency-vs-error SLI + route scoping)."""
 
+import pytest
+
 from sre_kb.synth.scaffold import burn_rate_expr
+
+
+def test_non_positive_error_budget_is_rejected():
+    """A 100% (budget 0) or out-of-range SLO target leaves a threshold of `> 0` that pages on any
+    request — reject it rather than emit a pager-storm alert."""
+    for bad in (0.0, 1.0, -0.1, 1.5):
+        with pytest.raises(ValueError):
+            burn_rate_expr("availability", None, bad, "/x")
 
 
 def test_latency_burns_on_buckets_scoped_by_route():

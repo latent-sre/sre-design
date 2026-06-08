@@ -28,3 +28,15 @@ jobs:
         run: make lint
       - name: Test (make test)
         run: make test
+
+  # Supply-chain integrity (HYBRID-PLAN R8): the runtime deps install ONLY from the pinned, hashed
+  # lockfile — a tampered or unexpected artifact fails the hash check. Regenerate with `make lock`.
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Hash-verified install of the locked runtime deps
+        run: python -m pip install --require-hashes -r requirements.lock

@@ -40,6 +40,9 @@ def test_skills_and_agents_exist():
     } <= names
 
 
+_MUTATING_TOOLS = {"editFiles", "runCommands"}
+
+
 @pytest.mark.parametrize("skill", SKILLS, ids=lambda p: p.parent.name)
 def test_skill_frontmatter_and_body(skill: Path):
     fm, body = _split(skill)
@@ -48,6 +51,17 @@ def test_skill_frontmatter_and_body(skill: Path):
     assert fm["name"] == skill.parent.name, f"{skill}: name must match folder"
     # GA requirement: SKILL.md body stays under 500 lines (progressive disclosure).
     assert len(body.splitlines()) < 500, f"{skill} body too long"
+    if "allowed-tools" in fm:  # optional, but if present it must be a list of tool names
+        assert isinstance(fm["allowed-tools"], list) and all(isinstance(t, str) for t in fm["allowed-tools"])
+
+
+def test_consumer_skill_is_read_only():
+    """The on-call consumer skill reads a published KB during an incident — it must not be
+    able to edit the KB or run mutating commands. Lock that as an invariant, not a comment."""
+    fm, _ = _split(ROOT / "skills" / "sre-incident-response" / "SKILL.md")
+    tools = set(fm.get("allowed-tools", []))
+    assert tools, "consumer skill must pin allowed-tools (read-only)"
+    assert not (tools & _MUTATING_TOOLS), f"consumer skill must stay read-only, got {sorted(tools)}"
 
 
 @pytest.mark.parametrize("agent", AGENTS, ids=lambda p: p.name)

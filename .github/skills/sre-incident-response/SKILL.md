@@ -1,6 +1,7 @@
 ---
 name: sre-incident-response
 description: 'On-call companion: given a symptom, a firing alert, or a failing dependency, find the relevant flow, blast radius, and runbook in an already-published SRE knowledge base and walk the responder through a grounded response. Use during an incident, when an alert fires, when a dependency is down, or to ask what to do about a symptom for a service. CONSUMER side — reads a published KB, does not scan code. Keywords: incident, on-call, alert firing, runbook, what do I do, dependency down, outage, paged, mitigate, escalate.'
+allowed-tools: ["codebase", "search"]
 ---
 
 # SRE incident response (consumer skill)
@@ -30,16 +31,19 @@ catalog/<service>/
   diagrams/*.mmd                sequence + topology
 ```
 
-Use [scripts/lookup.sh](./scripts/lookup.sh) `<catalog-dir> <term>` to grep the tree for an
-alert name, dependency, log string, or endpoint and list the artifacts that mention it.
+**Search** the tree for an alert name, dependency, log string, or endpoint to find the
+artifacts that mention it. If your tooling can run scripts,
+[scripts/lookup.sh](./scripts/lookup.sh) `<catalog-dir> <term>` does the same grep and lists
+the hits — but plain code search works just as well; this skill is read-only and never needs
+to execute anything.
 
 ## Workflow (during an incident)
 
-1. **Identify the entry point.** Match the symptom to an artifact:
+1. **Identify the entry point.** Match the symptom to an artifact (search the tree, or use
+   `lookup.sh` if available):
    - an alert name / detection string → the `Alert`;
    - a failing dependency or datastore → its `BlastRadius`;
    - an endpoint / request path → the `Flow`.
-   `lookup.sh` is the fast path.
 2. **Assess impact** from the `BlastRadius` / `FINDINGS.md`: which flows and services degrade,
    whether there's `dataLossRisk`, and the `severityHint`. State it plainly to the responder.
 3. **Go to the runbook.** Follow the `Alert`'s `relatedFlow` / the runbook's `alertRef` to the
@@ -51,6 +55,18 @@ alert name, dependency, log string, or endpoint and list the artifacts that ment
    `path:line` into the service; if the KB doesn't cover the symptom, say so and fall back to
    `FINDINGS.md` / escalation — do **not** invent steps. See
    [references/provenance-rules.md](./references/provenance-rules.md).
+
+## Worked example
+
+Page: *"failed to publish order.created event"* shows up in `order-service` logs. Search the
+catalog for `order.created` → the `Alert` `order-created-publish-failures` → its rendered
+`runbooks/order-created-publish-failures.md` (the runbook's `spec.trigger.alertRef` matches the
+alert). Cross-read the `BlastRadius` `order-created`: `stateful.dataLossRisk: true`. Tell the
+responder, grounded: *orders are still persisting, but the downstream `order.created` events are
+being swallowed and lost — there is no built-in replay, so assess the impact window.* Walk the
+runbook's Diagnosis (check the `order-kafka` binding / broker health; the publisher catch block
+swallows the failure) → Remediation, and read the `Escalation` (service owner). The code fix (an
+outbox) is a **follow-up**, not an incident action — don't attempt it live.
 
 ## Safety rules (non-negotiable during an incident)
 

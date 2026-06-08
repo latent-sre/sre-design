@@ -1,6 +1,7 @@
 ---
 name: sre-estate
-description: 'Analyze cross-service reliability across several repos at once: the estate topology and the co-tenancy blast radius of shared infrastructure (a datastore or broker many services depend on). Use when asked about cross-service impact, shared-database risk, what services are affected if shared infra fails, multi-service topology, or fleet/estate-level reliability. Keywords: estate, cross-service, co-tenancy, shared datastore, shared broker, topology, fleet, multi-repo, noisy neighbor, blast radius across services.'
+description: 'Analyze cross-service reliability across MULTIPLE service repos at once: the estate topology and the co-tenancy blast radius of shared infrastructure (a datastore or broker many services depend on). Use when asked about cross-service impact, shared-database risk, what OTHER services are affected if shared infra fails, multi-service topology, or fleet/estate-level reliability. For the blast radius inside a single service, use sre-blast-radius instead. Keywords: estate, cross-service, co-tenancy, shared datastore, shared broker, topology, fleet, multi-repo, noisy neighbor, shared-infra blast radius.'
+allowed-tools: ["codebase", "search", "editFiles", "runCommands"]
 ---
 
 # SRE estate analysis
@@ -44,6 +45,17 @@ facts; you explain and prioritize it, grounded in each service's code.
    fleet risk. Recommend isolation (separate stores / bulkheads) or a shared-fate runbook.
 5. Keep it grounded. Co-tenancy is asserted only where a binding/shared-store fact exists; if a
    coupling is suspected but unbacked, mark it "needs human confirmation," not a finding.
+
+## Worked example
+
+Running the estate over `order-service` + `billing-service`: the `Topology` shows both bind
+`orders-postgres`, and the engine emits an `orders-postgres-cotenancy` BlastRadius with
+`coTenancy: [{sharedBy: [billing-service, order-service]}]`, `impactedServices:
+[billing-service, order-service]`, `stateful.dataLossRisk: true`, `severityHint: critical`.
+Story: `orders-postgres` is a single point of failure for **two** teams — if it's down, both
+services degrade *simultaneously* and in-flight data is at risk. That makes it the top fleet
+risk, above anything contained within a single service. Fix: isolate the stores (per-service
+databases), or — short of that — a shared-fate runbook and an alert that pages both owners.
 
 ## Gotchas
 

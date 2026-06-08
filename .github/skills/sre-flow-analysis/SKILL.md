@@ -1,6 +1,7 @@
 ---
 name: sre-flow-analysis
 description: 'Analyze a service request flow and its failure points from sre-kb facts and emit or repair a validated Flow artifact (plus its Alert/Runbook). Use when asked to map a request flow, find where a request can fail, derive alerts/runbooks from code, or build the SRE knowledge base for a Spring/PCF service. Keywords: flow, request path, failure mode, circuit breaker, swallowed error, data loss, runbook, alert, blast radius.'
+allowed-tools: ["codebase", "search", "editFiles", "runCommands"]
 ---
 
 # SRE flow analysis

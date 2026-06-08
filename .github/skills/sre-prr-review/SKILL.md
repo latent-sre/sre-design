@@ -1,6 +1,7 @@
 ---
 name: sre-prr-review
 description: 'Grade a service''s production readiness (PRR) from sre-kb facts and turn the gaps into a prioritized, code-grounded remediation plan. Use when asked to assess production readiness, run a PRR / launch review, score reliability maturity, or explain why a service is not ready to ship. Keywords: production readiness, PRR, launch review, readiness score, reliability scorecard, SLO, runbook coverage, go/no-go.'
+allowed-tools: ["codebase", "search", "editFiles", "runCommands"]
 ---
 
 # SRE production-readiness review
@@ -48,6 +49,15 @@ invent a check result — the engine computes the checks from facts.
   one on a leaf. Read `severityHint` and `impactedFlows` from the `BlastRadius` artifacts.
 - **Tracing/structured-logging gaps are rarely blocking** on their own — flag as fast-follow
   unless an incident would be undiagnosable without them.
+
+## Worked example
+
+The `order-service` fixture scores a high grade — most `prrChecks` pass — yet its `gaps`
+include *"A publish failure is logged and swallowed — data-loss risk"* and *"client timeout 3s
+exceeds flow SLO budget 800ms"*, with `tracing-enabled: false`. The right PRR verdict is **not
+"grade A, ship it."** Lead with the two launch-blocking gaps — the swallowed data-loss path
+and the timeout that can blow the SLO on a single slow call — and rank them above the missing
+tracing (fast-follow). The letter grade summarizes coverage; the *findings* decide go/no-go.
 
 ## Gotchas
 

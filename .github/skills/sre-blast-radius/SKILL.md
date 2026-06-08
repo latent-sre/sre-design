@@ -1,6 +1,7 @@
 ---
 name: sre-blast-radius
-description: 'Reason about what fails when a dependency or datastore goes down, using the engine''s BlastRadius and ResiliencyPattern facts, and sharpen the severity / containment narrative grounded in code. Use when asked what breaks if X is down, how far an outage spreads, whether a failure is contained, what the blast radius or impact of a dependency is, or to prioritize risks by impact. Keywords: blast radius, impact, what breaks if down, circuit breaker, bulkhead, containment, data loss, critical dependency, severity.'
+description: 'Reason about what fails WITHIN ONE SERVICE when a dependency, broker, or datastore it uses goes down — from that service''s single-service BlastRadius and ResiliencyPattern facts — and sharpen the severity / containment narrative grounded in code. Use when asked what breaks if X is down, how far an outage spreads inside a service, whether a failure is contained, the impact or blast radius of a dependency, or to prioritize one service''s risks by impact. For shared infrastructure across MULTIPLE services or repos, use sre-estate instead. Keywords: blast radius, single service, impact, what breaks if down, circuit breaker, bulkhead, containment, data loss, critical dependency, severity.'
+allowed-tools: ["codebase", "search", "editFiles", "runCommands"]
 ---
 
 # SRE blast-radius analysis
@@ -51,6 +52,21 @@ narrative and verify the severity is justified — never invent impact.
   bulkhead is present. The cross-service co-tenancy path can raise it to `critical`.
 - **data-loss beats availability.** A swallowed publish/write failure (`dataLossRisk: true`)
   is the worst case even if the node looks "up" — surface it first; it never silently heals.
+
+## Worked example
+
+The `order-service` fixture emits two nodes that show both axes:
+
+- **`inventory`** (egress dependency) — `containment: [{kind: ResiliencyPattern, name: inventory},
+  {kind: Fallback, name: reserve-fallback}]`, `dependencyCriticality: degraded`,
+  `severityHint: medium`. Story: if inventory is down, `create-order` *degrades* (the fallback
+  reserves), it doesn't fail. A bounded, contained risk.
+- **`order-created`** (broker, fire-and-forget publish) — `containment: []`,
+  `stateful.dataLossRisk: true`, `dependencyCriticality: critical`, `severityHint: high`,
+  `riskRationale: "...irreversible data loss on failure"`. Story: the order persists but the
+  `order.created` event is swallowed and lost with no replay. **This outranks the inventory
+  risk** even though both touch the same single flow — data loss beats a contained degrade.
+  The fix is an outbox / transactional publish, not a retry.
 
 ## Gotchas
 

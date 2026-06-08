@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import re
 
 from sre_kb.taxonomy import vocab
 
@@ -68,6 +69,50 @@ def _pctl(percentile: int | float | str | None, default: int) -> int | float:
     return int(n) if n.is_integer() else n
 
 
+_SAFE_SPL_VALUE = re.compile(r"^[A-Za-z0-9_.:-]+$")
+_SAFE_GROUP_FIELD = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]*$")
+
+
+def _query_string(value: str) -> str:
+    """Quote a value for generated query languages that use double-quoted string literals.
+
+    Route, service, and log-pattern values are repository-derived evidence. Escaping them here keeps
+    a literal quote/backslash/newline from breaking out of PromQL/WQL/LogQL/SPL fragments and turning
+    generated artifacts into malformed or reviewer-hostile queries.
+    """
+    escaped = (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+    )
+    return f'"{escaped}"'
+
+
+def _label_match(label: str, value: str, *, op: str = "=") -> str:
+    """Render a label matcher with escaped value content."""
+    return f"{label}{op}{_query_string(value)}"
+
+
+def _spl_field_eq(field: str, value: str) -> str:
+    """Render a Splunk field equality, preserving existing terse output for safe values."""
+    value = str(value)
+    if _SAFE_SPL_VALUE.fullmatch(value):
+        return f"{field}={value}"
+    return f"{field}={_query_string(value)}"
+
+
+def _group_field(value: str) -> str:
+    """Return a safe grouping field/label for SPL and LogQL aggregation clauses.
+
+    Unlike quoted literal values, aggregation fields are query syntax. If a future caller passes an
+    unsafe value, fall back to the generated default rather than emitting reviewer-hostile syntax.
+    """
+    value = str(value)
+    return value if _SAFE_GROUP_FIELD.fullmatch(value) else "host"
+
+
 def _sel(*selectors: str) -> str:
     """Join non-empty Prometheus label selectors into a `{...}` block ('' if none)."""
     parts = [s for s in selectors if s]
@@ -110,7 +155,7 @@ class LogPatternIntent:
 
 # --- Prometheus adapter ---------------------------------------------------------------------------
 def _prometheus_burn(intent: BurnRateIntent) -> dict:
-    uri_sel = f'uri="{intent.route}"' if intent.route else ""
+    uri_sel = _label_match("uri", intent.route) if intent.route else ""
 
     def _cond(window: str, thr: float) -> str:
         """The burn ratio over `window` exceeding `thr` (latency: slow-request fraction from the
@@ -121,7 +166,7 @@ def _prometheus_burn(intent: BurnRateIntent) -> dict:
             total = f"sum(rate({_BURN_METRIC}_count{tot}[{window}]))"
             within_term = f"sum(rate({_BURN_METRIC}_bucket{within}[{window}]))"
             return f"({total} - {within_term}) / {total} > {thr}"
-        errs = _sel(uri_sel, 'outcome!="SUCCESS"')
+        errs = _sel(uri_sel, _label_match("outcome", "SUCCESS", op="!="))
         tot = _sel(uri_sel)
         errors = f"sum(rate({_BURN_METRIC}_count{errs}[{window}]))"
         total = f"sum(rate({_BURN_METRIC}_count{tot}[{window}]))"
@@ -146,8 +191,10 @@ def _splunk_burn(_: BurnRateIntent) -> dict:
 
 def _splunk_log(intent: LogPatternIntent) -> dict:
     return {
-        "splunk": f'index=app sourcetype={intent.service} "{intent.search}" '
-        f"| stats count by {intent.group_by}"
+        "splunk": (
+            f"index=app {_spl_field_eq('sourcetype', intent.service)} "
+            f"{_query_string(intent.search)} | stats count by {_group_field(intent.group_by)}"
+        )
     }
 
 
@@ -161,11 +208,11 @@ def _wavefront_burn(intent: BurnRateIntent) -> dict:
     """Wavefront WQL. Availability burns as a moving-window error-fraction ratio (faithful to the
     intent). Latency has no le-bucket series in Micrometer's Wavefront registry, so it is rendered
     as a percentile threshold — a *different* mechanism, labelled as such, not a budget burn-rate."""
-    route = f'uri="{intent.route}"' if intent.route else ""
+    route = _label_match("uri", intent.route) if intent.route else ""
     if intent.is_latency:
         pct = _pctl(intent.percentile, 99)
         phi = f"{pct / 100:g}"  # 99 -> "0.99"
-        series = _wf_ts("http.server.requests", route, f'phi="{phi}"')
+        series = _wf_ts("http.server.requests", route, _label_match("phi", phi))
         return {
             "wavefront": {
                 "query": f"{series} > {_le(intent.threshold_ms)}",
@@ -177,7 +224,7 @@ def _wavefront_burn(intent: BurnRateIntent) -> dict:
             }
         }
     out: dict = {}
-    not_success = 'not outcome="SUCCESS"'
+    not_success = "not " + _label_match("outcome", "SUCCESS")
     err_series = _wf_ts("http.server.requests.count", route, not_success)
     tot_series = _wf_ts("http.server.requests.count", route)
 
@@ -252,8 +299,9 @@ def _grafana_log(intent: LogPatternIntent) -> dict:
     """Grafana log alerting runs over a Loki datasource (LogQL), built deterministically from the
     search string; the reviewer supplies the Loki datasource UID."""
     logql = (
-        f"sum by ({intent.group_by}) "
-        f'(count_over_time({{service="{intent.service}"}} |= "{intent.search}" [5m]))'
+        f"sum by ({_group_field(intent.group_by)}) "
+        f"(count_over_time({{service={_query_string(intent.service)}}} "
+        f"|= {_query_string(intent.search)} [5m]))"
     )
     return {
         "grafana": {

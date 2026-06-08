@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from sre_kb.collectors.base import ScanContext
-from sre_kb.models.facts import Fact, Symbol
+from sre_kb.models.facts import Fact, FactSet, Symbol
 from sre_kb.signatures import fires
 from sre_kb.taxonomy import severity_rank
 from sre_kb.tiers import AST, LLM
@@ -85,11 +85,49 @@ _JUDGMENT_CATEGORIES = {"data-loss-path", "missing-idempotency", "unbounded-reso
 # (HYBRID-PLAN §7.4/§9.4). The load-shed/backpressure vocab (N5) is the first to use this seam.
 _JUDGMENT_REFUTERS = {"missing-backpressure": "backpressure", "missing-load-shedding": "load-shed"}
 
+# Observability-coverage categories (R6): the LLM scores metrics/logs/traces/synthetics coverage and
+# proposes the missing pillar; the engine REFUTES against its OWN observability facts — a
+# claimed-missing pillar the facts already prove present is dropped — then routes survivors to review
+# (`needs-review`, never auto-verified). Unlike _JUDGMENT_REFUTERS (which fire a code signature),
+# these refute on the FACT SET, reading exactly what the deterministic collectors already proved, so
+# the refutation can't drift from Tier-A detection (§7.4/§9.4). Coverage lives in config/deps, not
+# code, so these gaps anchor on a broader glob set than the code-only categories.
+_OBSERVABILITY_CATEGORIES = {
+    "missing-metrics", "missing-tracing", "missing-structured-logging", "missing-synthetic-monitoring",
+}
+# Dependency-name tokens that prove a pillar present (matched against `tech.dependency` facts).
+_OBS_DEP_TOKENS = {
+    "missing-metrics": ("micrometer", "actuator", "prometheus"),
+    "missing-tracing": ("sleuth", "micrometer-tracing", "opentelemetry", "otel", "zipkin", "brave", "jaeger"),
+}
+_OBSERVABILITY_GLOBS = _SOURCE_GLOBS + (
+    "pom.xml", "build.gradle", "*.gradle", "*.csproj",
+    "application.yml", "application.yaml", "application*.properties",
+    "appsettings*.json", "logback*.xml",
+)
+
+
+def _observability_present(fs: FactSet, category: str) -> bool:
+    """True iff the engine's own facts already prove the pillar `category` claims is missing — in
+    which case the gap is refuted (the LLM is wrong) and dropped."""
+    if category == "missing-structured-logging":
+        return any(f.attrs.get("format") == "json" or f.attrs.get("correlationFields")
+                   for f in fs.of("observability.logging"))
+    if category == "missing-synthetic-monitoring":
+        return False  # the engine has no synthetic-monitoring signal to refute against — always route
+    deps = [str(d.attrs.get("name", "")).lower() for d in fs.of("tech.dependency")]
+    if any(tok in name for name in deps for tok in _OBS_DEP_TOKENS.get(category, ())):
+        return True
+    if category == "missing-metrics":  # actuator exposure or an SLO config also proves metrics
+        return bool(fs.first("config.actuator") or fs.first("config.slo"))
+    return False
+
 
 def gap_categories() -> set[str]:
-    """Every known gap category the gap-finder can emit (refutation + confirmation + judgment).
-    Used by the graduation loop to validate a reviewer's `confirm-gap` verdict."""
-    return set(_REFUTING_CONCERNS) | set(_CONFIRMING_CATEGORIES) | set(_JUDGMENT_CATEGORIES)
+    """Every known gap category the gap-finder can emit (refutation + confirmation + judgment +
+    observability). Used by the graduation loop to validate a reviewer's `confirm-gap` verdict."""
+    return (set(_REFUTING_CONCERNS) | set(_CONFIRMING_CATEGORIES) | set(_JUDGMENT_CATEGORIES)
+            | _OBSERVABILITY_CATEGORIES)
 
 
 def target_concerns(category: str) -> tuple[str, ...]:
@@ -168,13 +206,16 @@ def load_proposals(path: Path) -> list[Proposal]:
 
 # --------------------------------------------------------------------------- locate
 
-def _locate(ctx: ScanContext, anchor: str) -> tuple[str, int, int] | None:
+def _locate(
+    ctx: ScanContext, anchor: str, globs: tuple[str, ...] = _SOURCE_GLOBS
+) -> tuple[str, int, int] | None:
     """Find the verbatim anchor as a contiguous run of whole source lines. Returns
-    (relpath, start, end) 1-based inclusive, or None if it isn't present verbatim."""
+    (relpath, start, end) 1-based inclusive, or None if it isn't present verbatim. `globs` widens the
+    search universe for observability gaps, which anchor on config/build files rather than code."""
     needles = [ln.strip() for ln in anchor.splitlines() if ln.strip()]
     if not needles:
         return None
-    for path in ctx.files(*_SOURCE_GLOBS):
+    for path in ctx.files(*globs):
         rel = ctx.rel(path)
         stripped = [ln.strip() for ln in ctx.read_lines(rel)]
         for i in range(len(stripped) - len(needles) + 1):
@@ -306,20 +347,44 @@ def _confirm(ctx: ScanContext, rel: str, start: int, end: int, category: str):
 # --------------------------------------------------------------------------- collect
 
 def collect_from_proposals(
-    ctx: ScanContext, proposals: list[Proposal], *, max_candidates: int | None = None
+    ctx: ScanContext, proposals: list[Proposal], *, fs: FactSet | None = None,
+    max_candidates: int | None = None,
 ) -> GapResult:
     """The collector: locate → stamp → re-derive every proposal. Emits one `resiliency.gap` Fact
     per surviving gap; records an Outcome for all (incl. drops) as audit evidence. A noise budget
     (§7.9) ranks survivors by severity and keeps at most `max_candidates` — the rest are recorded
-    `capped` so a cry-wolf run can't flood a reviewer."""
+    `capped` so a cry-wolf run can't flood a reviewer. `fs` (the engine's fact set) lets the
+    observability-coverage categories refute a claimed-missing pillar the facts already prove."""
     res = GapResult()
     survivors: list[tuple[Outcome, Fact]] = []
     for p in proposals:
-        loc = _locate(ctx, p.anchor)
+        globs = _OBSERVABILITY_GLOBS if p.category in _OBSERVABILITY_CATEGORIES else _SOURCE_GLOBS
+        loc = _locate(ctx, p.anchor, globs)
         if loc is None:
             res.outcomes.append(Outcome(p, "unlocatable", note="anchor not found verbatim in the source"))
             continue
         rel, s, e = loc
+
+        # Observability-coverage gap (R6): refute against the engine's own facts — a claimed-missing
+        # pillar the facts already prove present is dropped — else route to review (needs-review).
+        if p.category in _OBSERVABILITY_CATEGORIES:
+            if fs is not None and _observability_present(fs, p.category):
+                pillar = p.category.removeprefix("missing-")
+                res.outcomes.append(Outcome(p, "refuted", rel, (s, e), (rel,),
+                    f"the engine's facts already cover {pillar} — the gap does not hold"))
+                continue
+            target = p.target or Path(rel).stem
+            fact = Fact(
+                "resiliency.gap",
+                {"category": p.category, "target": target, "severity": p.severity,
+                 "rationale": p.rationale, "rederivation": "judgment", "checked": [rel],
+                 "note": "observability-coverage gap — not refuted by engine facts; routed to review"},
+                ctx.evidence(rel, s, e, "llm.gap_finder", source_tier=LLM),
+                Symbol(f"{rel}:{s}-{e}", "gap"),
+            )
+            survivors.append((Outcome(p, "routed", rel, (s, e), (rel,),
+                                      "observability-coverage gap — routed to human/oracle review"), fact))
+            continue
 
         # Confirmation probe (§9.4): the rule firing at the pointer confirms the gap AND graduates
         # it to Tier-A — the engine re-derived it, so it is no longer LLM-asserted. Never noise-capped
@@ -400,10 +465,12 @@ def collect_from_proposals(
 
 
 def collect(
-    ctx: ScanContext, proposals_path: Path | None = None, *, max_candidates: int | None = None
+    ctx: ScanContext, proposals_path: Path | None = None, *, fs: FactSet | None = None,
+    max_candidates: int | None = None,
 ) -> GapResult:
     """Self-gating entry point: read proposals from `proposals_path` (default the conventional
-    in-repo location). No proposals file → empty result."""
+    in-repo location). No proposals file → empty result. `fs` enables observability-coverage
+    refutation (the main pipeline passes its fact set; the standalone CLI runs without one)."""
     path = proposals_path or (ctx.root / PROPOSALS_REL)
     if not path.exists():
         return GapResult()
@@ -413,4 +480,4 @@ def collect(
         return GapResult()  # a malformed proposals file is self-gated to "no proposals", like the
         # YAML collectors — it must not abort the whole scan (load_proposals stays strict for the
         # validate CLI, which wants to surface a broken file).
-    return collect_from_proposals(ctx, proposals, max_candidates=max_candidates)
+    return collect_from_proposals(ctx, proposals, fs=fs, max_candidates=max_candidates)

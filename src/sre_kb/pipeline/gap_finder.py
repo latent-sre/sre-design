@@ -16,7 +16,7 @@ from pathlib import Path
 
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.collectors.llm import gap_finder
-from sre_kb.collectors.llm.gap_finder import GapResult
+from sre_kb.collectors.llm.gap_finder import _OBSERVABILITY_CATEGORIES, GapResult
 from sre_kb.config import load_config
 from sre_kb.models.facts import Fact
 from sre_kb.scoring.confidence import Signal, confidence
@@ -44,8 +44,10 @@ def scaffold_gap(fact: Fact, service: str) -> dict:
         status, conf, prov, unverified, cross = "verified", confidence(Signal.DIRECT), "deterministic", False, None
     else:
         status, conf, prov, unverified = "needs-review", confidence(Signal.WEAK), "llm-asserted", True
+        # An observability-coverage gap is about missing metrics/traces/logs, not a dependency on a
+        # resilience pattern — so it carries no ResiliencyPattern depends-on backlink.
         cross = ([{"kind": "ResiliencyPattern", "name": slug(a["target"]), "relation": "depends-on"}]
-                 if a.get("target") else None)
+                 if a.get("target") and a["category"] not in _OBSERVABILITY_CATEGORIES else None)
     return emit(
         "ResiliencyGap",
         name,

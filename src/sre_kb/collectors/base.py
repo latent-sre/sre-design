@@ -36,6 +36,7 @@ class ScanContext:
     commit: str = LOCAL_COMMIT
     _lines: dict[str, list[str]] = field(default_factory=dict)
     _modules: dict[tuple[str, str], Module] = field(default_factory=dict)
+    _files: dict[tuple[str, ...], list[Path]] = field(default_factory=dict)
 
     def read_lines(self, rel: str) -> list[str]:
         if rel not in self._lines:
@@ -59,6 +60,8 @@ class ScanContext:
         return str(path.relative_to(self.root)).replace("\\", "/")
 
     def files(self, *patterns: str) -> list[Path]:
+        if patterns in self._files:
+            return self._files[patterns]  # memoized: every collector re-globs the same patterns
         out: list[Path] = []
         for pattern in patterns:
             for p in sorted(self.root.rglob(pattern)):
@@ -69,6 +72,7 @@ class ScanContext:
                 if p.stat().st_size > _MAX_FILE_BYTES:
                     continue  # resource budget (safe-by-default)
                 out.append(p)
+        self._files[patterns] = out
         return out
 
     def evidence(

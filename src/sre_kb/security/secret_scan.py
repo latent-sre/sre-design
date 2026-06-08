@@ -248,8 +248,51 @@ def scan_tree(
 _REDACTION = "***REDACTED***"  # also matches _PLACEHOLDER, so redaction is idempotent
 
 
+def _redact_entropy_tokens(core: str) -> tuple[str, int]:
+    """Blank the high-entropy tokens scan_text flags (a bare opaque secret with no secretish key)."""
+    count = 0
+
+    def repl(m: re.Match) -> str:
+        nonlocal count
+        tok = m.group(0)
+        if _entropy_candidate(tok) and _shannon_entropy(tok) >= _ENTROPY_MIN_BITS:
+            count += 1
+            return _REDACTION
+        return tok
+
+    return _TOKEN_RE.sub(repl, core), count
+
+
+def _redact_secretish_values(core: str) -> tuple[str, int]:
+    """Blank the value of a secretish key/value pair (the value-shape detector), keeping key + sep."""
+    count = 0
+
+    def repl(m: re.Match) -> str:
+        nonlocal count
+        key, raw = m.group(1), m.group(2)
+        value = raw.strip("'\"")
+        if (
+            _is_secretish_key(key)
+            and not value.startswith(_SENTINEL_PREFIX)
+            and not _PLACEHOLDER.search(value)
+            and not _looks_like_hash(value)
+        ):
+            count += 1
+            quote = raw[0] if raw[:1] in ("'", '"') else ""
+            return m.group(0)[: m.start(2) - m.start(0)] + quote + _REDACTION + quote
+        return m.group(0)
+
+    return _KV_RE.sub(repl, core), count
+
+
 def redact_text(text: str) -> tuple[str, int]:
-    """Replace detected regex-pattern secrets with a placeholder, preserving line structure."""
+    """Replace detected secrets with a placeholder, preserving line structure.
+
+    Covers every detector scan_text uses — the regex rules AND the high-entropy / value-shape
+    heuristics — so a secret caught only by entropy or value-shape (e.g. a ``dsn=`` / ``connstring=``
+    value or a bare opaque token) is scrubbed too, not reported-then-published-raw under
+    ``--allow-secrets``. This keeps redact_tree in lockstep with scan_text.
+    """
     count = 0
     out: list[str] = []
     for line in text.splitlines(keepends=True):
@@ -264,6 +307,10 @@ def redact_text(text: str) -> tuple[str, int]:
                 continue
             core, n = pat.subn(_REDACTION, core)
             count += n
+        core, n = _redact_entropy_tokens(core)
+        count += n
+        core, n = _redact_secretish_values(core)
+        count += n
         out.append(core + eol)
     return "".join(out), count
 

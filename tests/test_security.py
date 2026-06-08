@@ -169,6 +169,28 @@ def test_redact_scrubs_secrets_before_gate(tmp_path):
     assert enforce_secret_gate(tmp_path) == []   # second gate now finds nothing
 
 
+def test_redact_covers_entropy_and_value_shape(tmp_path):
+    """Redaction must cover EVERY detector scan_text uses, not just the regex rules. A secret caught
+    only by high-entropy or value-shape (e.g. a `dsn=` value, whose key isn't in any redaction regex)
+    was previously reported-then-published-raw under --allow-secrets. Round-trip: scan->redact->scan."""
+    from sre_kb.security import redact_tree
+    from sre_kb.security.secret_scan import redact_text
+
+    for line in (
+        "dsn = postgres_AbleToConnect_99x_longvalue",        # value-shape (dsn) + entropy token
+        "blob: aGVsbG9Xb3JsZDEyMzQ1Njc4OTBhYmNk99",          # bare high-entropy token, no key
+    ):
+        assert scan_text(line, "f"), line                    # detected
+        red, n = redact_text(line)
+        assert n >= 1, line                                  # and redacted
+        assert scan_text(red, "f") == [], red                # round-trip clean
+
+    leak = tmp_path / "settings.conf"
+    leak.write_text("dsn = postgres_AbleToConnect_99x_longvalue\n", encoding="utf-8")
+    assert redact_tree(tmp_path) >= 1
+    assert enforce_secret_gate(tmp_path) == []               # fail-closed: gate clean after redaction
+
+
 def test_render_guardrails_sanitize_injected_values():
     """A hostile symbol/name can't inject a new guardrail line or break a code span."""
     from sre_kb.render.copilot import reliability_guardrails, runbook_markdown

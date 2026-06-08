@@ -10,7 +10,8 @@ from pathlib import Path
 
 from sre_kb.pipeline import run as run_pipeline
 from sre_kb.pipeline.challenge_apply import apply_verdicts
-from sre_kb.pipeline.challenge_run import SubprocessOracle, parse_reply, run_worklist
+from sre_kb.pipeline.challenge_run import SubprocessOracle, run_worklist
+from sre_kb.validation.challenge import parse_verdict_reply as parse_reply
 from sre_kb.workspace import RunLayout
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
@@ -22,12 +23,21 @@ def test_parse_reply_is_conservative():
         "supported",
         "supported — breaker present at X.java:10",
     )
-    # "unsupported" must not be misread as "supported" by substring
     assert parse_reply("unsupported, no guard")[0] == "unsupported"
     assert parse_reply("CONTRADICTED: step deletes data")[0] == "contradicted"
+    assert parse_reply("**Unsupported** — no evidence")[0] == "unsupported"  # markdown prefix
     # anything unreadable defers to a human — never a false pass
     assert parse_reply("")[0] == "indeterminate"
     assert parse_reply("I'm not sure about this one")[0] == "indeterminate"
+
+
+def test_parse_reply_never_false_passes_on_negation():
+    """Regression: a plain substring/regex search reads 'supported' out of these rejections.
+    The shared parser must anchor on the first token, so a negating reply defers (safe),
+    never silently passes the artifact through the downgrade-only gate."""
+    for reply in ("not supported by the evidence", "un-supported", "cannot be supported",
+                  "this is not supported"):
+        assert parse_reply(reply)[0] == "indeterminate", reply
 
 
 def test_run_worklist_attaches_artifact_and_claim_and_is_apply_shaped():
@@ -38,9 +48,12 @@ def test_run_worklist_attaches_artifact_and_claim_and_is_apply_shaped():
     }
     out = run_worklist(worklist, lambda _p: "contradicted: unsafe", oracle_id="stub")
     assert out["schema"] == "challenge.verdicts/v1"
+    assert out["oracle"] == "stub"  # oracle recorded once at the document level
     v = out["verdicts"][0]
+    # each verdict keeps the documented {artifact, claimId, verdict, reason} shape
+    assert set(v) == {"artifact", "claimId", "verdict", "reason"}
     assert v["artifact"] == RUNBOOK and v["claimId"] == "runbook/remediation-safe"
-    assert v["verdict"] == "contradicted" and v["oracle"] == "stub"
+    assert v["verdict"] == "contradicted"
 
 
 def test_subprocess_oracle_feeds_prompt_on_stdin_not_argv():

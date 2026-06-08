@@ -63,3 +63,15 @@ def test_relative_links_resolve(doc: Path):
             continue
         rel = target.split("#", 1)[0]
         assert (doc.parent / rel).exists(), f"{doc}: dangling link -> {target}"
+
+
+# Skills must be self-contained folders, so shared references (the non-negotiable provenance
+# rules, the challenge protocol) are copied into each skill rather than linked across folders.
+# That portability has a cost: the copies can drift. Pin them byte-identical so a one-sided
+# edit fails CI instead of silently diverging the rules between skills.
+@pytest.mark.parametrize("shared", ["provenance-rules.md", "challenge-protocol.md"])
+def test_shared_references_stay_identical(shared: str):
+    copies = sorted((ROOT / "skills").glob(f"*/references/{shared}"))
+    assert len(copies) >= 2, f"expected {shared} bundled into multiple skills"
+    bodies = {c.read_text(encoding="utf-8") for c in copies}
+    assert len(bodies) == 1, f"{shared} has drifted across skills: {[str(c) for c in copies]}"

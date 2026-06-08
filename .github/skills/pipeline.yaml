@@ -13,4 +13,5 @@ phases:
     - sre-flow-analysis
   assess:
     - sre-gap-finder
+    - sre-observability-coverage
   generate: []

@@ -123,3 +123,39 @@ def test_swallow_detected_in_a_later_catch_clause():
     sw = _send_call(src).swallow
     assert sw is not None and sw.message == "dropped"
 
+
+
+def test_nested_try_catch_not_attributed_to_enclosing_catch():
+    """#M6: a nested try/catch's throw/log must not be judged as the enclosing catch's. (a) an outer
+    catch that logs-and-swallows is detected even when an inner catch rethrows; (b) an inner catch's
+    log is not mis-attributed as the outer catch swallowing."""
+    from sre_kb.parsing import parse
+
+    # (a) outer logs + swallows; nested catch rethrows -> the inner throw must not mask the swallow
+    src_a = (
+        "class C {\n"
+        "  void go() {\n"
+        "    try { publisher.publish(evt); }\n"
+        "    catch (Exception e) {\n"
+        '      log.error("failed to publish");\n'
+        "      try { cleanup(); } catch (Exception e2) { throw e2; }\n"
+        "    }\n"
+        "  }\n"
+        "}\n"
+    )
+    publish = next(c for m in parse("java", src_a).types[0].methods for c in m.calls if c.method == "publish")
+    assert publish.swallow is not None and publish.swallow.message == "failed to publish"
+
+    # (b) outer neither logs nor rethrows directly; only a nested catch logs -> NOT an outer swallow
+    src_b = (
+        "class C {\n"
+        "  void go() {\n"
+        "    try { repo.save(x); }\n"
+        "    catch (Exception e) {\n"
+        '      try { other(); } catch (Exception e2) { log.error("inner only"); }\n'
+        "    }\n"
+        "  }\n"
+        "}\n"
+    )
+    save = next(c for m in parse("java", src_b).types[0].methods for c in m.calls if c.method == "save")
+    assert save.swallow is None

@@ -35,10 +35,24 @@ FIXTURE = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
         ("critical", "tier3", "critical"),  # never LOWERED below a declared severity
         ("high", None, "high"),  # unscored service -> no-op
         ("high", "unknown", "high"),  # unknown tier -> no-op
+        ("bogus", "tier1", "high"),  # unrankable declared sorts last -> floored, not slipped past
     ],
 )
 def test_effective_severity_floors_up_only(declared, tier, expected):
     assert effective_severity(declared, tier) == expected
+
+
+def test_malformed_declaration_emits_a_parse_error_fact(tmp_path):
+    """A broken .sre/criticality.yaml is surfaced as a collector.parse_error fact, not silently
+    ignored."""
+    from sre_kb.collectors.base import ScanContext
+
+    (tmp_path / ".sre").mkdir()
+    (tmp_path / ".sre" / "criticality.yaml").write_text("tier: : oops\n", encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+
+    errs = [f for f in criticality.collect(ctx) if f.type == "collector.parse_error"]
+    assert len(errs) == 1 and errs[0].attrs["detector"] == "common.criticality"
 
 
 # --------------------------------------------------------------------------- R1: the collector

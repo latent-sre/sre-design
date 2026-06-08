@@ -21,6 +21,27 @@ from sre_kb.validation.structural import validate_doc
 FIXTURE = Path(__file__).parent / "fixtures" / "sample-gap-finder"
 
 
+def test_collect_tolerates_a_malformed_proposals_file(tmp_path):
+    """A broken .sre/gap-proposals.json must self-gate to an empty result, not abort the scan (the
+    YAML collectors tolerate bad input; the scan path should too)."""
+    (tmp_path / ".sre").mkdir()
+    (tmp_path / ".sre" / "gap-proposals.json").write_text("{ not json", encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x", commit=LOCAL_COMMIT)
+    res = gap_finder.collect(ctx)
+    assert res.facts == [] and res.outcomes == []
+
+
+def test_locate_requires_whole_line_not_substring(tmp_path):
+    """A verbatim anchor must match a whole source line, not merely be a substring of one — else a
+    near-miss could locate to the wrong span yet still hash-validate."""
+    from sre_kb.collectors.llm.gap_finder import _locate
+
+    (tmp_path / "A.java").write_text("class A {\n    return xs;\n}\n", encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x", commit=LOCAL_COMMIT)
+    assert _locate(ctx, "return x") is None             # substring of `return xs;` must NOT match
+    assert _locate(ctx, "return xs;") == ("A.java", 2, 2)  # the exact whole line does
+
+
 def _ctx() -> ScanContext:
     return ScanContext(root=FIXTURE, repo="file://sample-gap-finder", commit=LOCAL_COMMIT)
 

@@ -24,7 +24,7 @@ import re
 
 import yaml
 
-from sre_kb.collectors.base import ScanContext
+from sre_kb.collectors.base import ScanContext, parse_error_fact
 from sre_kb.models.facts import Fact, Symbol
 from sre_kb.tiers import AST, LLM
 
@@ -81,8 +81,9 @@ def _declared(ctx: ScanContext, rel: str, source_tier: str) -> Fact | None:
         return None
     try:
         doc = yaml.safe_load(ctx.read_text(rel)) or {}
-    except yaml.YAMLError:
-        return None
+    except yaml.YAMLError as exc:
+        # Surface a malformed authoritative/proposal declaration rather than silently ignoring it.
+        return parse_error_fact(ctx, rel, "common.criticality", exc)
     if not isinstance(doc, dict):
         return None
     tier = str(doc.get("tier") or "unknown")

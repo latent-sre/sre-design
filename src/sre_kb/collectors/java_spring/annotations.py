@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
-from sre_kb.util import fqn
+from sre_kb.util import fqn, swallow_level
 
 _MAPPING = {
     "@GetMapping": "GET", "@PostMapping": "POST", "@PutMapping": "PUT",
@@ -64,7 +64,8 @@ def collect(ctx: ScanContext) -> list[Fact]:
                             sw = c.swallow
                             facts.append(Fact(
                                 "swallowed.failure",
-                                {"channel": channel, "level": sw.log_method, "message": sw.message, "class": tfqn},
+                                {"channel": channel, "level": swallow_level(sw.log_method),
+                                 "message": sw.message, "class": tfqn},
                                 ctx.evidence(rel, sw.start, sw.end, "java_spring.annotations"),
                                 Symbol(tfqn, "class"),
                             ))

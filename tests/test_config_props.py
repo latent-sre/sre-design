@@ -5,6 +5,18 @@ from __future__ import annotations
 from sre_kb.collectors.base import ScanContext
 from sre_kb.collectors.java_spring import config_props
 
+
+def test_malformed_yaml_emits_a_grounded_parse_error_fact(tmp_path):
+    """An unparseable config is recorded as a collector.parse_error fact (auditable coverage gap),
+    not silently dropped."""
+    (tmp_path / "application.yml").write_text("clients:\n  a: : : oops\n", encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+
+    errs = [f for f in config_props.collect(ctx) if f.type == "collector.parse_error"]
+    assert len(errs) == 1
+    assert errs[0].attrs["detector"] == "java_spring.config_props"
+    assert errs[0].evidence.path == "application.yml"   # cites the offending file
+
 _YML = """\
 resilience4j:
   timelimiter:

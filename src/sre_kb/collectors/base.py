@@ -36,6 +36,7 @@ class ScanContext:
     commit: str = LOCAL_COMMIT
     _lines: dict[str, list[str]] = field(default_factory=dict)
     _modules: dict[tuple[str, str], Module] = field(default_factory=dict)
+    _files: dict[tuple[str, ...], list[Path]] = field(default_factory=dict)
 
     def read_lines(self, rel: str) -> list[str]:
         if rel not in self._lines:
@@ -59,6 +60,8 @@ class ScanContext:
         return str(path.relative_to(self.root)).replace("\\", "/")
 
     def files(self, *patterns: str) -> list[Path]:
+        if patterns in self._files:
+            return self._files[patterns]  # memoized: every collector re-globs the same patterns
         out: list[Path] = []
         for pattern in patterns:
             for p in sorted(self.root.rglob(pattern)):
@@ -69,6 +72,7 @@ class ScanContext:
                 if p.stat().st_size > _MAX_FILE_BYTES:
                     continue  # resource budget (safe-by-default)
                 out.append(p)
+        self._files[patterns] = out
         return out
 
     def evidence(
@@ -84,6 +88,19 @@ class ScanContext:
             detector=detector,
             source_tier=source_tier,
         )
+
+
+def parse_error_fact(ctx: ScanContext, rel: str, detector: str, message: object) -> Fact:
+    """A grounded record that a config file couldn't be parsed. Collectors that tolerate a malformed
+    file (``except yaml.YAMLError``) emit this instead of silently dropping it, so a coverage gap is
+    itself auditable rather than invisible. Cites the file's first line."""
+    from sre_kb.models.facts import Fact
+
+    return Fact(
+        "collector.parse_error",
+        {"detector": detector, "message": str(message)[:200]},
+        ctx.evidence(rel, 1, 1, detector),
+    )
 
 
 @runtime_checkable

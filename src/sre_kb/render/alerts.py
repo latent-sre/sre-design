@@ -45,12 +45,14 @@ TIER_SEVERITY_FLOOR = {"tier0": "critical", "tier1": "high", "tier2": "medium", 
 
 
 def effective_severity(declared: str, tier: str | None) -> str:
-    """Raise `declared` to the floor implied by `tier` (never lower it). Unknown/None tier or an
-    unrankable declared severity is a no-op — so an unscored service keeps its declared severity."""
+    """Raise `declared` to the floor implied by `tier` (never lower it). An unknown/None tier is a
+    no-op. An unrankable `declared` sorts LAST (mirrors taxonomy.severity_rank), so the floor always
+    applies rather than letting a garbage severity slip past paging."""
     floor = TIER_SEVERITY_FLOOR.get(tier or "")
     if floor is None:
         return declared
-    return declared if SEVERITY_RANK.get(declared, 1) <= SEVERITY_RANK[floor] else floor
+    # default rank = len(scale): an unknown declared severity never outranks a real floor.
+    return declared if SEVERITY_RANK.get(declared, len(SEVERITY_RANK)) <= SEVERITY_RANK[floor] else floor
 
 
 def _le(threshold_ms: float | int) -> str:
@@ -227,8 +229,9 @@ def _wavefront_burn(intent: BurnRateIntent) -> dict:
                 "query": f"{series} > {_le(intent.threshold_ms)}",
                 "mechanism": (
                     f"static p{pct} latency threshold in seconds (requires Micrometer "
-                    f"publishPercentiles); Wavefront has no le-bucket series, so this is a "
-                    f"p{pct} <= {intent.threshold_ms}ms check, NOT a multi-window budget burn-rate"
+                    f"publishPercentiles); Wavefront has no le-bucket series, so this fires when "
+                    f"p{pct} > {_le(intent.threshold_ms)}s (SLO: p{pct} <= {intent.threshold_ms}ms), "
+                    f"NOT a multi-window budget burn-rate"
                 ),
             }
         }
@@ -285,11 +288,10 @@ def _grafana_burn(intent: BurnRateIntent) -> dict:
     The faithful, deterministic mapping is to run the Prometheus multi-window burn-rate against a
     Prometheus datasource — so we reuse that engine-generated PromQL verbatim and let the reviewer
     bind the datasource UID. Fidelity therefore equals the Prometheus adapter, not a fabrication."""
-    prom = _prometheus_burn(intent)
+    prom = _prometheus_burn(intent)  # always populates prometheus_<key> for every BURN_WINDOWS entry
     rules = {
         key: {"expr": prom[f"prometheus_{key}"], "for": short_w}
         for key, _long_w, short_w, _mult in BURN_WINDOWS
-        if f"prometheus_{key}" in prom
     }
     return {
         "grafana": {

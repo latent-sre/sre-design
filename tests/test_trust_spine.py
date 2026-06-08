@@ -61,6 +61,14 @@ def test_provenance_allows_in_root_path(tmp_path) -> None:
     assert verify_evidence(doc, tmp_path) == []   # in-root + hash matches -> clean
 
 
+def test_provenance_rejects_inverted_range(tmp_path) -> None:
+    """An inverted range (start>end) hashes an empty slice and must be flagged as out-of-bounds, not
+    silently 'verified' against the empty-excerpt hash."""
+    (tmp_path / "a.txt").write_text("x\ny\n", encoding="utf-8")
+    doc = {"evidence": [{"path": "a.txt", "lines": {"start": 2, "end": 1}, "excerptHash": _HASH}]}
+    assert any("out of bounds" in e for e in verify_evidence(doc, tmp_path))
+
+
 # --- status-aware readiness ------------------------------------------------------------
 
 

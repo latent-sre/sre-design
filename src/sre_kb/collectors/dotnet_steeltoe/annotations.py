@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
-from sre_kb.util import fqn
+from sre_kb.util import fqn, swallow_level
 
 _HTTP = {"[HttpGet]": "GET", "[HttpPost]": "POST", "[HttpPut]": "PUT", "[HttpDelete]": "DELETE", "[HttpPatch]": "PATCH"}
 
@@ -58,10 +58,10 @@ def collect(ctx: ScanContext) -> list[Fact]:
                         ))
                         if c.swallow:
                             sw = c.swallow
-                            level = sw.log_method[3:] if sw.log_method[:3].lower() == "log" else sw.log_method
                             facts.append(Fact(
                                 "swallowed.failure",
-                                {"channel": channel, "level": level, "message": sw.message, "class": tfqn},
+                                {"channel": channel, "level": swallow_level(sw.log_method),
+                                 "message": sw.message, "class": tfqn},
                                 ctx.evidence(rel, sw.start, sw.end, "dotnet_steeltoe.annotations"),
                                 Symbol(tfqn, "class"),
                             ))

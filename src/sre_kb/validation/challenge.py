@@ -217,7 +217,11 @@ def apply_challenge_gating(status: str, verdicts: list[Verdict]) -> tuple[str, l
     if status == "rejected" or not verdicts:
         return status, []
     notes = [f"{v.claim_id}:{v.verdict}" for v in verdicts if v.verdict != "supported"]
-    worst = max((v.verdict for v in verdicts), key=lambda v: _RANK.get(v, 0))
+    # An out-of-vocab verdict is normalized to "indeterminate" (mirrors parse_verdicts) so it can
+    # never be ranked as the lenient "supported" (rank 0) and silently waved through — keeping the
+    # "monotonic, never a false pass" invariant well-defined even on a malformed verdict.
+    worst = max((v.verdict if v.verdict in _RANK else "indeterminate" for v in verdicts),
+                key=_RANK.__getitem__)
     if worst == "contradicted":
         return "rejected", notes
     if worst == "unsupported" and status == "verified":

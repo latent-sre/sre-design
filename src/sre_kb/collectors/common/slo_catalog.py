@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import yaml
 
-from sre_kb.collectors.base import ScanContext
+from sre_kb.collectors.base import ScanContext, parse_error_fact
 from sre_kb.models.facts import Fact
 from sre_kb.util import find_line
 
@@ -20,7 +20,8 @@ def collect(ctx: ScanContext) -> list[Fact]:
         lines = ctx.read_lines(rel)
         try:
             data = yaml.safe_load(ctx.read_text(rel)) or {}
-        except yaml.YAMLError:
+        except yaml.YAMLError as exc:
+            facts.append(parse_error_fact(ctx, rel, "common.slo_catalog", exc))
             continue
         for s in data.get("slos") or []:
             if not isinstance(s, dict):

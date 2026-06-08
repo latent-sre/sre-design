@@ -43,7 +43,10 @@ def collect(ctx: ScanContext) -> list[Fact]:
             if name in seen or name == "spring-boot-starter-parent":
                 continue
             seen.add(name)
-            ln = find_line(lines, f"<artifactId>{name}</artifactId>") or find_line(lines, name) or 1
+            # Cite the <artifactId> match offset, not a find_line on the bare name — the regex allows
+            # whitespace inside the tag, and the old `find_line(name)` fallback could land on a
+            # <groupId>/comment line that merely contains the name.
+            ln = text.count("\n", 0, art.start()) + 1
             facts.append(
                 Fact(
                     "tech.dependency",

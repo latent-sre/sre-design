@@ -238,7 +238,7 @@ def scan_tree(
             raise SecretScanBudgetError(f"scan budget exceeded: more than {max_files} files under {root}")
         decoded = _decoded_file(p)
         if decoded is not None:
-            scanned += len(decoded[0])
+            scanned += p.stat().st_size  # bytes, not decoded chars — the budget (_MAX_SCAN_BYTES) is bytes
             if scanned > max_bytes:
                 raise SecretScanBudgetError(f"scan budget exceeded: over {max_bytes} bytes under {root}")
             findings += scan_text(decoded[0], rel)

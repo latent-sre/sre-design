@@ -32,6 +32,22 @@ def test_truth_file_loads_expected_and_controls() -> None:
     assert ("missing-timeout", "refunds-api") in truth.controls
 
 
+def test_recall_is_none_when_no_expected_gaps() -> None:
+    """With no expected gaps, recall is undefined — return None (like the precision properties)
+    rather than ZeroDivisionError, and passes() conservatively fails."""
+    from sre_kb.validation.copilot_gap import CopilotGapValidation
+
+    v = CopilotGapValidation(
+        target="t", proposals_path="p", truth_path="tr",
+        expected=set(), controls=set(), proposed=set(), grounded=set(), kept=set(),
+        confirmed=set(), missed_expected=set(), false_positive_proposals=set(),
+        false_positive_kept=set(), controls_proposed=set(), controls_kept=set(),
+        outcomes=[], by_status={},
+    )
+    assert v.proposal_recall is None and v.kept_recall is None
+    assert v.passes(min_recall=1.0, min_kept_precision=1.0) is False
+
+
 def test_copilot_gap_validation_reports_recall_precision_and_controls() -> None:
     report = validate_copilot_gap_run(FIXTURE, truth_path=TRUTH, proposals_path=PROPOSALS)
 

@@ -40,8 +40,11 @@ def _verify_one(ev: dict, root: Path, i: int) -> list[str]:
         return [f"evidence[{i}]: path escapes repo root: {path}"]
     if not fpath.exists():
         return [f"evidence[{i}]: path not found: {path}"]
+    # read mode matches the producer (ScanContext.read_lines also uses errors="replace"), so the
+    # recomputed hash is over the same bytes.
     content = fpath.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
-    if not (isinstance(start, int) and isinstance(end, int)) or start < 1 or end > len(content):
+    if (not (isinstance(start, int) and isinstance(end, int))
+            or start < 1 or start > end or end > len(content)):
         return [f"evidence[{i}]: line range {start}-{end} out of bounds for {path}"]
     if hash_excerpt(content, start, end) != want:
         return [f"evidence[{i}]: excerptHash mismatch at {path}:{start}-{end}"]

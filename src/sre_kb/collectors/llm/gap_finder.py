@@ -178,7 +178,10 @@ def _locate(ctx: ScanContext, anchor: str) -> tuple[str, int, int] | None:
         rel = ctx.rel(path)
         stripped = [ln.strip() for ln in ctx.read_lines(rel)]
         for i in range(len(stripped) - len(needles) + 1):
-            if all(needles[k] in stripped[i + k] for k in range(len(needles))):
+            # whole-line equality, not substring: a contiguous run of whole source lines (per the
+            # docstring). Substring matching let a near-miss anchor (`return x` vs `return xs`) locate
+            # to the wrong span yet still hash-validate, undermining the verbatim-anchor guarantee.
+            if all(needles[k] == stripped[i + k] for k in range(len(needles))):
                 return rel, i + 1, i + len(needles)
     return None
 
@@ -404,4 +407,10 @@ def collect(
     path = proposals_path or (ctx.root / PROPOSALS_REL)
     if not path.exists():
         return GapResult()
-    return collect_from_proposals(ctx, load_proposals(path), max_candidates=max_candidates)
+    try:
+        proposals = load_proposals(path)
+    except (json.JSONDecodeError, OSError):
+        return GapResult()  # a malformed proposals file is self-gated to "no proposals", like the
+        # YAML collectors — it must not abort the whole scan (load_proposals stays strict for the
+        # validate CLI, which wants to surface a broken file).
+    return collect_from_proposals(ctx, proposals, max_candidates=max_candidates)

@@ -28,3 +28,31 @@ jobs:
         run: make lint
       - name: Test (make test)
         run: make test
+
+  # Supply-chain integrity (HYBRID-PLAN R8): the runtime deps install ONLY from the pinned, hashed
+  # lockfile — a tampered or unexpected artifact fails the hash check. Regenerate with `make lock`.
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Hash-verified install of the locked runtime deps
+        run: python -m pip install --require-hashes -r requirements.lock
+
+  # Independent second secret gate (HYBRID-PLAN R8 / §9.3 #5): detect-secrets over the whole repo,
+  # complementing the engine's own publish-time scan. New secrets (not in .secrets.baseline) fail.
+  # Re-audit the baseline with: detect-secrets scan > .secrets.baseline
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install detect-secrets
+      - name: detect-secrets second gate
+        run: >-
+          git ls-files | grep -vE '^(requirements\.lock|\.secrets\.baseline)$'
+          | xargs detect-secrets-hook --baseline .secrets.baseline

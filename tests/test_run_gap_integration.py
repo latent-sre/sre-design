@@ -83,6 +83,45 @@ def test_gap_facts_are_persisted_and_kb_still_validates(gap_result):
     assert not bad, [(r.path, r.errors) for r in bad]
 
 
+def _obs_target(tmp_path: Path, *, extra_dep: str = "") -> Path:
+    """A minimal target: a pom.xml (its artifactId line is the anchor) + a missing-tracing proposal."""
+    import json
+
+    target = tmp_path / "repo"
+    (target / ".sre").mkdir(parents=True)
+    deps = "<dependency>\n<artifactId>spring-boot-starter-web</artifactId>\n</dependency>\n"
+    if extra_dep:
+        deps += f"<dependency>\n<artifactId>{extra_dep}</artifactId>\n</dependency>\n"
+    (target / "pom.xml").write_text(f"<project>\n<dependencies>\n{deps}</dependencies>\n</project>\n",
+                                    encoding="utf-8")
+    (target / ".sre" / "gap-proposals.json").write_text(json.dumps({"proposals": [{
+        "category": "missing-tracing", "target": "orders-api", "severity": "medium",
+        "anchor": "<artifactId>spring-boot-starter-web</artifactId>",
+        "rationale": "web service with no distributed-tracing dependency",
+    }]}), encoding="utf-8")
+    return target
+
+
+def test_observability_gap_routes_and_validates_end_to_end(tmp_path):
+    """A missing-tracing proposal (no tracing dep) surfaces as a needs-review ResiliencyGap that
+    validates against the schema's new enum, anchored on the config/build line."""
+    res = run_pipeline(str(_obs_target(tmp_path)), work_root=str(tmp_path / "w"), run_id="obs",
+                       to_stage="validate")
+    gap = _load(res.root)[("ResiliencyGap", "orders-api-missing-tracing")]
+    assert gap["status"] == "needs-review" and gap["spec"]["sourceTier"] == "llm"
+    assert gap["spec"]["category"] == "missing-tracing"
+    assert gap["evidence"][0]["path"] == "pom.xml"
+    assert not [r for r in validate_kb_tree(res.root / "kb") if not r.ok]
+
+
+def test_observability_gap_is_refuted_by_a_present_signal_end_to_end(tmp_path):
+    """With a tracing dependency present, the engine refutes the gap against its own facts — no
+    ResiliencyGap is produced (proves the orchestrator threads its fact set into the gap-finder)."""
+    target = _obs_target(tmp_path, extra_dep="spring-cloud-starter-sleuth")
+    res = run_pipeline(str(target), work_root=str(tmp_path / "w"), run_id="obs2", to_stage="validate")
+    assert not [k for k in _load(res.root) if k[0] == "ResiliencyGap"]
+
+
 def test_no_proposals_is_a_noop(tmp_path):
     res = run_pipeline(str(PLAIN_FIXTURE), work_root=str(tmp_path), run_id="p", to_stage="validate")
     docs = _load(res.root)

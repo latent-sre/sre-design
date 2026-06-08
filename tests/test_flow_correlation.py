@@ -52,3 +52,17 @@ def test_unresolved_receiver_among_many_is_not_guessed():
     repos = [_f(name="OrderRepository"), _f(name="AuditRepository")]
     assert _match_repo(repos, None) is None
     assert _match_repo(repos[:1], None).attrs["name"] == "OrderRepository"
+
+
+def test_match_cb_does_not_guess_among_several_unresolved():
+    """#M4: with an unresolved receiver and two breakers sharing a method name, attribute to neither
+    (the breaker is ambiguous) — only a sole candidate or an exact field-type match is attributed."""
+    from types import SimpleNamespace
+
+    from sre_kb.collectors.java_spring.flow_builder import _match_cb
+
+    cbs = [SimpleNamespace(attrs={"target": "reserve", "targetSymbol": "a.b.InventoryClient"}),
+           SimpleNamespace(attrs={"target": "reserve", "targetSymbol": "a.b.PricingClient"})]
+    assert _match_cb(cbs, "reserve", None) is None                  # ambiguous -> no guess
+    assert _match_cb(cbs, "reserve", "PricingClient") is cbs[1]     # exact field-type match
+    assert _match_cb(cbs[:1], "reserve", None) is cbs[0]            # sole candidate -> attributed

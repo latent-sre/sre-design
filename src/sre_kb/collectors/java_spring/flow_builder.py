@@ -27,13 +27,14 @@ def _short(symbol: str) -> str:
 
 
 def _match_cb(cbs, method: str, rtype: str | None):
-    for cb in cbs:
-        if method != cb.attrs.get("target"):
-            continue
+    candidates = [cb for cb in cbs if cb.attrs.get("target") == method]
+    for cb in candidates:  # prefer an exact receiver field-type match
         cls = _short(cb.attrs.get("targetSymbol") or "")
-        if rtype is None or not cls or rtype == cls:
+        if rtype and cls and rtype == cls:
             return cb
-    return None
+    # Unresolved receiver (or no field-type match): attribute to the sole candidate only; never
+    # guess the first among several breakers that share a method name (mirrors _match_repo/_match_pub).
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def _match_repo(repos, rtype: str | None):

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from functools import cache
+from functools import cache, lru_cache
 from pathlib import Path
 
 import yaml
@@ -51,12 +51,15 @@ def _validator_from_path(schema_path: Path) -> Draft202012Validator:
     return Draft202012Validator(schema)
 
 
-@cache
+# Bounded, unlike the no-arg validators above: these are keyed on an arbitrary schema_root Path
+# (the --schema-dir override / test path), so an unbounded @cache would grow without limit and pin a
+# stale compiled validator if the schema on disk changes. A small LRU is plenty — few roots per run.
+@lru_cache(maxsize=32)
 def _envelope_validator_from(schema_root: Path) -> Draft202012Validator:
     return _validator_from_path(schema_root / "_envelope.schema.json")
 
 
-@cache
+@lru_cache(maxsize=32)
 def _kind_validator_from(schema_root: Path, kind: str) -> Draft202012Validator | None:
     schema_path = schema_root / "v1alpha1" / f"{kind}.schema.json"
     if not schema_path.exists():

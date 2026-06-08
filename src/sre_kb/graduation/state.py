@@ -10,6 +10,8 @@ LLM scouts, a human approves, and the engine judges deterministically thereafter
 
 from __future__ import annotations
 
+import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -84,7 +86,17 @@ class GraduationTracker:
                 for name, c in sorted(self.categories.items())
             },
         }
-        path.write_text(yaml.safe_dump(body, sort_keys=False), encoding="utf-8")
+        # Atomic write (temp + os.replace): a crash mid-write must not truncate the tracker —
+        # load() treats a corrupt file as empty, which would silently discard the whole accumulating
+        # tally (#M7). Concurrent confirm-gap runs are still last-writer-wins, but never corrupt.
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".graduation-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(yaml.safe_dump(body, sort_keys=False))
+            os.replace(tmp, path)
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
 
     def _get(self, category: str) -> ConfirmedCategory:
         return self.categories.setdefault(category, ConfirmedCategory(category=category))

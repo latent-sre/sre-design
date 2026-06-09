@@ -1,0 +1,13 @@
+{
+  "service": "service",
+  "_doc": "Labeled extraction truth for the S5 eval harness — the Node/Express stack (node_express.endpoints + package_json): endpoints, tech stack, and the idempotency gap on the mutating route.",
+  "artifacts": [
+    {"kind": "TechStack", "name": "service"},
+    {"kind": "Interface", "name": "service"},
+    {"kind": "ResiliencyGap", "name": "p-o-s-t-orders-missing-idempotency"}
+  ],
+  "detectors": [
+    "node_express.endpoints",
+    "node_express.package_json"
+  ]
+}

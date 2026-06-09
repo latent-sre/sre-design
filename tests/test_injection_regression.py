@@ -1,8 +1,9 @@
 """Named injection-regression fixtures (HYBRID-PLAN §9.7 N5).
 
 The untrusted-input defenses already exist — the context-pack fence (`synth/context_pack._neutralize`)
-and the render sanitizers (`render/diagrams._mm`, `render/copilot._inline`). These tests *name* and
-*pin* the two attacks the threat model calls out so a future change can't silently regress them:
+and the shared render sanitizers (`render/templating.mermaid` and `render/templating.inline`, also
+registered as the `mermaid`/`inline` Jinja filters). These tests *name* and *pin* the two attacks the
+threat model calls out so a future change can't silently regress them:
 
   * AGENTS.md instruction-hijack — a target file ordering the agent to ignore instructions and forging
     the fence sentinels must be wrapped as inert data, fence intact.

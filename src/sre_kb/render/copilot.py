@@ -6,20 +6,12 @@ editing code (not just document it).
 
 from __future__ import annotations
 
-import re
-
 from sre_kb.render.diagrams import mermaid_sequence
+from sre_kb.render.templating import inline as _inline
+from sre_kb.render.templating import render
 from sre_kb.tiers import AST, LLM, artifact_tier
 
 GENERATED = "<!-- GENERATED from SRE KB — edit the KB, not this file. -->"
-
-
-def _inline(text: object) -> str:
-    """Flatten a value to one safe line before it lands in a guardrail/runbook: collapse
-    whitespace (kills newline-injected bullets/instructions) and drop backticks (kills
-    code-span breakout). Guardrails are rules the developer is told to obey, so an injected
-    line must never masquerade as one."""
-    return re.sub(r"\s+", " ", str(text)).replace("`", "").strip()
 
 
 def _dedup(items: list[str]) -> list[str]:
@@ -71,65 +63,48 @@ def advisory_notes(docs: list[dict]) -> list[str]:
     return _dedup(notes)
 
 
+def _flow_line(f: dict) -> dict:
+    """A Critical-flows entry: name plus its trigger as a single `METHOD path` line (rstripped so a
+    missing path/method leaves no trailing space). `name` stays raw — the template's `inline` filter
+    sanitizes it where it's rendered."""
+    t = f["spec"].get("trigger", {})
+    return {
+        "name": f["metadata"]["name"],
+        "line": f"{_inline(t.get('method', ''))} {_inline(t.get('path', ''))}".rstrip(),
+    }
+
+
 def copilot_instructions(service: str, docs: list[dict]) -> str:
-    flows = [d for d in docs if d["kind"] == "Flow"]
-    lines = [
-        GENERATED,
-        f"# SRE guardrails for `{_inline(service)}`",
-        "",
-        "This service has a validated SRE knowledge base. When editing code here, respect:",
-        "",
-        "## Reliability guardrails",
-    ]
-    rules = reliability_guardrails(docs)
-    lines += [f"- {r}" for r in rules] or ["- (none detected)"]
-    advisories = advisory_notes(docs)
-    if advisories:
-        lines += [
-            "",
-            "## Advisory (LLM-proposed, unverified)",
-            "Not byte-grounded — verify before acting; do not enforce these as hard rules.",
-        ]
-        lines += [f"- {a}" for a in advisories]
-    if flows:
-        lines += ["", "## Critical flows"]
-        for f in flows:
-            t = f["spec"].get("trigger", {})
-            lines.append(
-                f"- `{_inline(f['metadata']['name'])}` — "
-                f"{_inline(t.get('method',''))} {_inline(t.get('path',''))}".rstrip()
-            )
-    lines += [
-        "",
-        "## Conventions",
-        "- Every reliability claim in the KB cites `path:line`; keep code and KB in sync.",
-        "- Treat generated runbooks as drafts: verify before executing during an incident.",
-        "",
-    ]
-    return "\n".join(lines)
+    flows = [_flow_line(d) for d in docs if d["kind"] == "Flow"]
+    out = render(
+        "copilot-instructions.md.j2",
+        generated=GENERATED,
+        service=service,
+        rules=reliability_guardrails(docs),
+        advisories=advisory_notes(docs),
+        flows=flows,
+    )
+    # The document always ends in exactly one trailing newline (parity with the prior renderer).
+    return out.rstrip("\n") + "\n"
 
 
 def runbook_markdown(runbook: dict, flow: dict | None) -> str:
     spec = runbook.get("spec", {})
-    name = _inline(runbook["metadata"]["name"])
-    lines = [
-        GENERATED,
-        f"# Runbook: {name}",
-        "",
-        f"> {_inline(spec.get('banner', 'GENERATED — verify before executing'))}",
-        "",
-        f"**Trigger:** alert `{_inline(spec.get('trigger', {}).get('alertRef', name))}`  ",
-        f"**Related flow:** `{_inline(spec.get('relatedFlow', '-'))}`  ",
-        f"**Escalation:** {_inline(spec.get('escalation', '-'))}",
-        "",
-        "## Symptoms",
-    ]
-    lines += [f"- {_inline(s)}" for s in spec.get("symptoms", [])] or ["- (none)"]
-    lines += ["", "## Diagnosis"]
-    lines += [f"1. {_inline(d.get('step', '') if isinstance(d, dict) else d)}"
-              for d in spec.get("diagnosis", [])] or ["1. (none)"]
-    lines += ["", "## Remediation"]
-    lines += [f"1. {_inline(r)}" for r in spec.get("remediation", [])] or ["1. (none)"]
-    if flow is not None:
-        lines += ["", "## Flow", "", "```mermaid", mermaid_sequence(flow), "```", ""]
-    return "\n".join(lines)
+    name = runbook["metadata"]["name"]
+    out = render(
+        "runbook.md.j2",
+        generated=GENERATED,
+        name=name,
+        banner=spec.get("banner", "GENERATED — verify before executing"),
+        alert_ref=spec.get("trigger", {}).get("alertRef", _inline(name)),
+        related_flow=spec.get("relatedFlow", "-"),
+        escalation=spec.get("escalation", "-"),
+        symptoms=spec.get("symptoms", []),
+        # Diagnosis items may be {"step": ...} dicts or plain strings (hand/LLM-authored).
+        diagnosis=[d.get("step", "") if isinstance(d, dict) else d for d in spec.get("diagnosis", [])],
+        remediation=spec.get("remediation", []),
+        flow_diagram=mermaid_sequence(flow) if flow is not None else None,
+    )
+    # A flow appends a trailing-newline section; the no-flow form ends on the last list item with no
+    # trailing newline (parity with the prior renderer).
+    return out.rstrip("\n") + ("\n" if flow is not None else "")

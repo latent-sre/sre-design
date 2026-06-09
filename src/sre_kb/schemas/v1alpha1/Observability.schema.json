@@ -13,12 +13,38 @@
       "properties": {
         "logging": {
           "type": "object",
+          "additionalProperties": false,
           "required": ["framework", "format"],
           "properties": {
             "framework": { "type": "string" },
             "format": { "type": "string" },
             "pattern": { "type": ["string", "null"] },
-            "correlationFields": { "type": "array", "items": { "type": "string" } }
+            "correlationFields": { "type": "array", "items": { "type": "string" } },
+            "statements": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Roll-up of the log statements parsed from code (S2 assess-logging).",
+              "properties": {
+                "total": { "type": "integer" },
+                "byLevel": {
+                  "type": "object",
+                  "additionalProperties": { "type": "integer" }
+                },
+                "loggingApis": { "type": "array", "items": { "type": "string" } },
+                "parameterized": { "type": "integer" }
+              }
+            },
+            "quality": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Deterministic logging-quality assessment (S2 assess-logging): request/trace-ID context and alert-fatigue signals.",
+              "properties": {
+                "correlationContext": { "type": "boolean" },
+                "correlationFields": { "type": "array", "items": { "type": "string" } },
+                "placeholderHygiene": { "type": ["number", "null"] },
+                "alertFatigueSignals": { "type": "array", "items": { "type": "string" } }
+              }
+            }
           }
         },
         "metrics": { "type": "array" },

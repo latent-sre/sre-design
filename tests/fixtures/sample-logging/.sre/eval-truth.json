@@ -1,0 +1,10 @@
+{
+  "service": "service",
+  "_doc": "Labeled extraction truth for the S5 eval harness — coverage #13/#18 Observability logging (the java_spring.log_statements collector: parsed log statements + the deterministic quality roll-up).",
+  "artifacts": [
+    {"kind": "Observability", "name": "logging"}
+  ],
+  "detectors": [
+    "java_spring.log_statements"
+  ]
+}

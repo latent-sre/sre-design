@@ -98,3 +98,10 @@ def test_unknown_provider_rejected():
 def test_subprocess_oracle_alias_is_the_provider():
     from sre_kb.pipeline.challenge_run import SubprocessOracle
     assert SubprocessOracle is SubprocessProvider
+
+
+def test_subprocess_nonzero_exit_is_a_failure_not_an_answer():
+    """A failing oracle's stdout (an error banner before exit 1) must read as the failure signal
+    "" — otherwise CachingProvider would cache the error text as the permanent answer."""
+    p = SubprocessProvider(["sh", "-c", "echo rate limit exceeded; exit 1"])
+    assert p.complete("x") == ""

@@ -85,6 +85,10 @@ class SubprocessProvider:
             )
         except (OSError, subprocess.TimeoutExpired):
             return ""
+        if proc.returncode != 0:
+            # A failing oracle's stdout (an error banner, a partial answer before the crash) is
+            # not an answer — returning it would let CachingProvider cache the failure forever.
+            return ""
         return proc.stdout
 
     def __call__(self, prompt: str) -> str:

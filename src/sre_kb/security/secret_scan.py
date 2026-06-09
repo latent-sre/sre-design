@@ -227,10 +227,15 @@ def _decoded_file(path: Path) -> tuple[str, str] | None:
 def scan_tree(
     root: Path,
     *,
-    skip_prefixes: tuple[str, ...] = (),
+    skip_prefixes: tuple[str, ...] = (".git",),
     max_files: int = _MAX_SCAN_FILES,
     max_bytes: int = _MAX_SCAN_BYTES,
 ) -> list[dict]:
+    # The default skips ONLY the scan root's own .git: its config legitimately holds a credential
+    # on CI (actions/checkout persists its token there), which would wedge the generated
+    # fail-closed gate on every run. A NESTED .git (a vendored/embedded repo) is target content
+    # and stays scanned — git internals are exactly where committed credentials accumulate.
+    # Callers that override skip_prefixes own the whole policy.
     findings: list[dict] = []
     files = 0
     scanned = 0
@@ -238,11 +243,6 @@ def scan_tree(
         if not p.is_file() or p.is_symlink():
             continue
         rel = p.relative_to(root).as_posix()
-        if ".git" in p.relative_to(root).parts:
-            # Git internals are never engine-produced content, and .git/config legitimately
-            # holds a credential on CI (actions/checkout persists its token there) — scanning
-            # it would wedge the generated fail-closed gate on every run.
-            continue
         if any(rel == pre or rel.startswith(pre + "/") for pre in skip_prefixes):
             continue  # first-party assets (e.g. vendored schemas) are not target-derived content
         files += 1
@@ -361,9 +361,10 @@ def redact_tree(root: Path) -> int:
 
 
 def enforce_secret_gate(
-    tree: Path, *, allow: bool = False, skip_prefixes: tuple[str, ...] = ()
+    tree: Path, *, allow: bool = False, skip_prefixes: tuple[str, ...] = (".git",)
 ) -> list[dict]:
-    """Scan `tree`; raise SecretLeakError if anything matches (unless allow=True)."""
+    """Scan `tree`; raise SecretLeakError if anything matches (unless allow=True). The default
+    skip mirrors scan_tree's (the root .git only); an override owns the whole policy."""
     findings = scan_tree(tree, skip_prefixes=skip_prefixes)
     if findings and not allow:
         raise SecretLeakError(findings)

@@ -123,8 +123,10 @@ model). The gate has two loops:
 
 - **Discover (recall)** — a skill proposes byte-anchored gaps the engine missed. *Exists today* for
   resiliency; widen the taxonomy to all Tier-B areas (§7).
-  **Open discovery ✅ done:** the taxonomy is no longer a closed world. A proposal whose category is
-  outside the known vocabulary is a *novel* discovery: the anchor must still locate verbatim
+  **Open discovery ✅ done:** the taxonomy is no longer a closed world. A proposal explicitly
+  marked `"novel": true` whose category is outside the known vocabulary is a *novel* discovery (an
+  unmarked unknown category is treated as a typo'd taxonomy category and dropped — a misspelling
+  must not evade its probe): the anchor must still locate verbatim
   (fabrication dies at the door), no probe exists so it routes to `needs-review` as
   `category: novel` + `proposedCategory: <kebab-name>`, under its own tighter noise budget
   (`gap_finder.max_novel`). Reviewer confirmations (`confirm-gap <name> --novel`) accrue in the

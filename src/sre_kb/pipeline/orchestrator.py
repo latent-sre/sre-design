@@ -92,13 +92,14 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     # flow through the SAME validate/challenge/gate path. The contract (needs-review, never
     # auto-verify) holds because `scaffold_gap` fixes the status + sub-floor confidence, which the
     # shared gate only ever preserves or lowers.
-    gap_cap = (cfg.get("gap_finder") or {}).get("max_candidates")
+    gap_cfg = cfg.get("gap_finder") or {}
     # Tier-A deterministic parameter-completeness gaps (R5) + Tier-B re-grounded proposals (§7.9).
     # Both are `resiliency.gap` facts surfaced as ResiliencyGap artifacts via scaffold_gap below; the
     # Tier-A ones carry source_tier=ast and can verify, the Tier-B ones stay needs-review.
     gap_facts = (resiliency_params.collect(ctx) + messaging.collect_gaps(ctx, fs)
                  + idempotency.collect_gaps(ctx, fs)
-                 + gap_finder.collect(ctx, fs=fs, max_candidates=gap_cap).facts)
+                 + gap_finder.collect(ctx, fs=fs, max_candidates=gap_cfg.get("max_candidates"),
+                                      max_novel=gap_cfg.get("max_novel")).facts)
     if gap_facts:
         fs.add(*gap_facts)
 

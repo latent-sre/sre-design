@@ -46,6 +46,10 @@ Rules:
   engine locates those bytes and stamps the citation; a quote it can't find is dropped.
 - Never assert a gap you cannot point at. The engine re-derives every proposal with its signature
   library and drops any it can refute (e.g. a timeout that is actually present). You only widen recall.
+- A real, byte-anchored risk that fits NO taxonomy category may be proposed with a new kebab-case
+  `category` plus `"novel": true` (the open-discovery channel: always needs-review, tighter budget —
+  spend it only on your highest-confidence finds). Never use the marker as an escape hatch for a
+  near-miss spelling of a taxonomy category: unknown categories WITHOUT the marker are dropped.
 """
 
 

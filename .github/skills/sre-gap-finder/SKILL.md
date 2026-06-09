@@ -66,10 +66,12 @@ A JSON object the engine ingests (`collectors/llm/gap_finder.load_proposals`), w
 
 **Out-of-taxonomy discoveries.** If you find a real, byte-anchored risk that fits **no** taxonomy
 category, propose it anyway with a new kebab-case `category` name (e.g.
-`missing-cache-invalidation`). The engine routes it through the open-discovery channel:
-locate-grounded, always `needs-review`, under a tighter noise budget (`gap_finder.max_novel`) — so
-spend it only on your highest-confidence finds. Repeated reviewer confirmations
-(`sre-kb confirm-gap <name> --novel`) graduate the category into the taxonomy.
+`missing-cache-invalidation`) **plus `"novel": true`** — the explicit marker is required: an
+unknown category without it is treated as a typo of a taxonomy category and dropped, so a
+misspelling can never evade its probe. The engine routes marked proposals through the
+open-discovery channel: locate-grounded, always `needs-review`, under a tighter noise budget
+(`gap_finder.max_novel`) — so spend it only on your highest-confidence finds. Repeated reviewer
+confirmations (`sre-kb confirm-gap <name> --novel`) graduate the category into the taxonomy.
 
 Current engine behavior:
 - `missing-timeout`, `unguarded-critical-dependency`: refutation probes; kept as Tier-B

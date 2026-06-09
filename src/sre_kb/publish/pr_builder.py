@@ -213,13 +213,13 @@ def assemble_pr(
     # a schema's example value must not be able to wedge every publish.
     from sre_kb.security import enforce_secret_gate, redact_tree
 
-    findings = enforce_secret_gate(tree, allow=allow_secrets, skip_prefixes=(".sre/schemas",))
+    findings = enforce_secret_gate(tree, allow=allow_secrets, skip_prefixes=(".sre/schemas", ".git"))
     if findings and allow_secrets:
         # Explicit operator override: redact detected secrets rather than publish them raw, then
         # re-gate. If anything survives redaction (e.g. a future detector with no redactor), fail
         # closed — block the publish rather than leak a residual secret.
         redact_tree(tree)
-        enforce_secret_gate(tree, skip_prefixes=(".sre/schemas",))
+        enforce_secret_gate(tree, skip_prefixes=(".sre/schemas", ".git"))
     if dry_run:
         return tree, f"dry-run: staged PR tree at {tree} (would target {sre_repo})"
     ref = get_forge(forge, allowed_repos=allowed_repos).open_pr(

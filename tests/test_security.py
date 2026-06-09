@@ -270,3 +270,20 @@ def test_redaction_scrubs_value_with_common_word_and_is_idempotent():
     assert n >= 1 and "RealSecretValueHere" not in redacted
     again, n2 = redact_text(redacted)
     assert again == redacted and n2 == 0
+
+
+def test_nested_git_dirs_are_still_scanned(tmp_path):
+    """Only the scan root's own .git is exempt (the CI checkout token); a vendored/embedded repo's
+    .git is target content — exactly where committed credentials accumulate."""
+    from sre_kb.security.secret_scan import scan_tree
+
+    nested = tmp_path / "vendor" / "lib" / ".git"
+    nested.mkdir(parents=True)
+    # Assembled at runtime: the repo's own CI secret gate (detect-secrets) must not match the
+    # user:pass@ shape as a literal in this source file.
+    creds = "x-access-token:" + "ghp_SECRETTOKEN12345678901234"
+    (nested / "config").write_text(
+        f'[remote "origin"]\n\turl = https://{creds}@github.com/o/r.git\n',
+        encoding="utf-8",
+    )
+    assert scan_tree(tmp_path) != []

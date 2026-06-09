@@ -61,3 +61,17 @@ def test_no_logging_api_means_no_statements(tmp_path):
     )
     ctx = ScanContext(root=tmp_path, repo="file://x")
     assert log_statements.collect(ctx) == []  # self-gating: no logger import -> nothing
+
+
+def test_camelcase_log_suffixed_receivers_are_loggers(tmp_path):
+    """auditLog/txnLog/AUDIT_LOG are common logger field names: the case-preserved suffix test
+    keeps them while still excluding catalog/backlog/dialog."""
+    (tmp_path / "C.java").write_text(
+        "package x;\nimport org.slf4j.Logger;\n"
+        'class C { void m() { auditLog.error("payment failed"); AUDIT_LOG.warn("w"); '
+        'catalog.error("lookup-miss"); } }\n',
+        encoding="utf-8",
+    )
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    stmts = [f for f in log_statements.collect(ctx) if f.type == "observability.log.statement"]
+    assert sorted(f.attrs["level"] for f in stmts) == ["error", "warn"]  # no catalog.error

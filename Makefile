@@ -4,13 +4,13 @@ install:
 	python -m pip install -e ".[dev]"
 
 test:
-	pytest -q
+	python -m pytest -q
 
 lint:
-	ruff check src tests
+	python -m ruff check src tests
 
 fmt:
-	ruff format src tests
+	python -m ruff format src tests
 
 lock:
 	python -m pip install -q pip-tools

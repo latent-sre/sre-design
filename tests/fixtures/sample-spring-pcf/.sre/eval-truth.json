@@ -1,0 +1,34 @@
+{
+  "service": "order-service",
+  "_doc": "Labeled extraction truth for the S5 eval harness (rubric-as-spec). What a correct deterministic scan of this fixture should extract — the §4 coverage matrix made concrete.",
+  "artifacts": [
+    {"kind": "Flow", "name": "create-order"},
+    {"kind": "ResiliencyPattern", "name": "inventory"},
+    {"kind": "Fallback", "name": "reserve-fallback"},
+    {"kind": "Observability", "name": "logging"},
+    {"kind": "SloSli", "name": "create-order-latency"},
+    {"kind": "Alert", "name": "create-order-latency-burn-rate"},
+    {"kind": "Alert", "name": "order-created-publish-failures"},
+    {"kind": "Runbook", "name": "order-created-publish-failures"},
+    {"kind": "BlastRadius", "name": "inventory"},
+    {"kind": "BlastRadius", "name": "order-repository"},
+    {"kind": "BlastRadius", "name": "order-created"},
+    {"kind": "Dependency", "name": "orders-postgres"},
+    {"kind": "Dependency", "name": "inventory-http"},
+    {"kind": "Dependency", "name": "order-kafka"},
+    {"kind": "Deployment", "name": "order-service"},
+    {"kind": "TechStack", "name": "order-service"},
+    {"kind": "Interface", "name": "order-service"},
+    {"kind": "ResiliencyGap", "name": "p-o-s-t-api-v1-orders-missing-idempotency"}
+  ],
+  "detectors": [
+    "java_spring.annotations",
+    "java_spring.resiliency",
+    "java_spring.observability",
+    "java_spring.log_statements",
+    "java_spring.config_props",
+    "java_spring.build",
+    "common.manifest_pcf",
+    "common.slo_catalog"
+  ]
+}

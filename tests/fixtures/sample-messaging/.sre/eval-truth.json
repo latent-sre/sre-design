@@ -1,0 +1,12 @@
+{
+  "service": "service",
+  "_doc": "Labeled extraction truth for the S5 eval harness — S3 consumer-side messaging resilience.",
+  "artifacts": [
+    {"kind": "Messaging", "name": "messaging"},
+    {"kind": "ResiliencyGap", "name": "order-shipped-consumer-without-dlq"},
+    {"kind": "ResiliencyGap", "name": "order-shipped-non-idempotent-consumer"}
+  ],
+  "detectors": [
+    "java_spring.messaging"
+  ]
+}

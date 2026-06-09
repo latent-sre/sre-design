@@ -48,6 +48,8 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
         if not root.exists():
             raise FileNotFoundError(f"target not found: {root}")
         ctx = ScanContext(root=root, repo=f"file://{root.name}", commit=LOCAL_COMMIT)
+        if roots.get(ctx.repo) == root:
+            continue  # the same target listed twice (shell-glob overlap) is idempotent, not two services
         if roots.get(ctx.repo, root) != root:
             # Evidence is keyed by the basename-derived repo id; a silent overwrite would verify
             # the first service's provenance against the second service's files.

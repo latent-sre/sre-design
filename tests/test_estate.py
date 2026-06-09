@@ -57,3 +57,11 @@ def test_duplicate_target_basenames_are_rejected(tmp_path):
     with pytest.raises(ValueError, match="duplicate estate target basename"):
         run_estate([str(tmp_path / "team-a" / "api"), str(tmp_path / "team-b" / "api")],
                    work_root=str(tmp_path / "w"), run_id="dup")
+
+
+def test_same_target_listed_twice_is_idempotent(tmp_path_factory):
+    """Shell-glob overlap can list one path twice: it must scan once, not double-count the
+    service in the topology and reports."""
+    work = tmp_path_factory.mktemp("dup2")
+    r = run_estate([str(ORDER), str(ORDER), str(BILLING)], work_root=str(work), run_id="idem")
+    assert sorted(r.services) == ["billing-service", "order-service"]

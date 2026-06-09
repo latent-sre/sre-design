@@ -61,7 +61,7 @@ def test_self_gating_on_a_non_go_repo():
 
 def test_parser_synthesizes_go_routes_as_decorated_methods():
     m = parse("go", 'package p\nfunc f(){ r.GET("/x", func(c *gin.Context){ http.Get("http://y") }) }\n')
-    [route] = m.types[0].methods
+    route = next(meth for meth in m.types[0].methods if meth.annotations)  # the synthesized route
     assert route.annotations == {"r.get": {"": "/x"}}
     assert [(c.receiver, c.method) for c in route.calls if c.receiver == "http"] == [("http", "Get")]
 
@@ -85,6 +85,31 @@ def test_endpoints_self_gate_on_a_non_go_repo():
     spring = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
     ctx = ScanContext(root=spring, repo="file://spring", commit=LOCAL_COMMIT)
     assert endpoints.collect(ctx) == []  # no *.go -> nothing
+
+
+# --------------------------------------------------------------- swallow (discarded error)
+
+def test_go_discarded_error_is_detected_as_a_swallow():
+    m = parse("go", "package p\nfunc f(repo R){\n\t_, _ = repo.Write(o)\n\tv := repo.Get(k)\n}\n")
+    [fn] = m.types[0].methods
+    swallowed = [(c.receiver, c.method) for c in fn.calls if c.swallow is not None]
+    assert swallowed == [("repo", "Write")]  # the discarded-error call, not the plain `v := repo.Get`
+    assert next(c.swallow for c in fn.calls if c.swallow).log_method == "discarded-error"
+
+
+def test_go_swallow_is_confirmed_by_the_gap_finder():
+    # Go parity (no try/catch — the swallow is an error discarded to `_`): the gap-finder's
+    # swallowed-failure confirmation probe grounds it and graduates to Tier-A.
+    from sre_kb.collectors.llm import gap_finder
+    from sre_kb.collectors.llm.gap_finder import Proposal
+
+    ctx = ScanContext(root=FIXTURE, repo="file://sample-go-gin", commit=LOCAL_COMMIT)
+    res = gap_finder.collect_from_proposals(ctx, [
+        Proposal("swallowed-failure", "_, _ = repo.Write(o)", target="orders", severity="high"),
+    ])
+    [out] = res.outcomes
+    assert out.result == "confirmed"
+    assert res.facts[0].evidence.source_tier == "ast"  # graduated, cross-stack
 
 
 # --------------------------------------------------------------- end-to-end KB

@@ -364,14 +364,17 @@ def test_judgment_anchor_in_go_node_nginx_is_located_not_dropped(tmp_path):
         assert fact.evidence.source_tier == "llm" and fact.attrs["rederivation"] == "judgment"
 
 
-def test_confirmation_category_stays_parseable_only(tmp_path):
-    """Confirm/refute probes need an AST at the pointer, so they keep the Java/C#/Python globs — a
-    Go anchor stays unlocatable rather than locating only to be dropped (the engine can't re-derive)."""
+def test_go_confirming_anchor_locates_but_is_not_confirmed_without_the_rule(tmp_path):
+    """Go now has an engine AST, so a confirming-category anchor in a `.go` file locates and the probe
+    runs — but the gap is kept only if the rule actually fires. A `make(chan)` is not a scheduled job,
+    so the undocumented-job confirmation refutes it (located, probed, dropped) rather than falsely
+    keeping it: the no-false-confirm invariant holds, now via refute instead of unlocatable."""
     ctx = ScanContext(root=_cross_stack_repo(tmp_path), repo="file://x", commit=LOCAL_COMMIT)
     res = gap_finder.collect_from_proposals(
         ctx, [Proposal("undocumented-job", "out := make(chan Job)", target="svc", severity="medium")]
     )
-    assert res.outcomes[0].result == "unlocatable"
+    assert res.outcomes[0].result == "refuted"
+    assert res.facts == []  # nothing confirmed or kept
 
 
 def test_no_proposals_file_is_a_quiet_no_op():

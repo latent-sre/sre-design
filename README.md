@@ -19,18 +19,18 @@ The full design lives in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Status
 
-Working engine, tested offline (455 tests, ruff-clean) against bundled **Java/Spring**,
+Working engine, tested offline (463 tests, ruff-clean) against bundled **Java/Spring**,
 **.NET/Steeltoe**, **Python/FastAPI**, **Node/Express**, and **Go** fixtures — the same collectors
 emit the same KB across stacks (repo-neutrality). See [`docs/DESIGN.md`](docs/DESIGN.md) for the full
 design and a current implementation-status section.
 
 Implemented:
 - **AST-backed extraction** — code structure (classes, methods, calls, annotations,
-  try/catch) is read from a tree-sitter model (Java, C#, and Python — `parsing/code_model.py`)
-  with per-class scoping and receiver→field-type call correlation; only config files use
-  direct parsing. Python/FastAPI emits the same facts (endpoints, egress, tech stack) so the
-  unchanged scaffolder produces the same KB; Node/Express (`package.json`) and Go (`go.mod`) add
-  tech-stack slices (framework + runtime + deps) by direct parse — no new dependency. Confidence is
+  try/catch) is read from a tree-sitter model (Java, C#, Python, and JavaScript —
+  `parsing/code_model.py`) with per-class scoping and receiver→field-type call correlation; only
+  config files use direct parsing. Python/FastAPI and Node/Express emit the same facts (endpoints,
+  egress, tech stack) from the AST so the unchanged scaffolder produces the same KB; Go (`go.mod`)
+  adds a tech-stack slice by direct parse. Confidence is
   signal-derived.
 - **Trust tiers (provenance)** — every evidence item carries a `source_tier` (`ast`
   deterministic | `llm`), rolled up per artifact in the validation report. Tier-B proposals stay

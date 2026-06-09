@@ -13,7 +13,8 @@ import yaml
 
 from sre_kb.collectors import scan
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
-from sre_kb.collectors.node_express import package_json
+from sre_kb.collectors.node_express import endpoints, package_json
+from sre_kb.parsing import parse
 from sre_kb.pipeline import run as run_pipeline
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample-node-express"
@@ -63,6 +64,37 @@ def test_malformed_package_json_yields_a_grounded_parse_error(tmp_path):
     assert any(f.type == "collector.parse_error" for f in facts)  # gap recorded, not swallowed
 
 
+# --------------------------------------------------------------- AST endpoints + egress
+
+def test_parser_synthesizes_express_routes_as_decorated_methods():
+    m = parse("javascript", "app.get('/x', (req, res) => { axios.get('http://y'); });")
+    [route] = m.types[0].methods
+    assert route.annotations == {"app.get": {"": "/x"}}
+    assert [(c.receiver, c.method) for c in route.calls if c.receiver == "axios"] == [("axios", "get")]
+
+
+def test_express_routes_and_egress_extracted_with_provenance():
+    fs, _ = _facts()
+    eps = {(f.attrs["method"], f.attrs["path"]) for f in fs.of("rest.endpoint")}
+    assert eps == {("GET", "/orders/:id"), ("POST", "/orders"), ("GET", "/health")}
+    for f in fs.of("rest.endpoint"):
+        assert f.evidence.path.endswith("server.js") and f.evidence.source_tier == "ast"
+    clients = {f.attrs["client"] for f in fs.of("http.egress")}
+    assert clients == {"axios", "fetch"}  # db.query(...) is NOT read as HTTP egress
+
+
+def test_named_handler_keeps_its_name():
+    fs, _ = _facts()
+    post = next(f for f in fs.of("rest.endpoint") if f.attrs["path"] == "/orders")
+    assert post.attrs["handler"] == "createOrder"
+
+
+def test_endpoints_self_gate_on_a_non_js_repo():
+    spring = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
+    ctx = ScanContext(root=spring, repo="file://spring", commit=LOCAL_COMMIT)
+    assert endpoints.collect(ctx) == []  # no *.js -> nothing
+
+
 # --------------------------------------------------------------- end-to-end KB
 
 def test_node_service_yields_a_validated_tech_stack(tmp_path):
@@ -78,6 +110,10 @@ def test_node_service_yields_a_validated_tech_stack(tmp_path):
     assert ts["spec"]["runtime"] == "node" and ts["spec"]["buildTool"] == "npm"
     assert {"name": "express"} in ts["spec"]["frameworks"]
     assert {"express", "pg", "axios"} <= set(ts["spec"]["notableLibraries"])
+
+    itf = next(d for (kind, _), d in docs.items() if kind == "Interface")
+    paths = {e["path"] for e in itf["spec"]["endpoints"]}
+    assert {"/orders/:id", "/orders", "/health"} <= paths
 
     from sre_kb.validation import validate_kb_tree
     bad = [x for x in validate_kb_tree(r.root / "kb") if not x.ok]

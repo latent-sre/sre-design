@@ -19,7 +19,9 @@ phases:
     - sre-observability-coverage
     - sre-blast-radius
     - sre-prr-review
+    - sre-security-posture
   generate:
     - sre-generate-slos
+    - sre-generate-dashboards
   consume:
     - sre-incident-response

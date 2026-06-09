@@ -1,0 +1,19 @@
+# SecurityPosture skeleton — fill only fields you can cite; the rest become openRisks.
+# Status stays needs-review (advisory); never feeds the alert severity floor.
+apiVersion: sre.kb/v1alpha1
+kind: SecurityPosture
+metadata:
+  name: <service>-security
+  service: <service>
+spec:
+  controls: []            # discrete safeguards present, each cited (e.g. secret-scan, tls)
+  authn: none-found       # oauth2 | oidc | mtls | basic | none-found
+  authz: none-found       # role-based | abac | method-level | none-found
+  encryption: none-found  # tls-in-transit | kms-at-rest | none-found
+  secrets: needs-review   # externalized | vault | env | hardcoded-RISK  # pragma: allowlist secret
+  openRisks: []           # expected-but-unevidenced controls a reviewer must close
+status: needs-review
+crossRefs:
+  - kind: Criticality
+    name: <service>
+    relation: depends-on   # data classification (PII/PCI) lives on Criticality, not here

@@ -174,3 +174,33 @@ def test_hand_edited_garbage_tracker_loads_as_empty(tmp_path):
 
     (sre / "graduation-tracker.yaml").write_text("categories:\n  missing-timeout: oops\n", encoding="utf-8")
     assert GraduationTracker.load(tmp_path).categories == {}
+
+
+def test_cli_confirm_gap_novel_category(tmp_path):
+    """Open-discovery graduation path: an out-of-taxonomy category is rejected without --novel
+    (a typo must not silently start a tally), accepted with it, and a garbage name never is."""
+    r = runner.invoke(app, ["confirm-gap", "missing-cache-invalidation", "--target", str(tmp_path)])
+    assert r.exit_code == 2 and "--novel" in r.output
+
+    r = runner.invoke(app, ["confirm-gap", "missing-cache-invalidation", "--target", str(tmp_path),
+                            "--novel", "--anchor", "ShippingClient.java:14"])
+    assert r.exit_code == 0, r.output
+    cat = GraduationTracker.load(tmp_path).categories["missing-cache-invalidation"]
+    assert cat.confirmed == 1 and cat.anchors == ["ShippingClient.java:14"]
+
+    r = runner.invoke(app, ["confirm-gap", "Not A Slug!!", "--target", str(tmp_path), "--novel"])
+    assert r.exit_code == 2 and "kebab-case" in r.output
+
+
+def test_cli_graduation_candidates_drafts_novel_taxonomy_promotion(tmp_path):
+    """A recurring zero-FP novel category drafts a *taxonomy* promotion (add the category + probe),
+    not a signature draft — the taxonomy itself grows from the loop."""
+    t = GraduationTracker()
+    for i in range(5):
+        t.confirm("missing-cache-invalidation", anchor=f"ShippingClient.java:{i}")
+    t.save(tmp_path)
+    r = runner.invoke(app, ["graduation-candidates", "--target", str(tmp_path)])
+    assert r.exit_code == 0, r.output
+    assert "missing-cache-invalidation: READY to graduate" in r.output
+    assert "novel (out-of-taxonomy) category" in r.output
+    assert "gap_finder.py and the ResiliencyGap schema enum" in r.output

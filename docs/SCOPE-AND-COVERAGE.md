@@ -109,6 +109,13 @@ model). The gate has two loops:
 
 - **Discover (recall)** — a skill proposes byte-anchored gaps the engine missed. *Exists today* for
   resiliency; widen the taxonomy to all Tier-B areas (§7).
+  **Open discovery ✅ done:** the taxonomy is no longer a closed world. A proposal whose category is
+  outside the known vocabulary is a *novel* discovery: the anchor must still locate verbatim
+  (fabrication dies at the door), no probe exists so it routes to `needs-review` as
+  `category: novel` + `proposedCategory: <kebab-name>`, under its own tighter noise budget
+  (`gap_finder.max_novel`). Reviewer confirmations (`confirm-gap <name> --novel`) accrue in the
+  graduation tally; a recurring zero-FP novel category graduates into a taxonomy row — graduation
+  promotes *categories*, not just signatures, so the taxonomy itself grows from the loop.
 - **Confirm (precision) — ✅ done (S4, both directions)** — the engine hands a skill its own boundary
   calls (`confirm/boundary-calls.json`); the skill affirms or disputes **with anchors**, and the engine
   re-grounds at the cited bytes (`pipeline/confirm.py`, `sre-confirm-boundaries` skill, `confirm-apply`).

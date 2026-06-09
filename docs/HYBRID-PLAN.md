@@ -454,6 +454,7 @@ status-authority note at the top):
 | #20 Tier-B | `generate-runbooks` — runbook-content drafter, closed-world grounded on the run's artifacts | ✅ | |
 | S4b | confirm-loop present-but-disabled direction (presence boundary calls → byte-proven `disabled-resilience` gap) | ✅ | |
 | S4c | graduation-from-confirms (confirm-apply verdicts feed the graduation tally) | ✅ | proactive disable collector still open |
+| S4d | open-discovery channel (out-of-taxonomy `novel` gaps: locate-grounded, own noise budget, `confirm-gap --novel` graduation path) | ✅ | SCOPE §6 |
 | infra | full scan/publish credential split (§9.3 #5) | 🟡 scan role done; publish role + CI open | gate before live publish |
 
 The per-phase detail below remains the authoritative narrative for each ✅.

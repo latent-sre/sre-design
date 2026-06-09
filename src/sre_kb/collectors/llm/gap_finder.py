@@ -188,6 +188,23 @@ def gap_categories() -> set[str]:
             | _OBSERVABILITY_CATEGORIES | _LOGGING_CATEGORIES | _MESSAGING_CATEGORIES)
 
 
+# Open-discovery channel (SCOPE §6): a proposal whose category is OUTSIDE the known taxonomy is a
+# *novel* discovery — the recall channel for risk classes nobody made a category for yet. The same
+# non-circular contract applies (the anchor must locate verbatim; a fabricated citation still dies
+# at the door), and no probe exists, so it routes to human review as `needs-review` under its own,
+# tighter noise budget (`gap_finder.max_novel`) — an open invitation is a noise hazard. The proposed
+# name becomes data (`proposedCategory`, feeding artifact naming and the graduation tally), so it
+# must be slug-shaped; a name that isn't is dropped, never laundered into an identifier.
+NOVEL_CATEGORY = "novel"
+_NOVEL_NAME = re.compile(r"^[a-z][a-z0-9-]{2,40}$")
+
+
+def is_valid_novel_category(name: str) -> bool:
+    """True iff `name` is acceptable as an out-of-taxonomy (novel) category: slug-shaped and not
+    the reserved `novel` marker itself."""
+    return name != NOVEL_CATEGORY and bool(_NOVEL_NAME.match(name))
+
+
 def target_concerns(category: str) -> tuple[str, ...]:
     """The deterministic concern(s) a confirmed `category` would graduate into a signature for — the
     shared-signature concerns Tier-A keys off. Empty for `swallowed-failure` (graduates via the AST
@@ -416,17 +433,26 @@ def _confirm(ctx: ScanContext, rel: str, start: int, end: int, category: str):
 
 def collect_from_proposals(
     ctx: ScanContext, proposals: list[Proposal], *, fs: FactSet | None = None,
-    max_candidates: int | None = None,
+    max_candidates: int | None = None, max_novel: int | None = None,
 ) -> GapResult:
     """The collector: locate → stamp → re-derive every proposal. Emits one `resiliency.gap` Fact
     per surviving gap; records an Outcome for all (incl. drops) as audit evidence. A noise budget
     (§7.9) ranks survivors by severity and keeps at most `max_candidates` — the rest are recorded
-    `capped` so a cry-wolf run can't flood a reviewer. `fs` (the engine's fact set) lets the
+    `capped` so a cry-wolf run can't flood a reviewer. Out-of-taxonomy (novel) discoveries spend
+    `max_novel`, their own tighter budget. `fs` (the engine's fact set) lets the
     observability-coverage categories refute a claimed-missing pillar the facts already prove."""
     res = GapResult()
+    known = gap_categories()
     survivors: list[tuple[Outcome, Fact]] = []
+    novel: list[tuple[Outcome, Fact]] = []
     for p in proposals:
-        if (p.category in _OBSERVABILITY_CATEGORIES or p.category in _LOGGING_CATEGORIES
+        if p.category not in known and not is_valid_novel_category(p.category):
+            res.outcomes.append(Outcome(p, "unconfirmable",
+                                        note="out-of-taxonomy category name is not slug-shaped — dropped"))
+            continue
+        if p.category not in known:
+            globs = ALL_GLOBS  # a novel discovery may anchor anywhere in the verbatim universe
+        elif (p.category in _OBSERVABILITY_CATEGORIES or p.category in _LOGGING_CATEGORIES
                 or p.category in _MESSAGING_CATEGORIES):
             globs = _OBSERVABILITY_GLOBS  # logging/messaging/coverage anchors live in code + config
         elif p.category in _JUDGMENT_CATEGORIES:
@@ -438,6 +464,23 @@ def collect_from_proposals(
             res.outcomes.append(Outcome(p, "unlocatable", note="anchor not found verbatim in the source"))
             continue
         rel, s, e = loc
+
+        if p.category not in known:
+            # Open discovery: no probe can exist for a category the engine has never seen — it is
+            # locate-grounded only and routed to human review, exactly like a judgment call.
+            target = p.target or Path(rel).stem
+            fact = Fact(
+                "resiliency.gap",
+                {"category": NOVEL_CATEGORY, "proposedCategory": p.category, "target": target,
+                 "severity": p.severity, "rationale": p.rationale, "rederivation": "novel",
+                 "checked": [rel],
+                 "note": "out-of-taxonomy discovery — no deterministic probe; routed to human review"},
+                ctx.evidence(rel, s, e, "llm.gap_finder", source_tier=LLM),
+                Symbol(f"{rel}:{s}-{e}", "gap"),
+            )
+            novel.append((Outcome(p, "routed", rel, (s, e), (rel,),
+                                  f"novel discovery ({p.category!r}) — routed to human review"), fact))
+            continue
 
         # Observability-coverage gap (R6): refute against the engine's own facts — a claimed-missing
         # pillar the facts already prove present is dropped — else route to review (needs-review).
@@ -568,22 +611,25 @@ def collect_from_proposals(
         )
         survivors.append((Outcome(p, "confirmed", rel, (s, e), checked, note), fact))
 
-    # Noise budget: highest severity first (stable within a severity), cap the rest.
-    survivors.sort(key=lambda of: severity_rank(of[0].proposal.severity))
-    for i, (outcome, fact) in enumerate(survivors):
-        if max_candidates is not None and i >= max_candidates:
-            outcome.result = "capped"
-            outcome.note = f"dropped by noise budget (max_candidates={max_candidates})"
-            res.outcomes.append(outcome)
-        else:
-            res.facts.append(fact)
-            res.outcomes.append(outcome)
+    # Noise budgets: highest severity first (stable within a severity), cap the rest. Novel
+    # discoveries spend their own, tighter budget so the open channel can neither crowd out the
+    # taxonomy categories nor flood a reviewer.
+    for pool, cap, knob in ((survivors, max_candidates, "max_candidates"), (novel, max_novel, "max_novel")):
+        pool.sort(key=lambda of: severity_rank(of[0].proposal.severity))
+        for i, (outcome, fact) in enumerate(pool):
+            if cap is not None and i >= cap:
+                outcome.result = "capped"
+                outcome.note = f"dropped by noise budget ({knob}={cap})"
+                res.outcomes.append(outcome)
+            else:
+                res.facts.append(fact)
+                res.outcomes.append(outcome)
     return res
 
 
 def collect(
     ctx: ScanContext, proposals_path: Path | None = None, *, fs: FactSet | None = None,
-    max_candidates: int | None = None,
+    max_candidates: int | None = None, max_novel: int | None = None,
 ) -> GapResult:
     """Self-gating entry point: read proposals from `proposals_path` (default the conventional
     in-repo location). No proposals file → empty result. `fs` enables observability-coverage
@@ -597,4 +643,5 @@ def collect(
         return GapResult()  # a malformed proposals file is self-gated to "no proposals", like the
         # YAML collectors — it must not abort the whole scan (load_proposals stays strict for the
         # validate CLI, which wants to surface a broken file).
-    return collect_from_proposals(ctx, proposals, fs=fs, max_candidates=max_candidates)
+    return collect_from_proposals(ctx, proposals, fs=fs, max_candidates=max_candidates,
+                                  max_novel=max_novel)

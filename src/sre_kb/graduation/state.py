@@ -125,11 +125,17 @@ class GraduationTracker:
         return [c for _, c in sorted(self.categories.items()) if c.is_candidate(threshold)]
 
 
-def draft_signature(cat: ConfirmedCategory, concerns: tuple[str, ...]) -> str:
+def draft_signature(cat: ConfirmedCategory, concerns: tuple[str, ...], *, known: bool = True) -> str:
     """The assisted auto-draft: a human-reviewable sketch of the deterministic rule a promotion-ready
-    category should become. The engine never edits its own rules — this is a suggestion to merge."""
+    category should become. The engine never edits its own rules — this is a suggestion to merge.
+    `known=False` marks a novel (out-of-taxonomy) category from the open-discovery channel."""
     lines = [f"  draft for '{cat.category}' — review and merge by hand, never auto-applied:"]
-    if cat.category == "swallowed-failure":
+    if not known:
+        lines.append("    novel (out-of-taxonomy) category, confirmed repeatedly by reviewers — promote it")
+        lines.append("    into the gap taxonomy first: add the category (+ a probe/refuter or judgment")
+        lines.append("    routing) in collectors/llm/gap_finder.py and the ResiliencyGap schema enum; it")
+        lines.append("    then accrues toward a deterministic signature like any taxonomy category.")
+    elif cat.category == "swallowed-failure":
         lines.append("    graduates via the AST swallow detector (Call.swallow), not a regex signature;")
         lines.append("    extend that detector to cover the confirmed sites below.")
     elif cat.category == "disabled-resilience":

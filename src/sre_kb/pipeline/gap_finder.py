@@ -16,7 +16,7 @@ from pathlib import Path
 
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.collectors.llm import gap_finder
-from sre_kb.collectors.llm.gap_finder import _OBSERVABILITY_CATEGORIES, GapResult
+from sre_kb.collectors.llm.gap_finder import _OBSERVABILITY_CATEGORIES, NOVEL_CATEGORY, GapResult
 from sre_kb.config import load_config
 from sre_kb.models.facts import Fact
 from sre_kb.scoring.confidence import Signal, confidence
@@ -39,27 +39,34 @@ def scaffold_gap(fact: Fact, service: str) -> dict:
     """
     a = fact.attrs
     tier = fact.evidence.source_tier
-    name = slug(f"{a['target']}-{a['category']}")
+    # A novel gap is named by its proposed category — `category` is the shared "novel" marker, and
+    # two distinct discoveries on one target must not collide into one artifact name.
+    name = slug(f"{a['target']}-{a.get('proposedCategory') or a['category']}")
     if tier == AST:  # graduated: engine-derived, not LLM-asserted
         status, conf, prov, unverified, cross = "verified", confidence(Signal.DIRECT), "deterministic", False, None
     else:
         status, conf, prov, unverified = "needs-review", confidence(Signal.WEAK), "llm-asserted", True
-        # An observability-coverage gap is about missing metrics/traces/logs, not a dependency on a
-        # resilience pattern — so it carries no ResiliencyPattern depends-on backlink.
+        # An observability-coverage gap is about missing metrics/traces/logs, and a novel gap is
+        # not necessarily about a resilience pattern at all — neither carries a ResiliencyPattern
+        # depends-on backlink.
         cross = ([{"kind": "ResiliencyPattern", "name": slug(a["target"]), "relation": "depends-on"}]
-                 if a.get("target") and a["category"] not in _OBSERVABILITY_CATEGORIES else None)
+                 if a.get("target") and a["category"] not in _OBSERVABILITY_CATEGORIES
+                 and a["category"] != NOVEL_CATEGORY else None)
+    spec = {
+        "category": a["category"],
+        "target": a.get("target"),
+        "severity": a.get("severity", "medium"),
+        "rationale": a.get("rationale"),
+        "rederivation": a.get("rederivation", "confirmed"),
+        "sourceTier": tier,
+        "checked": a.get("checked", []),
+    }
+    if a.get("proposedCategory"):
+        spec["proposedCategory"] = a["proposedCategory"]
     return emit(
         "ResiliencyGap",
         name,
-        {
-            "category": a["category"],
-            "target": a.get("target"),
-            "severity": a.get("severity", "medium"),
-            "rationale": a.get("rationale"),
-            "rederivation": a.get("rederivation", "confirmed"),
-            "sourceTier": tier,
-            "checked": a.get("checked", []),
-        },
+        spec,
         [fact.evidence],
         status,
         conf,
@@ -84,7 +91,9 @@ def run_gap_finder(
     """Scan `target`'s LLM gap proposals, re-ground them, scaffold + validate + gate."""
     full_cfg = load_config()
     cfg = full_cfg.get("gating", {})
-    cap = (full_cfg.get("gap_finder") or {}).get("max_candidates")
+    gap_cfg = full_cfg.get("gap_finder") or {}
+    cap = gap_cfg.get("max_candidates")
+    novel_cap = gap_cfg.get("max_novel")
     root = Path(target).resolve()
     if not root.exists():
         raise FileNotFoundError(f"target not found: {root}")
@@ -92,7 +101,8 @@ def run_gap_finder(
     svc = service or root.name
 
     result = gap_finder.collect(
-        ctx, Path(proposals_path) if proposals_path else None, max_candidates=cap
+        ctx, Path(proposals_path) if proposals_path else None, max_candidates=cap,
+        max_novel=novel_cap,
     )
 
     docs, records = [], []

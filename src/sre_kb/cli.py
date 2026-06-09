@@ -127,6 +127,50 @@ def validate_kb(
     raise typer.Exit(code=1 if failures else 0)
 
 
+@app.command("eval")
+def eval_cmd(
+    target: str = typer.Option(..., "--target", help="Local path of the labeled fixture repo."),
+    truth: Path = typer.Option(None, "--truth", help="Eval truth JSON (default: <target>/.sre/eval-truth.json)."),
+    report: Path = typer.Option(None, "--report", help="Write the full scorecard JSON here."),
+    work_root: str = typer.Option(".work", "--work-root"),
+    run_id: str = typer.Option("eval", "--run"),
+) -> None:
+    """Score the deterministic extraction over a labeled fixture (S5 rubric-as-spec): per-area
+    precision/recall + per-detector coverage. The engine still never calls a model — this measures
+    the deterministic output against the labeled truth set."""
+    import json
+
+    from sre_kb.eval.scorecard import load_eval_truth, score_target
+
+    truth_path = truth or (Path(target) / ".sre" / "eval-truth.json")
+    if not truth_path.exists():
+        typer.echo(f"no eval truth at {truth_path}", err=True)
+        raise typer.Exit(code=2)
+    sc = score_target(target, load_eval_truth(truth_path), work_root=work_root, run_id=run_id)
+    data = sc.as_dict()
+    o = data["overall"]
+
+    def _pct(v: float | None) -> str:
+        return "  n/a" if v is None else f"{v * 100:5.1f}%"
+
+    typer.echo(f"overall: recall {_pct(o['recall'])}  precision {_pct(o['precision'])}  "
+               f"detector-coverage {_pct(o['detectorRecall'])}")
+    for kind, row in data["perArea"].items():
+        flags = []
+        if row["missed"]:
+            flags.append(f"missed={row['missed']}")
+        if row["unexpected"]:
+            flags.append(f"unexpected={row['unexpected']}")
+        typer.echo(f"  {kind:18} recall {_pct(row['recall'])}  precision {_pct(row['precision'])}  "
+                   f"{' '.join(flags)}")
+    missing = data["detectorCoverage"]["missing"]
+    if missing:
+        typer.echo(f"  detectors not firing: {missing}")
+    if report:
+        report.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        typer.echo(f"wrote scorecard → {report}")
+
+
 @app.command("confirm-gap")
 def confirm_gap(
     category: str = typer.Argument(..., help="Gap category a reviewer is confirming (or dismissing)."),

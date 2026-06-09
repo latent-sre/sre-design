@@ -1001,11 +1001,19 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   kind of absence claim the confirm loop lets a reviewer dispute (a guard in a global filter the engine
   can't see). The false-negative "present-but-disabled" direction and graduation-from-confirms remain
   follow-ups; the absence-claim half (the one the plan prioritized) is complete.
-- **S5 — Eval harness (rubric-as-spec). 🔲 Open.** Generalize `copilot-gap-validate`'s precision/recall
-  from gaps-only to **all extraction**: run over labeled `tests/fixtures/sample-*` repos and emit a
-  per-area / per-detector precision/recall/coverage scorecard. This is the gate to maturity stage 2
-  ("once we're extremely accurate"): accuracy becomes a number, not a vibe. Tier-B/semantic rows will
-  score structurally lower — expected, not a bug. Recipe in `SCOPE-AND-COVERAGE.md` §9.
+- **S5 — Eval harness (rubric-as-spec). ✅ Done.** `eval/scorecard.py` generalizes
+  `copilot-gap-validate`'s precision/recall from gaps-only to **all extraction**: it runs the
+  deterministic pipeline over a labeled fixture (`<fixture>/.sre/eval-truth.json`, the §4 coverage
+  matrix made concrete) and scores every produced artifact and detector against the expected set —
+  **per-area (kind) precision/recall, per-detector coverage, and an overall roll-up**. Precision is
+  scoped to labeled kinds (a labeled kind is exhaustive; an unlabeled kind is out of scope, never a
+  false positive) so partial labeling is honest. `sre-kb eval --target <fixture>` prints the scorecard
+  and flags missed/unexpected artifacts; `--report` emits the JSON. Labeled `sample-spring-pcf`
+  (18 areas, 8 detectors) and `sample-messaging` both score 1.0/1.0 today, so a regression that drops
+  or fabricates an artifact shows up as recall/precision < 1 — accuracy is now a number, not a vibe,
+  the gate to maturity stage 2. Tier-B/semantic rows will score structurally lower (they land
+  `needs-review`); the per-area `verified` count surfaces that. (`eval/scorecard.py`, `cli.py eval`;
+  `tests/test_eval_scorecard.py`. Recipe in `SCOPE-AND-COVERAGE.md` §9.)
 - **S6 — Unified scan worklist (manual-path front door). ✅ Done.** The LLM half was fragmented across
   separate exchanges (`gap-proposals.json`, the challenge worklist/verdicts). The engine now emits one
   manifest, `.work/<run>/scan-worklist.json` (`synth/worklist.py`), enumerating every discover/confirm

@@ -168,13 +168,18 @@ New (each pointer-generator, discover+confirm, read-only on targets; add to `.gi
 
 ## 9. How accuracy is measured (the rubric is the spec)
 
-The §4 matrix + the SRE rubric **are** the coverage contract. Turn them into an eval harness:
+The §4 matrix + the SRE rubric **are** the coverage contract. **The eval harness exists** (S5,
+`eval/scorecard.py`, CLI `sre-kb eval`):
 
-- Run the engine over labeled `tests/fixtures/sample-*` repos.
-- Compute **precision/recall/coverage per area and per detector** (generalize the existing
-  `copilot-gap-validate` precision/recall from gaps-only to all extraction).
-- Report a scorecard; **precision will be structurally lower for Tier-B/semantic rows — that's
-  expected, not a bug.** Stage 2 is unlocked when the rows you intend to trust clear their bar.
+- Run the engine over labeled `tests/fixtures/sample-*` repos (`<fixture>/.sre/eval-truth.json` —
+  expected artifacts by kind+name, expected detectors).
+- It computes **precision/recall per area (kind) and coverage per detector** (generalizing the
+  `copilot-gap-validate` precision/recall from gaps-only to all extraction). Precision is scoped to
+  labeled kinds, so partial labeling doesn't penalize an unlabeled-but-correct artifact.
+- It reports a scorecard; **precision will be structurally lower for Tier-B/semantic rows — that's
+  expected, not a bug** (the per-area `verified` count surfaces the Tier-A/Tier-B split). Stage 2 is
+  unlocked when the rows you intend to trust clear their bar. `sample-spring-pcf` and `sample-messaging`
+  are labeled and score 1.0/1.0; label more fixtures to widen the scorecard.
 
 ### The measurement recipe (today, gap-finder; generalize to all Tier-B)
 

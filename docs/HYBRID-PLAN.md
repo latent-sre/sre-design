@@ -985,16 +985,22 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   `ResiliencyGap` schema enum — it surfaced that the S2 logging and the N5 backpressure/load-shed
   categories were emittable but absent from the enum (a scaffolded gap would have failed validation);
   all are now in the enum.
-- **S4 — Confirm loop in the LLM gate. 🔲 Open.** Today the LLM only *discovers* (gap-finder). Add a
-  *confirm* exchange (a file beside `gap-proposals.json`) where the engine hands a skill its own
-  present/absent boundary calls and the skill disputes/affirms them **with anchors** the engine
-  re-grounds — catching false-positive gaps (a real timeout the regex missed) and false-negative
-  "present" claims (a mechanism present but disabled). Recurring confirms feed graduation. Start with
-  absence-claims (false positives erode reviewer trust fastest). Engine stays model-free; the LLM
-  becomes a second challenger under the existing grounding contract. **Quick win en route:** graduate
-  *idempotency-on-mutating-route* to Tier-A — the pieces exist (HTTP verb in endpoints + `idempotency`
-  signature), so "POST/PUT or consumer handler with no idempotency guard in scope" is a deterministic,
-  verifiable gap.
+- **S4 — Confirm loop in the LLM gate. ✅ Done.** The precision dual of the discover loop, starting
+  with **absence-claims** as planned. The engine emits `confirm/boundary-calls.json` from its Tier-A
+  absence gaps (`consumer-without-dlq`, `non-idempotent-consumer`, `missing-idempotency`,
+  `missing-timeout`, `unguarded-critical-dependency`); a skill (`sre-confirm-boundaries`) affirms each
+  or disputes it **with a verbatim anchor**; `confirm-apply` **re-grounds** every dispute — it locates
+  the anchor and fires the *same shared signature Tier-A keys off*, scoped to the gap's own file +
+  enclosing type — and moves a refuted false-positive gap to `rejected`. Non-circular and safe: a
+  dispute can only *drop* a gap, and only by pointing at real code where the engine's own rule fires
+  (it can't fabricate). Engine stays model-free; the confirm task joins the unified scan-worklist (S6).
+  (`pipeline/confirm.py`, `synth/worklist.py`, `cli.py`, `.github/skills/sre-confirm-boundaries/`;
+  `tests/test_confirm*.py`.) **Quick win delivered:** `collectors/common/idempotency.py` graduates
+  *idempotency-on-mutating-route* to a deterministic Tier-A gap (every POST/PUT/PATCH/DELETE route with
+  no idempotency guard in scope — the HTTP dual of `non-idempotent-consumer`), which is exactly the
+  kind of absence claim the confirm loop lets a reviewer dispute (a guard in a global filter the engine
+  can't see). The false-negative "present-but-disabled" direction and graduation-from-confirms remain
+  follow-ups; the absence-claim half (the one the plan prioritized) is complete.
 - **S5 — Eval harness (rubric-as-spec). 🔲 Open.** Generalize `copilot-gap-validate`'s precision/recall
   from gaps-only to **all extraction**: run over labeled `tests/fixtures/sample-*` repos and emit a
   per-area / per-detector precision/recall/coverage scorecard. This is the gate to maturity stage 2

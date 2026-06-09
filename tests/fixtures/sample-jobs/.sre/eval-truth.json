@@ -1,0 +1,14 @@
+{
+  "service": "billing-service",
+  "_doc": "Labeled extraction truth for the S5 eval harness — coverage #9 ScheduledJob (the java_spring.jobs collector: cron vs fixed-rate, the trigger method, concurrency).",
+  "artifacts": [
+    {"kind": "ScheduledJob", "name": "invoice-jobs-nightly-invoice-run"},
+    {"kind": "ScheduledJob", "name": "invoice-jobs-poll-payment-status"},
+    {"kind": "Deployment", "name": "billing-service"},
+    {"kind": "TechStack", "name": "billing-service"}
+  ],
+  "detectors": [
+    "java_spring.jobs",
+    "common.manifest_pcf"
+  ]
+}

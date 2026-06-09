@@ -22,6 +22,10 @@ public class PaymentsClient {
         return restTemplate.postForObject(baseUrl + "/charge", new Charge(orderId, amountCents), Receipt.class);
     }
 
+    // PLANTED NOVEL GAP (out-of-taxonomy): the breaker fallback converts an infrastructure
+    // failure into a normal business "declined" receipt — callers and metrics can't tell an
+    // outage from a real decline. No taxonomy category covers this; it exercises the
+    // open-discovery channel (category=novel).
     private Receipt chargeFallback(String orderId, long amountCents, Throwable t) {
         return Receipt.declined(orderId);
     }

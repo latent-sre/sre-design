@@ -19,6 +19,11 @@
       "category": "undocumented-job",
       "target": "emitDailyReconciliation",
       "note": "planted gap: scheduled reconciliation job has no job/runbook metadata"
+    },
+    {
+      "category": "fallback-masks-failure",
+      "target": "payments-api",
+      "note": "planted out-of-taxonomy gap: the breaker fallback masks failure as a business decline (exercises the open-discovery channel)"
     }
   ],
   "controls": [

@@ -16,6 +16,7 @@ import yaml
 
 from sre_kb.collectors import scan as run_collectors
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
+from sre_kb.collectors.common import idempotency
 from sre_kb.collectors.java_spring import messaging, resiliency_params
 from sre_kb.collectors.llm import gap_finder
 from sre_kb.config import load_config
@@ -95,6 +96,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     # Both are `resiliency.gap` facts surfaced as ResiliencyGap artifacts via scaffold_gap below; the
     # Tier-A ones carry source_tier=ast and can verify, the Tier-B ones stay needs-review.
     gap_facts = (resiliency_params.collect(ctx) + messaging.collect_gaps(ctx, fs)
+                 + idempotency.collect_gaps(ctx, fs)
                  + gap_finder.collect(ctx, fs=fs, max_candidates=gap_cap).facts)
     if gap_facts:
         fs.add(*gap_facts)

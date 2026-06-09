@@ -23,4 +23,4 @@ offline-wheel:
 	./scripts/build-offline.sh
 
 clean:
-	rm -rf .work .pytest_cache .ruff_cache **/__pycache__
+	rm -rf .work .pytest_cache .ruff_cache .hypothesis .coverage **/__pycache__

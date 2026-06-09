@@ -972,3 +972,25 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   per-area / per-detector precision/recall/coverage scorecard. This is the gate to maturity stage 2
   ("once we're extremely accurate"): accuracy becomes a number, not a vibe. Tier-B/semantic rows will
   score structurally lower — expected, not a bug. Recipe in `SCOPE-AND-COVERAGE.md` §9.
+- **S6 — Unified scan worklist (manual-path front door). ✅ Done.** The LLM half was fragmented across
+  separate exchanges (`gap-proposals.json`, the challenge worklist/verdicts). The engine now emits one
+  manifest, `.work/<run>/scan-worklist.json` (`synth/worklist.py`), enumerating every discover/confirm
+  task with where to read context and where to save output; `sre-kb scan-worklist --run <id>` shows it,
+  and the `sre-target-scan` agent reads it and produces every output in one pass. Generalizes the proven
+  `challenge-worklist → Copilot → challenge-apply` pattern to the whole LLM half.
+
+#### Decision — LLM transport (2026-06-09)
+
+The "engine never calls a model" rule was reassessed and found to bundle two separable decisions:
+*which endpoint* (data governance) and *whether the engine calls it* (automation). The binding
+constraint is governance, not automation.
+
+- **Today:** the only org-approved endpoint is **enterprise GitHub Copilot, IDE-only** (no programmatic
+  API access yet). So the engine stays model-free and we **optimize the manual path** — S6 above.
+- **Forward:** a pluggable **`LLMProvider` seam** (mirroring the `Forge` seam) keeps the Copilot file
+  exchange as the default impl and adds a programmatic impl when an endpoint is approved. The first
+  candidate is **Google Vertex/Gemini in-tenant** — we have access but must clear a business case,
+  drafted in `docs/VERTEX-LLM-PROVIDER-CASE.md`. The seam preserves the pointer-generator trust
+  boundary and keeps the engine reproducible via prompt-hash response caching. **Deferred** until the
+  Vertex case is approved; the worklist + skills are the forward-compatible seam, manually driven for
+  now. Unlocks S4 (confirm loop at scale) and S5 (eval harness in CI).

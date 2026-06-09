@@ -1,10 +1,11 @@
 """`sre-kb` command-line interface.
 
 All subcommands are implemented: `run`/`scan`/`render`/`publish` (the deterministic pipeline),
-`validate-kb`, `findings`, `estate`, `diff`, `challenge-worklist`/`challenge-apply`,
+`validate-kb`, `findings`, `estate`, `diff`, `scan-worklist`, `challenge-worklist`/`challenge-apply`,
 `gap-finder`, `secret-scan`, and `schema`. There is no separate `validate` subcommand — validation is the
 default `--to-stage` of `run`. The engine never calls an LLM — enrichment happens in VS Code via
-Copilot between `scan` and the validate stage, and the LLM challenge oracle runs out-of-process
+Copilot between `scan` and the validate stage. `scan-worklist` is the single front door for that
+manual loop (one manifest of every discover/confirm task); the LLM challenge oracle runs out-of-process
 (worklist → Copilot → `challenge-apply`).
 """
 
@@ -358,6 +359,33 @@ def findings_narrative(
         typer.echo(render_narrative(service, text, check))
     if not check.grounded:
         raise typer.Exit(code=1)  # a narrative citing an artifact not in the run is a defect
+
+
+@app.command("scan-worklist")
+def scan_worklist_cmd(
+    run_id: str = typer.Option(..., "--run"),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Show the unified LLM scan worklist: every discover/confirm task Copilot should run for this
+    run, with where to read each task's context and where to save its output. One front door for the
+    manual LLM loop — the `sre-target-scan` agent reads this file and produces every output."""
+    import json
+
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    path = layout.root / "scan-worklist.json"
+    if not path.exists():
+        typer.echo("no scan worklist (run not validated yet)")
+        raise typer.Exit(code=0)
+    data = json.loads(path.read_text())
+    for task in data["tasks"]:
+        base = "<target>" if task["writeToBase"] == "target" else "<run>"
+        typer.echo(f"  [{task['mode']}] {task['title']}")
+        typer.echo(f"      skill:   {task['skill']}")
+        typer.echo(f"      writeTo: {base}/{task['writeTo']}")
+        typer.echo(f"      ingest:  {task['ingest']}")
+    typer.echo(f"{len(data['tasks'])} task(s) for the LLM half — see {path}")
 
 
 @app.command("challenge-worklist")

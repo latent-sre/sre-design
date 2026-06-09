@@ -24,6 +24,7 @@ from sre_kb.reporting.findings import detect_tier_conflicts
 from sre_kb.scoring.readiness import readiness_spec
 from sre_kb.synth import scaffold
 from sre_kb.synth.context_pack import build_context_pack
+from sre_kb.synth.worklist import build_scan_worklist
 from sre_kb.tiers import artifact_tier
 from sre_kb.validation.challenge import (
     GroundingChallenger,
@@ -222,6 +223,21 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         cdir = layout.root / "challenge"
         cdir.mkdir(parents=True, exist_ok=True)
         (cdir / "worklist.json").write_text(json.dumps(worklist, indent=2), encoding="utf-8")
+
+    # Unified LLM scan worklist: one manifest of every discover/confirm task Copilot should run for
+    # this run — the single front door for the manual loop. The engine still never calls a model.
+    app = fs.first("pcf.app")
+    service = (app.attrs.get("name") if app else None) or "service"
+    scan_worklist = build_scan_worklist(
+        run_id,
+        service=service,
+        target=str(target_path),
+        context_packs=sum(1 for d in docs if d.get("evidence")),
+        challenge_items=len(worklist["items"]),
+    )
+    (layout.root / "scan-worklist.json").write_text(
+        json.dumps(scan_worklist, indent=2), encoding="utf-8"
+    )
 
     projections = pr_tree = None
     if to_stage in ("render", "publish"):

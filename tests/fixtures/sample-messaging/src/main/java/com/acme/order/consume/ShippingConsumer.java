@@ -6,8 +6,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class ShippingConsumer {
 
-    // Bare listener: no @RetryableTopic/@DltHandler (a poison pill blocks the partition) and no
-    // idempotency guard (a redelivery double-ships). Both are deterministic Tier-A gaps.
+    // Bare listener: no dead-letter route (a poison pill blocks the partition) and no replay guard
+    // (a redelivery double-ships). Both are deterministic Tier-A gaps.
     @KafkaListener(topics = "order.shipped", groupId = "orders")
     public void onShipped(OrderShipped event) {
         ship(event);

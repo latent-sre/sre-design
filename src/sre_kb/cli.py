@@ -488,6 +488,63 @@ def challenge_apply(
     typer.echo(f"applied verdicts to {len(summary)} artifact(s).")
 
 
+@app.command("confirm-worklist")
+def confirm_worklist_cmd(
+    run_id: str = typer.Option(..., "--run"),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Show the S4 confirm worklist: the engine's Tier-A absence claims for Copilot to affirm or
+    dispute with a verbatim anchor (the engine re-grounds each dispute via `confirm-apply`)."""
+    import json
+
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    path = layout.root / "confirm" / "boundary-calls.json"
+    if not path.exists():
+        typer.echo("no confirm worklist (no Tier-A absence claims, or run not validated yet)")
+        raise typer.Exit(code=0)
+    data = json.loads(path.read_text())
+    for item in data["items"]:
+        typer.echo(f"  {item['artifact']}  [{item['claimId']}]  "
+                   f"absent: {' / '.join(item['concern'])} @ {item['path']}:{item['line']}")
+    typer.echo(f"{len(data['items'])} absence claim(s) to confirm — see {path}")
+
+
+@app.command("confirm-apply")
+def confirm_apply_cmd(
+    run_id: str = typer.Option(..., "--run"),
+    verdicts: Path = typer.Option(None, "--verdicts", help="Verdicts JSON (default: <run>/confirm/verdicts.json)."),
+    target: str = typer.Option(None, "--target", help="Scanned repo to re-ground against (default: from the run report)."),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Apply confirm verdicts: re-ground each dispute and reject any refuted absence gap (a dispute
+    can only drop a false-positive gap; the engine re-derives the mechanism's presence itself)."""
+    import json
+
+    from sre_kb.pipeline.confirm import regate_run
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    vpath = verdicts or (layout.root / "confirm" / "verdicts.json")
+    if not vpath.exists():
+        typer.echo(f"no verdicts file at {vpath}", err=True)
+        raise typer.Exit(code=1)
+    tgt = target
+    if tgt is None:
+        report = layout.reports / "validation_report.json"
+        if report.exists():
+            tgt = json.loads(report.read_text()).get("target")
+    if not tgt:
+        typer.echo("no target to re-ground against (pass --target)", err=True)
+        raise typer.Exit(code=1)
+    outcomes = regate_run(layout, tgt, json.loads(vpath.read_text()))
+    for o in outcomes:
+        typer.echo(f"  {o.artifact}: {o.result}  ({o.note})")
+    refuted = sum(1 for o in outcomes if o.result == "refuted")
+    typer.echo(f"confirmed {len(outcomes)} claim(s); {refuted} gap(s) refuted → rejected.")
+
+
 @app.command("gap-finder")
 def gap_finder_cmd(
     target: str = typer.Option(..., "--target", help="Local path of the target repo."),

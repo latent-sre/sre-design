@@ -52,7 +52,17 @@
       "items": { "$ref": "#/$defs/crossRef" }
     },
     "generatedBy": { "$ref": "#/$defs/generatedBy" },
-    "unverifiedAgainstLive": { "type": "boolean" }
+    "unverifiedAgainstLive": { "type": "boolean" },
+    "challengeVerdicts": {
+      "type": "array",
+      "description": "Audit trail of LLM challenge verdicts applied to this artifact (challenge-apply).",
+      "items": { "type": "object" }
+    },
+    "confirmVerdicts": {
+      "type": "array",
+      "description": "Audit trail of S4 confirm-loop outcomes that re-gated this artifact (confirm-apply).",
+      "items": { "type": "object" }
+    }
   },
   "$defs": {
     "evidence": {

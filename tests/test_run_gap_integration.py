@@ -123,7 +123,10 @@ def test_observability_gap_is_refuted_by_a_present_signal_end_to_end(tmp_path):
 
 
 def test_no_proposals_is_a_noop(tmp_path):
+    """Without a gap-proposals file the Tier-B (LLM) gap-finder is a no-op: any ResiliencyGap present
+    is a deterministic Tier-A gap (here the mutating-route idempotency gap on POST /api/v1/orders),
+    never an LLM-proposed one."""
     res = run_pipeline(str(PLAIN_FIXTURE), work_root=str(tmp_path), run_id="p", to_stage="validate")
-    docs = _load(res.root)
-    assert not [k for k in docs if k[0] == "ResiliencyGap"]
-    assert '"resiliency.gap"' not in (res.root / "facts" / "facts.jsonl").read_text()
+    gaps = [d for k, d in _load(res.root).items() if k[0] == "ResiliencyGap"]
+    assert gaps and all(g["spec"]["sourceTier"] == "ast" for g in gaps)  # Tier-A only, no Tier-B
+    assert '"source_tier": "llm"' not in (res.root / "facts" / "facts.jsonl").read_text()

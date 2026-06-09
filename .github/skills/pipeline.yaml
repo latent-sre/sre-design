@@ -17,6 +17,7 @@ phases:
     - map-messaging
   assess:
     - sre-gap-finder
+    - sre-confirm-boundaries
     - sre-observability-coverage
     - sre-assess-logging
     - sre-blast-radius

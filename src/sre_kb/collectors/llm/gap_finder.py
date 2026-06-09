@@ -260,6 +260,16 @@ def load_proposals(path: Path) -> list[Proposal]:
 
 # --------------------------------------------------------------------------- locate
 
+# Public alias: the confirm loop (pipeline/confirm.py) re-grounds a disputed boundary call by locating
+# its verbatim anchor with the exact same rule the discover loop uses — one locator, both directions.
+ALL_GLOBS = _OBSERVABILITY_GLOBS  # code + config/build, the widest verbatim-anchor universe
+
+
+def locate(ctx: ScanContext, anchor: str, globs: tuple[str, ...] = ALL_GLOBS):
+    """Locate `anchor` as a verbatim run of whole source lines: (relpath, start, end) or None."""
+    return _locate(ctx, anchor, globs)
+
+
 def _locate(
     ctx: ScanContext, anchor: str, globs: tuple[str, ...] = _SOURCE_GLOBS
 ) -> tuple[str, int, int] | None:

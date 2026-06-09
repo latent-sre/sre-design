@@ -108,11 +108,12 @@ model). The gate has two loops:
 
 - **Discover (recall)** — a skill proposes byte-anchored gaps the engine missed. *Exists today* for
   resiliency; widen the taxonomy to all Tier-B areas (§7).
-- **Confirm (precision) — NEW** — after a rerun, the engine hands a skill its own present/absent
-  boundary calls; the skill disputes/affirms them **with anchors**, and the engine re-grounds at the
-  cited bytes. Catches false-positive gaps (a real timeout the regex missed) and false-negative
-  "present" claims (a mechanism that's present but disabled/misconfigured). Recurring confirms feed
-  `graduation` → Tier-A.
+- **Confirm (precision) — ✅ done (S4, absence-claims)** — the engine hands a skill its own absence
+  boundary calls (`confirm/boundary-calls.json`, from the Tier-A absence gaps); the skill affirms or
+  disputes **with anchors**, and the engine re-grounds at the cited bytes (`pipeline/confirm.py`,
+  `sre-confirm-boundaries` skill, `confirm-apply`). A dispute can only *drop* a false-positive gap, and
+  only by pointing at real code where the engine's own signature fires in scope. The false-negative
+  "present-but-disabled" direction and graduation-from-confirms are the remaining follow-ups.
 
 ```
 run 1: engine emits {present, absent} with evidence
@@ -154,12 +155,14 @@ New (each pointer-generator, discover+confirm, read-only on targets; add to `.gi
    ~~`assess-logging` (format + quality)~~ ✅. **Both done** (S2 + S3): logging statements parsed with
    the quality assessment, and consumer-side messaging resilience (DLQ/idempotency Tier-A;
    ordering/poison-pill/saga Tier-B). The two highest-value app-team holes on PCF are closed.
-2. **Graduate idempotency-on-mutating-route to Tier-A.** The pieces exist (HTTP verb in endpoints +
-   `idempotency` signature); make "POST/PUT or consumer handler with no idempotency guard in scope"
-   a deterministic gap. Cheap, verifiable, high value.
-3. **Build the confirm loop** (§6) — start with absence-claims (false-positive gaps erode reviewer
-   trust fastest at stage 1).
-4. **Stand up the eval harness** (§9) so accuracy is a number, not a vibe — the gate to stage 2.
+2. ~~**Graduate idempotency-on-mutating-route to Tier-A.**~~ ✅ **Done (S4 quick win):**
+   `collectors/common/idempotency.py` emits a deterministic Tier-A `missing-idempotency` gap for every
+   mutating route with no idempotency guard in scope.
+3. ~~**Build the confirm loop** (§6)~~ ✅ **Done (S4, absence-claims):** `pipeline/confirm.py` +
+   `sre-confirm-boundaries` + `confirm-apply` re-ground a skill's disputes of the engine's absence
+   claims, dropping false positives. Started with absence-claims as planned.
+4. **Stand up the eval harness** (§9) so accuracy is a number, not a vibe — the gate to stage 2. **(S5,
+   next.)**
 5. **Then** drafting skills (`generate-alerts`/`-runbooks`) and the prune (§5).
 6. Defer publish/agent surfaces until accuracy clears the bar.
 

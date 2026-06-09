@@ -11,6 +11,7 @@ manual loop (one manifest of every discover/confirm task); the LLM challenge ora
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import typer
@@ -623,6 +624,44 @@ def gap_finder_cmd(
         typer.echo(f"  [{o.result:<12}] {o.proposal.category} on {o.proposal.target}{where}  — {o.note}")
     for status, n in sorted(run.by_status.items()):
         typer.echo(f"  {status}: {n}")
+
+
+@app.command("map-contracts")
+def map_contracts_cmd(
+    target: str = typer.Option(..., "--target", help="Local path of the target repo."),
+    proposals: Path = typer.Option(
+        None, "--proposals",
+        help="Semantic-break proposals JSON (default: <target>/.sre/contract-proposals.json)."
+    ),
+    report: Path = typer.Option(None, "--report", help="Write the re-grounding report JSON here."),
+) -> None:
+    """Tier-B map-api-contracts (coverage #7): ingest the skill's semantic-break proposals and
+    re-ground each — locate the anchor in the current spec, drop anything the deterministic baseline
+    diff already covers as a structural change, and route genuine semantic breaks to review.
+
+    The engine never calls a model — it ingests proposals Copilot already wrote by running the
+    map-api-contracts skill. Nothing proposed can auto-verify.
+    """
+    from sre_kb.pipeline.contract import run_map_contracts
+
+    result = run_map_contracts(target, proposals_path=proposals)
+    kept, dropped = result.kept(), result.dropped()
+    typer.echo(
+        f"map-contracts: {len(result.outcomes)} proposal(s) -> {len(kept)} routed to review, "
+        f"{len(dropped)} dropped"
+    )
+    for o in result.outcomes:
+        where = f" @ {o.path}:{o.lines[0]}-{o.lines[1]}" if o.lines else ""
+        typer.echo(f"  [{o.result:<11}] {o.proposal.target}{where}  — {o.note}")
+    if report is not None:
+        payload = [
+            {"target": o.proposal.target, "category": o.proposal.category, "result": o.result,
+             "path": o.path, "lines": list(o.lines) if o.lines else None,
+             "severity": o.proposal.severity, "rationale": o.proposal.rationale, "note": o.note}
+            for o in result.outcomes
+        ]
+        report.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        typer.echo(f"  report -> {report}")
 
 
 @app.command("copilot-gap-validate")

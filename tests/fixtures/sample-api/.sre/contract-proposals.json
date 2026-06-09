@@ -1,0 +1,13 @@
+{"proposals": [
+  {"target": "GET /api/v1/orders", "severity": "high",
+   "anchor": "operationId: listOrders",
+   "was": "listOrders returned all orders",
+   "rationale": "listOrders now returns only the caller's own orders — same shape, narrowed result set, breaking for clients that relied on the full list"},
+  {"target": "GET /api/v1/orders/{id}", "severity": "medium",
+   "anchor": "operationId: getOrder",
+   "was": "getOrder was not in the previous contract",
+   "rationale": "claims a semantic break on an operation the deterministic diff already flags as newly added"},
+  {"target": "POST /api/v1/orders", "severity": "low",
+   "anchor": "format: epoch-millis",
+   "rationale": "anchor does not appear verbatim in the current spec"}
+]}

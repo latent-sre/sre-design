@@ -17,14 +17,41 @@
         "contract": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Drift against an ingested OpenAPI/AsyncAPI spec (#7): undocumented = code exposes but spec omits; specOnly = spec documents but no handler serves.",
+          "description": "Drift against an ingested OpenAPI/AsyncAPI spec (#7): undocumented = code exposes but spec omits; specOnly = spec documents but no handler serves. When a `.sre/api-baseline/` spec is committed, `baselineVersion`/`changes`/`versionPolicy` carry the deterministic breaking-change diff vs that baseline.",
           "properties": {
             "source": { "type": ["string", "null"] },
             "specPath": { "type": ["string", "null"] },
             "version": { "type": ["string", "null"] },
             "documented": { "type": "integer" },
             "undocumented": { "type": "array", "items": { "type": "string" } },
-            "specOnly": { "type": "array", "items": { "type": "string" } }
+            "specOnly": { "type": "array", "items": { "type": "string" } },
+            "baselineVersion": { "type": ["string", "null"] },
+            "changes": {
+              "type": "array",
+              "description": "Deterministic, byte-grounded diff vs the committed baseline spec.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["changeType", "ref", "breaking"],
+                "properties": {
+                  "changeType": { "type": "string", "enum": ["operation-removed", "operation-added", "required-parameter-added"] },
+                  "ref": { "type": "string" },
+                  "breaking": { "type": "boolean" },
+                  "detail": { "type": ["string", "null"] }
+                }
+              }
+            },
+            "versionPolicy": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "description": "Semver check: a breaking change present without a major bump fails (ok=false).",
+              "properties": {
+                "ok": { "type": "boolean" },
+                "breakingChanges": { "type": "integer" },
+                "majorBumped": { "type": "boolean" },
+                "detail": { "type": ["string", "null"] }
+              }
+            }
           }
         }
       }

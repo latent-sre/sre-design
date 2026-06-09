@@ -182,7 +182,7 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
         }
         if spec_eps:
             first = spec_eps[0].attrs
-            interface_spec["contract"] = {
+            contract = {
                 "source": first.get("source"),
                 "specPath": first.get("specPath"),
                 "version": first.get("specVersion"),
@@ -193,6 +193,26 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
                                    if (s.attrs["method"], s.attrs["normPath"]) not in detected_keys),
             }
             ev = ev + [spec_eps[0].evidence]
+            # Baseline diff (#7 versioning): deterministic, byte-grounded breaking-change facts vs a
+            # committed `.sre/api-baseline/` spec. Self-gating — absent unless a baseline was diffed.
+            changes = fs.of("api.contract.change")
+            version_policy = fs.first("api.contract.versionPolicy")
+            if changes or version_policy:
+                contract["baselineVersion"] = (changes[0].attrs.get("baselineVersion")
+                                               if changes else version_policy.attrs.get("baselineVersion"))
+                contract["changes"] = [
+                    {"changeType": c.attrs["changeType"], "ref": c.attrs["ref"],
+                     "breaking": c.attrs["breaking"], "detail": c.attrs.get("detail")}
+                    for c in sorted(changes, key=lambda c: (not c.attrs["breaking"], c.attrs["ref"]))
+                ]
+                if version_policy:
+                    vp = version_policy.attrs
+                    contract["versionPolicy"] = {
+                        "ok": vp["ok"], "breakingChanges": vp["breakingChanges"],
+                        "majorBumped": vp["majorBumped"], "detail": vp.get("detail"),
+                    }
+                    ev = ev + [version_policy.evidence]
+            interface_spec["contract"] = contract
         docs.append(emit("Interface", service, interface_spec, ev, "verified",
                          confidence(Signal.DIRECT), service))
 

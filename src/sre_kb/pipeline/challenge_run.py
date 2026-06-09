@@ -19,7 +19,7 @@ data — an injection attempt it must ignore. An empty/garbled/negating reply pa
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from sre_kb.llm.provider import SubprocessProvider
 from sre_kb.validation.challenge import parse_verdict_reply

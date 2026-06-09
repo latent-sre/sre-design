@@ -7,7 +7,7 @@ lock-step by tests/test_envelope_schema.py (a model-built artifact must validate
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,18 +16,18 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class Status(str, Enum):
+class Status(StrEnum):
     verified = "verified"
     needs_review = "needs-review"
     rejected = "rejected"
 
 
-class ProvenanceMode(str, Enum):
+class ProvenanceMode(StrEnum):
     deterministic = "deterministic"
     llm_asserted = "llm-asserted"
 
 
-class Driver(str, Enum):
+class Driver(StrEnum):
     engine = "engine"
     copilot = "copilot"
 
@@ -65,7 +65,7 @@ class GeneratedBy(_Strict):
     generatedAt: str | None = None
 
 
-class Ownership(str, Enum):
+class Ownership(StrEnum):
     app = "app"
     platform = "platform"
     shared = "shared"

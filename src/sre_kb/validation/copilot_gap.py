@@ -15,7 +15,7 @@ from typing import Any
 from sre_kb.collectors.llm.gap_finder import Outcome
 from sre_kb.pipeline.gap_finder import run_gap_finder
 
-GapKey = tuple[str, str]
+type GapKey = tuple[str, str]
 
 
 def _key(category: str | None, target: str | None) -> GapKey | None:

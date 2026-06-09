@@ -67,7 +67,12 @@ kinds:
   Architecture:     { schema: schemas/v1alpha1/Architecture.schema.json,     phase: P2 }
   Deployment:       { schema: schemas/v1alpha1/Deployment.schema.json,       phase: P2 }
   Dependency:       { schema: schemas/v1alpha1/Dependency.schema.json,       phase: P2 }
-  Interface:        { schema: schemas/v1alpha1/Interface.schema.json,        phase: P2 }
+  # Built from detected endpoints/channels; common.openapi ingests an existing OpenAPI/AsyncAPI spec
+  # (if present) to add contract-drift (documented vs detected, #7).
+  Interface:
+    schema: schemas/v1alpha1/Interface.schema.json
+    collectors: [common.openapi]
+    phase: P2
   # Consumer-side async-resilience posture (HYBRID-PLAN S3). Interface carries the messaging
   # *contract*; Messaging carries each consumer's DLQ/retry/idempotency mechanisms (Tier-A). The
   # judgment calls (ordering/partition, poison-pill, saga) route to the map-messaging skill (Tier-B).

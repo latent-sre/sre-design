@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from sre_kb.collectors.base import CollectorProtocol, ScanContext
 from sre_kb.collectors.common import criticality, manifest_pcf, slo_catalog
-from sre_kb.collectors.common import feature_flags
+from sre_kb.collectors.common import feature_flags, openapi
 from sre_kb.collectors.dotnet_steeltoe import annotations as dotnet_annotations
 from sre_kb.collectors.dotnet_steeltoe import build as dotnet_build
 from sre_kb.collectors.dotnet_steeltoe import resiliency as dotnet_resiliency
@@ -40,6 +40,7 @@ _FILE_COLLECTORS: list[CollectorProtocol] = [
     slo_catalog.collect,
     criticality.collect,
     feature_flags.collect,
+    openapi.collect,
     build.collect,
     annotations.collect,
     config_props.collect,

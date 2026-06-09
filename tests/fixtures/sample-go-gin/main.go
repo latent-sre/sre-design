@@ -27,3 +27,9 @@ func main() {
 func getOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"id": c.Param("id")})
 }
+
+func persistOrder(repo OrderRepo, o Order) {
+	// The write error is discarded to the blank identifier — a logged-and-swallowed equivalent
+	// (data loss): a failed persist is silently dropped.
+	_, _ = repo.Write(o)
+}

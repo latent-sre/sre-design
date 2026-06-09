@@ -38,10 +38,10 @@ from sre_kb.tiers import AST, LLM
 PROPOSALS_REL = ".sre/gap-proposals.json"
 
 _EXT_LANG = {".java": "java", ".cs": "csharp", ".py": "python",
-             ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript"}
+             ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript", ".go": "go"}
 # Parseable source: the engine has a tree-sitter AST for these, so confirm/refute probes can
-# re-derive a rule at the pointer (e.g. the swallow detector). JS joined once the Node parser landed.
-_SOURCE_GLOBS = ("*.java", "*.cs", "*.py", "*.js", "*.mjs", "*.cjs")
+# re-derive a rule at the pointer (e.g. the swallow detector). JS/Go joined as their parsers landed.
+_SOURCE_GLOBS = ("*.java", "*.cs", "*.py", "*.js", "*.mjs", "*.cjs", "*.go")
 # Config files the timeout refutation probe also searches (a timeout may live in config, not code).
 _CONFIG_GLOBS = ("application.yml", "application.yaml", "application*.properties",
                  "appsettings*.json", "bootstrap.yml")
@@ -82,16 +82,15 @@ _JUDGMENT_CATEGORIES = {"data-loss-path", "missing-idempotency", "unbounded-reso
                         "missing-backpressure", "missing-load-shedding"}
 
 # Judgment-call gaps reason about CROSS-STACK mechanisms — the backpressure/load-shed vocab in
-# `signatures.py` fires on Go buffered channels (`make(chan …, n)`), nginx/envoy
-# `limit_req`/`limit_conn`, and TypeScript stream `highWaterMark`. Those anchors live in stacks the
-# engine can't parse into types, so without widening the locate universe a real cross-stack gap is
-# dropped `unlocatable` before it ever reaches the oracle (#42). Re-derivation stays safe for these
-# stacks: the engine can't parse them into types, so the judgment refuter abstains (`_enclosing_type`
-# returns None) and the gap routes to human/oracle review rather than risking a false refute that
-# silently drops a real gap (§9.5 ⑤). (JS/Node now has an AST, so it lives in `_SOURCE_GLOBS` and the
-# confirm/refute probes reach it; only the still-unparsed stacks below are judgment-only.)
+# `signatures.py` fires on nginx/envoy `limit_req`/`limit_conn` and TypeScript stream `highWaterMark`.
+# Those anchors live in stacks the engine can't parse into types, so without widening the locate
+# universe a real cross-stack gap is dropped `unlocatable` before it ever reaches the oracle (#42).
+# Re-derivation stays safe for these stacks: the engine can't parse them into types, so the judgment
+# refuter abstains (`_enclosing_type` returns None) and the gap routes to human/oracle review rather
+# than risking a false refute that silently drops a real gap (§9.5 ⑤). (JS/Node and Go now have an
+# AST, so they live in `_SOURCE_GLOBS` and the confirm/refute probes reach them; only the
+# still-unparsed stacks below are judgment-only.)
 _JUDGMENT_GLOBS = _SOURCE_GLOBS + (
-    "*.go",                            # Go (buffered channels, semaphores)
     "*.ts", "*.tsx", "*.jsx",          # TypeScript / JSX (stream highWaterMark) — no engine AST yet
     "*.conf",                          # nginx / envoy directives (limit_req/limit_conn)
 )

@@ -556,11 +556,38 @@ def _go_call_rm(call: Node, src: bytes) -> tuple[str, str]:
     return ("", _last_ident(fn, src) if fn is not None else "")
 
 
-def _go_calls(node: Node | None, src: bytes) -> list[Call]:
+def _go_enclosing_swallow(call: Node, src: bytes) -> Swallow | None:
+    """Go has no try/catch: a swallowed failure is an error discarded to the blank identifier in the
+    assignment that receives the call's result (`x, _ := f()` / `_ = f()`) — the anti-pattern errcheck
+    flags. Reuses the `Swallow` shape (the discard mechanism in place of a log method) so the
+    gap-finder's swallow confirmation grounds it cross-stack."""
+    rhs = call.parent
+    if rhs is None or rhs.type != "expression_list":
+        return None  # the call must be a right-hand value, not nested in a larger expression
+    stmt = rhs.parent
+    if stmt is None or stmt.type not in ("short_var_declaration", "assignment_statement"):
+        return None
+    right = stmt.child_by_field_name("right")
+    if right is None or right.id != rhs.id:  # tree-sitter returns fresh wrappers; compare by node id
+        return None
+    left = stmt.child_by_field_name("left")
+    if left is None:
+        return None
+    if any(c.type == "identifier" and _txt(c, src) == "_" for c in left.children):
+        return Swallow("discarded-error", "", stmt.start_point[0] + 1, stmt.end_point[0] + 1)
+    return None
+
+
+def _go_calls(node: Node | None, src: bytes, stop_nested: bool = False) -> list[Call]:
+    # In a named function we skip nested func_literals (route-handler closures, goroutines): their
+    # calls belong to the synthesized route method, not the enclosing function — counting both would
+    # double-emit the egress.
+    walk = (_descend_outside(node, {"call_expression"}, {"func_literal"}) if stop_nested
+            else _descend(node, {"call_expression"}))
     out = []
-    for call in _descend(node, {"call_expression"}):
+    for call in walk:
         recv, meth = _go_call_rm(call, src)
-        out.append(Call(recv, meth, call.start_point[0] + 1, (), None))
+        out.append(Call(recv, meth, call.start_point[0] + 1, (), _go_enclosing_swallow(call, src)))
     return out
 
 
@@ -593,6 +620,19 @@ def _parse_go(root: Node, src: bytes) -> Module:
             name_line=call.start_point[0] + 1,
             end=call.end_point[0] + 1,
             calls=_go_calls(handler, src) if handler.type == "func_literal" else [],
+        ))
+    # Named functions/methods carry the swallow detector (a discarded-error is the Go swallow); their
+    # bodies are where most handlers and repository calls live (gin handlers are usually named funcs).
+    for fn in _descend(root, {"function_declaration", "method_declaration"}):
+        nm = fn.child_by_field_name("name")
+        body = fn.child_by_field_name("body")
+        methods.append(MethodDecl(
+            name=_txt(nm, src) if nm else "",
+            annotations={},
+            start=fn.start_point[0] + 1,
+            name_line=(nm.start_point[0] + 1) if nm else fn.start_point[0] + 1,
+            end=fn.end_point[0] + 1,
+            calls=_go_calls(body, src, stop_nested=True),
         ))
     module = TypeDecl(name="module", kind="module", supertypes=[], annotations={},
                       fields={}, methods=methods, start=1, end=root.end_point[0] + 1)

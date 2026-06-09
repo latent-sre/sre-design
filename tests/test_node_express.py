@@ -153,3 +153,13 @@ def test_node_service_yields_a_validated_tech_stack(tmp_path):
     from sre_kb.validation import validate_kb_tree
     bad = [x for x in validate_kb_tree(r.root / "kb") if not x.ok]
     assert not bad, [(x.path, x.errors) for x in bad]
+
+
+def test_static_prefix_and_parenthesized_paths_are_still_routes():
+    """A parenthesized literal or a static-prefix concatenation names the route; only template
+    literals and bare variables are skip-cases."""
+    m = parse("javascript",
+              "app.get(('/health'), (req, res) => res.send('ok'));\n"
+              "app.post('/api/' + version, (req, res) => res.send('ok'));")
+    paths = [list(r.annotations.values())[0][""] for r in m.types[0].methods]
+    assert paths == ["/health", "/api/"]

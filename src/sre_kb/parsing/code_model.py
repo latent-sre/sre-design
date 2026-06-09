@@ -450,6 +450,22 @@ def _js_str(s: Node, src: bytes) -> str:
     return _txt(frag, src) if frag else _txt(s, src).strip("\"'`")
 
 
+def _js_route_path_node(args: Node, handler: Node) -> Node | None:
+    """The route-path string among the DIRECT arguments before the handler. A parenthesized string
+    (`('/health')`) or a static-prefix concatenation (`'/api' + version` — leftmost operand) still
+    names the route; a template literal or a bare variable does not (documented skip-cases)."""
+    for c in args.children:
+        if c.start_byte >= handler.start_byte:
+            return None
+        n: Node | None = c
+        while n is not None and n.type in ("parenthesized_expression", "binary_expression"):
+            n = (n.child_by_field_name("left") if n.type == "binary_expression"
+                 else next((k for k in n.children if k.is_named), None))
+        if n is not None and n.type == "string":
+            return n
+    return None
+
+
 def _js_str_args(args: Node | None, src: bytes) -> tuple[str, ...]:
     if args is None:
         return ()
@@ -515,12 +531,14 @@ def _parse_javascript(root: Node, src: bytes) -> Module:
         args = call.child_by_field_name("arguments")
         if args is None:
             continue
-        # The path must be a direct string argument BEFORE the handler — descending into the
+        # The path must come from a DIRECT argument before the handler — descending into the
         # handler body would take some string inside it as the route path when the real first
         # argument is a template literal or a variable (both are skip-cases, not routes).
-        path_node = next((c for c in args.children if c.type == "string"), None)
         handler = next((c for c in args.children if c.type in _JS_FUNCS), None)
-        if path_node is None or handler is None or path_node.start_byte > handler.start_byte:
+        if handler is None:
+            continue
+        path_node = _js_route_path_node(args, handler)
+        if path_node is None:
             continue  # a path string AND a handler function -> a route, not an egress call
         obj = fn.child_by_field_name("object")
         recv = _last_ident(obj, src) if obj else ""

@@ -1,0 +1,101 @@
+# Business case: approve Google Vertex AI as a programmatic LLM provider for the SRE engine
+
+Date: 2026-06-09
+Status: **draft for approval** — the engine works today on enterprise GitHub Copilot (IDE-only); this
+case requests an *additional, automatable* endpoint to lift the adoption ceiling.
+
+## The ask
+
+Approve **Google Vertex AI (Gemini) within our own GCP tenant** as an org-sanctioned endpoint the SRE
+engine may call programmatically for its LLM half — scoped initially to a pilot (one project, a
+bounded set of services). We already have Vertex access; this case is the data-governance and
+cost/benefit justification to use it from automation rather than only via Copilot in the IDE.
+
+## Problem this solves
+
+The engine's deterministic half scans an application repo and produces a validated SRE knowledge base.
+The **LLM half** (recall + judgment: resiliency gaps, messaging/log assessment, "where can this flow
+fail") today runs **only through GitHub Copilot in the IDE** — a human opens VS Code, runs each skill,
+and saves output files. That is fine for one service interactively, but it is the **adoption ceiling**:
+
+- It cannot run in **CI** or on a schedule.
+- It cannot **fan out** across many services (a portfolio scan is N manual sessions).
+- The **converging discover→confirm loop** and the **accuracy eval harness** (HYBRID-PLAN §9.7 S4/S5)
+  require repeatable, automatable model calls — impossible by hand at scale.
+
+The unified scan worklist (S6, shipped) makes the manual loop one front door, but it is still manual.
+A programmatic, approved endpoint removes the ceiling without changing the engine's design.
+
+## Why Vertex specifically
+
+- **Already available to us** — no new vendor onboarding; the gap is policy, not access.
+- **In-tenant data governance** — calls stay in our GCP project under our IAM; Vertex offers data
+  residency, customer-managed encryption, and **enterprise terms under which prompt/response data is
+  not used to train Google's models**. Private connectivity (VPC Service Controls / Private Service
+  Connect) keeps traffic off the public internet.
+- **Model-neutral by design** — fits the engine's existing "no pinned vendor" stance; Gemini is one
+  `LLMProvider` impl, not a lock-in (see architecture below).
+
+## What data is sent (and what is not)
+
+- **Sent:** small, fenced excerpts of target source the engine already assembles into context packs —
+  the *same* content Copilot receives today. Untrusted target text is wrapped as data, never
+  instructions (`synth/context_pack`, the injection fences).
+- **Minimized:** only the bytes a task needs (the candidate call sites / claims), not whole repos.
+- **Never sent:** secrets — the engine's `secret_scan` gate plus the independent `detect-secrets`
+  CI gate run before any handoff; the publish path is fail-closed on detected secrets.
+- **Note:** source already leaves our boundary *today* via Copilot (also a cloud LLM). Vertex-in-tenant
+  is a **stronger** governance posture than the status quo, not a weaker one.
+
+## Architecture — bounded, reversible, trust-preserving
+
+A thin `LLMProvider` seam (mirroring the existing SCM-neutral `Forge` seam and pluggable collectors):
+
+- **Default impl is unchanged:** `CopilotFileProvider` (today's IDE file exchange). No provider
+  configured ⇒ the engine behaves exactly as now.
+- **New impl:** `VertexProvider` consumes the **same** `scan-worklist.json` tasks and the same
+  `SKILL.md` prompts, calling Vertex instead of waiting for a human. Swapping transport changes
+  nothing else.
+- **The trust boundary does not move:** the LLM remains a **pointer-generator** — it cites verbatim
+  bytes; the engine re-grounds every output deterministically and gates it. An automated call cannot
+  assert a verdict the engine trusts.
+- **Reproducibility is preserved:** pin model + version, temperature 0, and **cache responses by
+  prompt-hash** (the engine already hashes everything). CI replays the cache; only an explicit refresh
+  hits the model — so the engine stays deterministic and testable.
+
+## Benefits
+
+- **CI + scheduled scans** of the whole portfolio, not one-at-a-time IDE sessions.
+- **Service fan-out** — scan many repos in one run.
+- **The discover→confirm loop and accuracy eval harness become real** (S4/S5), which is the gate to
+  trusting/publishing output (the maturity curve in `SCOPE-AND-COVERAGE.md`).
+- **Throughput** — removes the human bottleneck on the recall/judgment work.
+
+## Cost
+
+Token-based, and **low after caching**: most cost is the first scan of a service; re-scans replay the
+cache except where code changed. Bounded further by the gap-finder **noise budget**
+(`gap_finder.max_candidates`) and minimized context packs. Compare against the alternative: skilled
+engineer-hours doing the manual IDE loop per service, which does not scale and is far more expensive
+per service at portfolio size. A pilot will produce an exact per-service token/cost figure.
+
+## Risks & mitigations
+
+| Risk | Mitigation |
+|---|---|
+| Source data leakage | In-tenant Vertex, enterprise no-train terms, VPC-SC/private endpoints; secret gates run pre-handoff; context minimized |
+| Prompt injection from hostile target code | Existing untrusted-data fences + sanitizers; the LLM is read-only and a pointer-generator; engine re-grounds |
+| Cost runaway | Noise budget + per-run caps + prompt-hash caching; pilot establishes the figure before scale |
+| Model drift / non-reproducibility | Pin model version, temperature 0, cache by prompt-hash; eval harness detects regressions |
+| Vendor lock-in | `LLMProvider` seam is provider-neutral; Copilot path stays; another provider is another impl |
+
+## Recommendation
+
+Approve a **scoped pilot**: Vertex/Gemini in our GCP tenant, the `VertexProvider` impl, run over a
+handful of services in CI. Success criteria: (1) per-service token cost within budget, (2) discover
+recall and confirm precision measured by the eval harness, (3) zero secret/data-governance findings.
+On success, expand to portfolio scanning. The engine stays Copilot-IDE-capable throughout, so this is
+additive and reversible.
+
+> Until this is approved, the engine remains Copilot-IDE-only and we optimize the manual path (the
+> unified `scan-worklist.json` + the `sre-target-scan` agent). See HYBRID-PLAN §9.7 (S4/S5/S6).

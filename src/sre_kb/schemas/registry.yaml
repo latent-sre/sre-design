@@ -79,7 +79,10 @@ kinds:
   ScheduledJob:     { schema: schemas/v1alpha1/ScheduledJob.schema.json,     phase: P2 }
   DeliveryPipeline: { schema: schemas/v1alpha1/DeliveryPipeline.schema.json, phase: P2 }
   Topology:         { schema: schemas/v1alpha1/Topology.schema.json,         phase: P2 }
-  FeatureFlag:      { schema: schemas/v1alpha1/FeatureFlag.schema.json,      phase: P2 }
+  FeatureFlag:
+    schema: schemas/v1alpha1/FeatureFlag.schema.json
+    collectors: [common.feature_flags]
+    phase: P2
   # DataStore folded into Dependency (S1, SCOPE §5): a datastore binding is a Dependency carrying its
   # `engine`; the infra fields (backup/RPO/RTO) are platform-DR an app team doesn't own.
   ConfigManagement: { schema: schemas/v1alpha1/ConfigManagement.schema.json, phase: P2 }

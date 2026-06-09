@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: flags-service
+
+feature-flags:
+  new-checkout: false
+  kill-switch-payments: true

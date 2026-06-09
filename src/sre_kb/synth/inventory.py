@@ -8,6 +8,7 @@ its `engine`); its infra fields (backup/RPO/RTO) are platform-DR an app team doe
 from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
+from sre_kb.collectors.common.openapi import normalize_path
 from sre_kb.inventory_signatures import (
     StackSig,
     all_manifests,
@@ -157,18 +158,43 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
     channels = fs.of("message.egress")
     if endpoints or channels:
         ev = [endpoints[0].evidence] if endpoints else [channels[0].evidence]
-        docs.append(emit("Interface", service, {
+        # API-contract drift (#7): join detected endpoints to an ingested OpenAPI spec, if present.
+        spec_eps = fs.of("api.spec.endpoint")
+        spec_keys = {(s.attrs["method"], s.attrs["normPath"]) for s in spec_eps}
+        detected_keys = {(e.attrs.get("method"), normalize_path(str(e.attrs.get("path", "/"))))
+                         for e in endpoints}
+
+        def _endpoint(e):
+            ep = {"method": e.attrs.get("method"), "path": e.attrs.get("path"),
+                  "handler": e.attrs.get("handler"), "idempotent": None, "retrySafe": None}
+            if spec_eps:  # only assert documented/undocumented when a spec was ingested
+                key = (e.attrs.get("method"), normalize_path(str(e.attrs.get("path", "/"))))
+                ep["documented"] = key in spec_keys
+            return ep
+
+        interface_spec = {
             "style": "rest+async" if (endpoints and channels) else ("rest" if endpoints else "async"),
-            "endpoints": [
-                {"method": e.attrs.get("method"), "path": e.attrs.get("path"),
-                 "handler": e.attrs.get("handler"), "idempotent": None, "retrySafe": None}
-                for e in endpoints
-            ],
+            "endpoints": [_endpoint(e) for e in endpoints],
             "channels": [
                 {"channel": c.attrs.get("channel"), "role": "producer", "broker": c.attrs.get("broker")}
                 for c in channels
             ],
-        }, ev, "verified", confidence(Signal.DIRECT), service))
+        }
+        if spec_eps:
+            first = spec_eps[0].attrs
+            interface_spec["contract"] = {
+                "source": first.get("source"),
+                "specPath": first.get("specPath"),
+                "version": first.get("specVersion"),
+                "documented": sum(1 for k in detected_keys if k in spec_keys),
+                "undocumented": sorted(f"{m} {p}" for (m, p) in detected_keys - spec_keys),
+                "specOnly": sorted(f"{s.attrs['method']} {s.attrs['path']}"
+                                   for s in spec_eps
+                                   if (s.attrs["method"], s.attrs["normPath"]) not in detected_keys),
+            }
+            ev = ev + [spec_eps[0].evidence]
+        docs.append(emit("Interface", service, interface_spec, ev, "verified",
+                         confidence(Signal.DIRECT), service))
 
     # --- ConfigManagement ---
     config_facts = fs.of("config.slo", "config.client", "config.timelimiter", "config.actuator")

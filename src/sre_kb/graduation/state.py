@@ -56,9 +56,11 @@ class GraduationTracker:
             doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         except yaml.YAMLError:
             return cls()
+        if not isinstance(doc, dict) or not isinstance(doc.get("categories"), dict):
+            return cls()  # a non-mapping root/categories block is corrupt wholesale
         cats: dict[str, ConfirmedCategory] = {}
-        try:
-            for name, raw in (doc.get("categories") or {}).items():
+        for name, raw in doc["categories"].items():
+            try:
                 raw = raw or {}
                 cats[str(name)] = ConfirmedCategory(
                     category=str(name),
@@ -68,8 +70,11 @@ class GraduationTracker:
                     anchors=[str(a) for a in (raw.get("anchors") or [])],
                     promoted=bool(raw.get("promoted", False)),
                 )
-        except (AttributeError, TypeError, ValueError):
-            return cls()  # a hand-edit that breaks the shape (e.g. `confirmed: lots`) is corrupt
+            except (AttributeError, TypeError, ValueError):
+                # Skip ONLY the shape-broken record (e.g. `confirmed: lots`): wiping the whole
+                # tracker here would let the very next confirm-gap save destroy every healthy
+                # category's accumulated tally over one hand-edit typo.
+                continue
         return cls(categories=cats)
 
     def save(self, root: Path) -> None:

@@ -204,3 +204,25 @@ def test_cli_graduation_candidates_drafts_novel_taxonomy_promotion(tmp_path):
     assert "missing-cache-invalidation: READY to graduate" in r.output
     assert "novel (out-of-taxonomy) category" in r.output
     assert "gap_finder.py and the ResiliencyGap schema enum" in r.output
+
+
+def test_one_corrupt_record_does_not_wipe_sibling_tallies(tmp_path):
+    """A shape-broken record is skipped alone: returning an empty tracker would let the very next
+    confirm-gap save permanently destroy every healthy category's accumulated history."""
+    sre = tmp_path / ".sre"
+    sre.mkdir()
+    (sre / "graduation-tracker.yaml").write_text(
+        "categories:\n"
+        "  missing-timeout:\n    confirmed: 5\n"
+        "  data-loss-path:\n    confirmed: lots\n"
+        "  undocumented-job:\n    confirmed: 2\n",
+        encoding="utf-8",
+    )
+    t = GraduationTracker.load(tmp_path)
+    assert set(t.categories) == {"missing-timeout", "undocumented-job"}
+    assert t.categories["missing-timeout"].confirmed == 5
+    t.confirm("missing-timeout")
+    t.save(tmp_path)  # the save after a partial load must keep the healthy tallies
+    reloaded = GraduationTracker.load(tmp_path)
+    assert reloaded.categories["missing-timeout"].confirmed == 6
+    assert reloaded.categories["undocumented-job"].confirmed == 2

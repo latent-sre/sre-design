@@ -172,6 +172,7 @@ class ConfirmOutcome:
     # disabled-confirmed (a presence dispute the engine re-derived → a new Tier-A disabled gap)
     result: str
     note: str = ""
+    category: str | None = None  # the gap category the verdict bears on (for the graduation tally)
     gap: Fact | None = None  # present-but-disabled: the byte-grounded gap to emit on confirmation
 
 
@@ -260,19 +261,22 @@ def apply_confirm(ctx: ScanContext, gap_facts: list[Fact], verdicts: dict,
                 gap, note = _reground_disabled(ctx, call, anchor)
                 outcomes.append(ConfirmOutcome(
                     call.claim_id, call.artifact,
-                    "disabled-confirmed" if gap else _dispute_result(note), note, gap=gap))
+                    "disabled-confirmed" if gap else _dispute_result(note), note,
+                    category="disabled-resilience", gap=gap))
             else:
                 outcomes.append(ConfirmOutcome(call.claim_id, call.artifact, "affirmed",
-                                               "engine's presence claim affirmed"))
+                                               "engine's presence claim affirmed",
+                                               category="disabled-resilience"))
         elif claim_id in calls:
             call = calls[claim_id]
             if verdict == "dispute":
                 refuted, note = _reground(ctx, call, anchor)
                 outcomes.append(ConfirmOutcome(
-                    call.claim_id, call.artifact, "refuted" if refuted else _dispute_result(note), note))
+                    call.claim_id, call.artifact, "refuted" if refuted else _dispute_result(note),
+                    note, category=call.category))
             else:  # affirm / anything-not-dispute -> the engine's claim stands (never a false refute)
                 outcomes.append(ConfirmOutcome(call.claim_id, call.artifact, "affirmed",
-                                               "engine's absence claim affirmed"))
+                                               "engine's absence claim affirmed", category=call.category))
         # a verdict for a claim not in this run — ignore (idempotent / stale)
     return outcomes
 
@@ -337,6 +341,42 @@ def _emit_disabled_gap(layout, root: Path, gap: Fact, service: str) -> None:
     dest.mkdir(parents=True, exist_ok=True)
     (dest / f"{doc['metadata']['name']}.yaml").write_text(
         yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8")
+
+
+def confirm_emitted_categories() -> set[str]:
+    """Gap categories the confirm loop itself can graduate — beyond the gap-finder's, the
+    present-but-disabled direction's `disabled-resilience`. Used to validate a reviewer's verdict and
+    to drive graduation-from-confirms."""
+    return {"disabled-resilience"}
+
+
+def record_confirm_graduation(root: Path, outcomes: list[ConfirmOutcome],
+                              run_id: str | None = None) -> dict[str, str]:
+    """Graduation-from-confirms (HYBRID-PLAN §9.3 #3): feed confirm-apply outcomes into the target's
+    graduation tracker, exactly as `confirm-gap` does for the discover loop — so confirms accrue
+    automatically. A **confirmed disable** is a real `disabled-resilience` instance (drives graduation
+    of a proactive Tier-A disable collector); a **refuted absence** is a false positive for its category
+    (blocks graduation and flags the probe over-fires). Affirms / unconfirmed disputes carry no
+    graduation signal. Returns {category: verdict} for the ones recorded. Writes the tracker only when
+    something changed, so a no-signal run leaves the target untouched."""
+    from sre_kb.graduation import GraduationTracker
+
+    tracker = GraduationTracker.load(root)
+    recorded: dict[str, str] = {}
+    changed = False
+    for o in outcomes:
+        if o.result == "disabled-confirmed" and o.gap is not None:
+            ev = o.gap.evidence
+            tracker.confirm("disabled-resilience", run=run_id, anchor=f"{ev.path}:{ev.lines.start}")
+            recorded["disabled-resilience"] = "confirmation"
+            changed = True
+        elif o.result == "refuted" and o.category:
+            tracker.refute(o.category)
+            recorded[o.category] = "false-positive"
+            changed = True
+    if changed:
+        tracker.save(root)
+    return recorded
 
 
 def regate_run(layout, target: str, verdicts: dict) -> list[ConfirmOutcome]:

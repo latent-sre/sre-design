@@ -95,6 +95,32 @@ def test_endpoints_self_gate_on_a_non_js_repo():
     assert endpoints.collect(ctx) == []  # no *.js -> nothing
 
 
+def test_js_try_catch_swallow_is_detected_by_the_parser():
+    m = parse("javascript",
+              "app.post('/o', (req, res) => { try { axios.post('http://y'); }"
+              " catch (e) { logger.error('failed', e); } });")
+    [route] = m.types[0].methods
+    swallowed = [c for c in route.calls if c.swallow is not None]
+    assert [c.method for c in swallowed] == ["post"]  # the try-body egress, not the catch's log call
+    assert swallowed[0].swallow.log_method == "error"
+
+
+def test_node_swallow_is_confirmed_by_the_gap_finder():
+    # Node parity (mirrors the Python swallow-confirmation test): the gap-finder's swallowed-failure
+    # confirmation probe grounds a Node try/catch swallow and graduates it to Tier-A.
+    from sre_kb.collectors.llm import gap_finder
+    from sre_kb.collectors.llm.gap_finder import Proposal
+
+    ctx = ScanContext(root=FIXTURE, repo="file://sample-node-express", commit=LOCAL_COMMIT)
+    res = gap_finder.collect_from_proposals(ctx, [
+        Proposal("swallowed-failure", "fetch('http://payments/charge', { method: 'POST' });",
+                 target="payments", severity="high"),
+    ])
+    [out] = res.outcomes
+    assert out.result == "confirmed"
+    assert res.facts[0].evidence.source_tier == "ast"  # graduated, cross-stack
+
+
 # --------------------------------------------------------------- end-to-end KB
 
 def test_node_service_yields_a_validated_tech_stack(tmp_path):

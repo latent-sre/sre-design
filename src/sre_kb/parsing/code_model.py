@@ -463,12 +463,36 @@ def _js_call_rm(call: Node, src: bytes) -> tuple[str, str]:
     return ("", _last_ident(fn, src) if fn is not None else "")
 
 
+def _js_enclosing_swallow(call: Node, src: bytes) -> Swallow | None:
+    """JS analogue of `_enclosing_swallow`: a `try` whose `catch` logs but does not re-`throw`. Same
+    swallow semantics, JS node names (catch_clause / throw_statement)."""
+    node = call.parent
+    while node is not None:
+        if node.type == "try_statement":
+            body = node.child_by_field_name("body")
+            if body and body.start_byte <= call.start_byte < body.end_byte:
+                for catch in (c for c in node.children if c.type == "catch_clause"):
+                    cbody = catch.child_by_field_name("body") or catch
+                    if next(_descend_outside(cbody, {"throw_statement"}, _NESTED_TRY), None) is not None:
+                        continue  # this catch re-throws -> not swallowed here (ignore nested try)
+                    for c in _descend_outside(cbody, {"call_expression"}, _NESTED_TRY):
+                        recv, meth = _js_call_rm(c, src)
+                        if _is_log_call(recv, meth):
+                            a = _js_str_args(c.child_by_field_name("arguments"), src)
+                            return Swallow(meth, a[0] if a else "",
+                                           catch.start_point[0] + 1, catch.end_point[0] + 1)
+                return None
+        node = node.parent
+    return None
+
+
 def _js_calls(node: Node | None, src: bytes) -> list[Call]:
     out = []
     for call in _descend(node, {"call_expression"}):
         recv, meth = _js_call_rm(call, src)
         out.append(Call(recv, meth, call.start_point[0] + 1,
-                        _js_str_args(call.child_by_field_name("arguments"), src), None))
+                        _js_str_args(call.child_by_field_name("arguments"), src),
+                        _js_enclosing_swallow(call, src)))
     return out
 
 

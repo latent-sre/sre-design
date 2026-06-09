@@ -78,19 +78,17 @@ probing, and a noise budget. The spike cleared the plan's make-or-break bar, and
 into `sre-kb run`** (a `.sre/gap-proposals.json` is auto-detected and routed through the shared gate;
 §9.3 item 1). The remaining order is **integrate before expand** (§9.3):
 
-- **Graduation loop** — a reviewer records verdicts with `sre-kb confirm-gap`; once a gap category
-  recurs (threshold reached, zero false positives) `sre-kb graduation-candidates` drafts the
-  deterministic signature to review and merge, ratcheting the engine's recall upward (assisted, never
-  auto-applied).
-- **Render-adapter breadth** (Phase 5) — a tool-neutral alert-intent → adapter seam emits
-  Prometheus, Splunk, Wavefront, AppDynamics, Grafana, and ThousandEyes from one intent (config
-  `render.alert_tools`); dashboard panels render for Prometheus, Grafana, and Wavefront.
+- **Scoped publish credential split** — wire the scoped publish role + CI so an unattended
+  `--no-dry-run` publish (and `challenge-run --oracle`) runs under least privilege; the no-credential
+  scan role already landed. This is the remaining gate before live publish.
 - **Live oracle in CI** — run `challenge-run --oracle '<llm-cli>'` against a hosted Copilot/
   Claude CLI so the judgment-call gate runs unattended.
 
-Recently landed: the broader **authoring skill set** (`sre-blast-radius` / `sre-prr-review` /
-`sre-estate`) and a **consumer side** (`sre-incident-response` skill + `sre-oncall` agent), and
-the **live challenge loop** (`sre-kb challenge-run`).
+Recently landed: the **graduation loop** (`sre-kb confirm-gap` → `sre-kb graduation-candidates`),
+the Phase 5 **render-adapter breadth** (Prometheus/Splunk/Wavefront/AppDynamics/Grafana/ThousandEyes
+alerts; Prometheus/Grafana/Wavefront dashboards), **drift detection** (`sre-kb diff`), the
+**generate-phase skills** (`sre-generate-slos`, `sre-generate-dashboards`) plus `sre-security-posture`,
+and **Node/Express + Go** collectors with AST endpoint extraction (five stacks).
 
 Known limitations (documented, not bugs): variable-topic egress (non-literal Kafka topics)
 and cross-file call-graph beyond a single handler body are out of scope for the per-file
@@ -101,7 +99,7 @@ AST model.
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                                                   # the test suite (261 tests)
+pytest -q                                                   # the test suite (467 tests)
 sre-kb schema list                                          # the kind registry
 
 # scan -> scaffold -> validate -> render -> stage a PR tree (dry-run)

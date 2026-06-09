@@ -9,9 +9,13 @@ app.get('/orders/:id', async (req, res) => {
   res.json(inv.data);
 });
 
-// POST with a named handler and a bare fetch egress to the payments service.
+// POST with a named handler whose payments egress failure is logged and swallowed (data loss).
 app.post('/orders', function createOrder(req, res) {
-  fetch('http://payments/charge', { method: 'POST' });
+  try {
+    fetch('http://payments/charge', { method: 'POST' });
+  } catch (e) {
+    logger.error('charge failed', e);
+  }
   res.status(201).end();
 });
 

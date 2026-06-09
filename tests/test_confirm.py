@@ -85,3 +85,84 @@ def test_only_tier_a_absence_gaps_are_confirmable(tmp_path):
                    ctx.evidence("C.java", 6, 6, "llm.gap_finder", source_tier="llm"))
     assert confirm.confirmable(gap) and not confirm.confirmable(llm_gap)
     assert confirm.build_confirm_worklist("r", [llm_gap])["items"] == []
+
+
+# --- presence direction (present-but-disabled) -------------------------------------------------
+
+_BREAKER = """\
+package x;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+public class InventoryClient {
+    @CircuitBreaker(name = "inventory", fallbackMethod = "fb")
+    public void reserve(String sku) {}
+}
+"""
+_CONFIG = """\
+resilience4j:
+  circuitbreaker:
+    instances:
+      inventory:
+        enabled: false
+"""
+
+
+def _ctx_and_breaker(tmp_path):
+    (tmp_path / "InventoryClient.java").write_text(_BREAKER, encoding="utf-8")
+    (tmp_path / "application.yml").write_text(_CONFIG, encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    pf = Fact("resiliency.circuitbreaker", {"name": "inventory", "target": "reserve"},
+              ctx.evidence("InventoryClient.java", 4, 4, "java_spring.resiliency", source_tier="ast"))
+    return ctx, pf
+
+
+def test_worklist_lists_presence_boundary_calls(tmp_path):
+    ctx, pf = _ctx_and_breaker(tmp_path)
+    wl = confirm.build_confirm_worklist("r", [], [pf])
+    item = next(i for i in wl["items"] if i.get("direction") == "presence")
+    assert item["claimId"] == "present:circuit-breaker:inventory"
+    assert item["concern"] == ["circuit-breaker"] and item["target"] == "inventory"
+
+
+def test_only_named_tier_a_mechanisms_are_presence_confirmable(tmp_path):
+    ctx, pf = _ctx_and_breaker(tmp_path)
+    nameless = Fact("resiliency.circuitbreaker", {"name": "", "target": "x"},
+                    ctx.evidence("InventoryClient.java", 4, 4, "java_spring.resiliency", source_tier="ast"))
+    assert confirm.presence_confirmable(pf) and not confirm.presence_confirmable(nameless)
+
+
+def test_dispute_with_disable_config_confirms_and_builds_a_tier_a_gap(tmp_path):
+    ctx, pf = _ctx_and_breaker(tmp_path)
+    out = confirm.apply_confirm(
+        ctx, [], _verdict("present:circuit-breaker:inventory", "dispute",
+                          "      inventory:\n        enabled: false"), [pf])[0]
+    assert out.result == "disabled-confirmed" and out.gap is not None
+    assert out.gap.attrs["category"] == "disabled-resilience"
+    assert out.gap.attrs["target"] == "inventory"
+    assert out.gap.evidence.source_tier == "ast"          # engine-re-derived → graduates to Tier-A
+
+
+def test_presence_affirm_leaves_the_mechanism_standing(tmp_path):
+    ctx, pf = _ctx_and_breaker(tmp_path)
+    out = confirm.apply_confirm(ctx, [], _verdict("present:circuit-breaker:inventory", "affirm"), [pf])[0]
+    assert out.result == "affirmed" and out.gap is None
+
+
+def test_presence_dispute_naming_the_wrong_instance_is_out_of_scope(tmp_path):
+    ctx, pf = _ctx_and_breaker(tmp_path)
+    # a disable for a DIFFERENT instance must not confirm a disable on `inventory`.
+    (tmp_path / "application.yaml").write_text("payments:\n  enabled: false\n", encoding="utf-8")
+    out = confirm.apply_confirm(
+        ctx, [], _verdict("present:circuit-breaker:inventory", "dispute",
+                          "payments:\n  enabled: false"), [pf])[0]
+    assert out.result == "dispute-out-of-scope" and out.gap is None
+
+
+def test_presence_dispute_without_a_disable_signal_is_unconfirmed(tmp_path):
+    ctx, pf = _ctx_and_breaker(tmp_path)
+    # an anchor that names the instance but carries no `enabled: false` cannot confirm a disable.
+    (tmp_path / "application.properties").write_text(
+        "resilience4j.circuitbreaker.instances.inventory.failure-rate-threshold=50\n", encoding="utf-8")
+    out = confirm.apply_confirm(
+        ctx, [], _verdict("present:circuit-breaker:inventory", "dispute",
+                          "resilience4j.circuitbreaker.instances.inventory.failure-rate-threshold=50"), [pf])[0]
+    assert out.result == "dispute-unconfirmed" and out.gap is None

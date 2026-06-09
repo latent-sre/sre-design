@@ -68,8 +68,8 @@ def _copy_tree(src: Path, dest: Path) -> None:
         shutil.copytree(src, dest, dirs_exist_ok=True)
 
 
-def _generated_validate_workflow() -> str:
-    return """name: validate-sre-kb
+def _generated_validate_workflow(pip_args: str = "") -> str:
+    return f"""name: validate-sre-kb
 
 on:
   pull_request:
@@ -96,7 +96,7 @@ jobs:
         with:
           python-version: "3.13"  # matches the engine's requires-python floor
       - name: Install pinned engine
-        run: python -m pip install "$(cat .sre/version)"
+        run: python -m pip install {pip_args}"$(cat .sre/version)"
       - name: Validate KB artifacts
         run: |
           shopt -s nullglob
@@ -105,7 +105,7 @@ jobs:
             sre-kb validate-kb --schema-dir .sre/schemas "$kb"
             found=1
           done
-          [ "$found" = 1 ] || { echo "::error::no catalog/*/kb directories found"; exit 1; }
+          [ "$found" = 1 ] || {{ echo "::error::no catalog/*/kb directories found"; exit 1; }}
       - name: Fail-closed secret gate
         run: sre-kb secret-scan .
 """
@@ -121,18 +121,30 @@ merge.
 - [ ] Review all `needs-review` artifacts in `REVIEW.md`.
 - [ ] Confirm generated alerts, dashboards, and runbooks against live systems before enabling them.
 - [ ] Confirm CODEOWNERS and branch protection are configured for this repo.
+- [ ] Confirm the pinned engine in `.sre/version` is installable from this repo's CI
+      (`publish.engine_index_url` / an internal index) — the validate workflow fails without it.
 """
 
 
-def _stage_repo_root_hardening(pr_root: Path) -> None:
+def _stage_repo_root_hardening(pr_root: Path, publish_cfg: dict | None = None) -> None:
     """Stage repo-control files at the *published repo root*. GitHub honors workflows, CODEOWNERS,
     and the PR template only at the root (or root ``.github/``), never under ``catalog/<service>/`` —
     so these must sit beside the catalog, not inside it. The vendored schemas + pinned engine version
-    let the generated CI validate the KB hermetically."""
+    let the generated CI validate the KB hermetically.
+
+    The engine is NOT on public PyPI: the generated workflow installs `publish.engine_spec`
+    (default ``sre-kb==<this version>``) from `publish.engine_index_url` — configure one (internal
+    index, or an engine_spec pointing at a wheel URL) before the first real publish, or the
+    generated CI fails on its install step."""
+    cfg = publish_cfg or {}
+    engine_spec = cfg.get("engine_spec") or f"sre-kb=={__version__}"
+    index_url = cfg.get("engine_index_url")
+    pip_args = f"--index-url {index_url} " if index_url else ""
     _copy_tree(schemas_dir(), pr_root / ".sre" / "schemas")
-    _write_file(pr_root / ".sre" / "version", f"sre-kb=={__version__}\n")
+    _write_file(pr_root / ".sre" / "version", f"{engine_spec}\n")
     _write_file(pr_root / ".github" / "CODEOWNERS", "* REPLACE_ME__owning_team\n")
-    _write_file(pr_root / ".github" / "workflows" / "validate-sre-kb.yml", _generated_validate_workflow())
+    _write_file(pr_root / ".github" / "workflows" / "validate-sre-kb.yml",
+                _generated_validate_workflow(pip_args))
     _write_file(pr_root / ".github" / "pull_request_template.md", _generated_pr_template())
 
 
@@ -205,7 +217,7 @@ def assemble_pr(
         _stage_pr_tree(stage, layout, proj, service, docs, report)
         shutil.copytree(stage / "tree", base, dirs_exist_ok=True)
     # Repo-control files belong at the published repo root, not under catalog/<service>/.
-    _stage_repo_root_hardening(pr_root)
+    _stage_repo_root_hardening(pr_root, load_config().get("publish") or {})
 
     tree = pr_root
     # Fail closed before publish: generated output containing a real secret is surfaced for human

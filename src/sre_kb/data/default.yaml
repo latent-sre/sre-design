@@ -48,6 +48,11 @@ scan:
 publish:
   forge: github
   dry_run_default: true
+  # Where the generated validate-sre-kb.yml installs the pinned engine from. sre-kb is not on
+  # public PyPI: set engine_index_url to your internal index (or engine_spec to a direct wheel
+  # URL/path) before the first live publish — the generated CI fails on install without it.
+  engine_index_url: ~
+  engine_spec: ~  # default: sre-kb==<engine version>
   # Live publishes (--no-dry-run) may only target repos on this allowlist (owner/repo or a
   # GitHub URL). Empty list = block every live publish until you add your SRE repo here, so
   # a misconfigured target or a stray token can't push anywhere (safe by default). Dry-runs

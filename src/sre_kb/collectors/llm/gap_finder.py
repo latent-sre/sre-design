@@ -141,6 +141,26 @@ def _logging_context_present(fs: FactSet) -> bool:
                for f in fs.of("observability.logging"))
 
 
+# Messaging-quality categories (S3 map-messaging): the consumer-side judgment calls the deterministic
+# `java_spring.messaging` collector can't prove. `missing-poison-pill-handling` REFUTES against the
+# engine's own `message.consumer` facts (a consumer with a dead-letter route already handles the
+# poison pill); `unordered-consumer` (ordering/partition safety) and `missing-saga-compensation`
+# (permanently Tier-B — no deterministic ground truth) are pure judgment routed to the oracle. The
+# deterministic DLQ/idempotency absences are Tier-A gaps in the collector, not here. Anchors live in
+# code or config, so they share the observability globs.
+_MESSAGING_CATEGORIES = {"missing-poison-pill-handling", "unordered-consumer", "missing-saga-compensation"}
+
+
+def _poison_pill_handled(fs: FactSet, target: str | None) -> bool:
+    """True iff a known consumer for `target` already has a dead-letter route — which handles the
+    poison pill, refuting the gap. Reads the engine's `message.consumer` facts, so it can't drift
+    from Tier-A detection (the same fact-refutation shape as observability-coverage)."""
+    if not target:
+        return False
+    return any(c.attrs.get("channel") == target and c.attrs.get("deadLetter")
+               for c in fs.of("message.consumer"))
+
+
 def _observability_present(fs: FactSet, category: str) -> bool:
     """True iff the engine's own facts already prove the pillar `category` claims is missing — in
     which case the gap is refuted (the LLM is wrong) and dropped."""
@@ -161,7 +181,7 @@ def gap_categories() -> set[str]:
     """Every known gap category the gap-finder can emit (refutation + confirmation + judgment +
     observability). Used by the graduation loop to validate a reviewer's `confirm-gap` verdict."""
     return (set(_REFUTING_CONCERNS) | set(_CONFIRMING_CATEGORIES) | set(_JUDGMENT_CATEGORIES)
-            | _OBSERVABILITY_CATEGORIES | _LOGGING_CATEGORIES)
+            | _OBSERVABILITY_CATEGORIES | _LOGGING_CATEGORIES | _MESSAGING_CATEGORIES)
 
 
 def target_concerns(category: str) -> tuple[str, ...]:
@@ -392,8 +412,9 @@ def collect_from_proposals(
     res = GapResult()
     survivors: list[tuple[Outcome, Fact]] = []
     for p in proposals:
-        if p.category in _OBSERVABILITY_CATEGORIES or p.category in _LOGGING_CATEGORIES:
-            globs = _OBSERVABILITY_GLOBS  # logging/coverage anchors live in code + config/logback
+        if (p.category in _OBSERVABILITY_CATEGORIES or p.category in _LOGGING_CATEGORIES
+                or p.category in _MESSAGING_CATEGORIES):
+            globs = _OBSERVABILITY_GLOBS  # logging/messaging/coverage anchors live in code + config
         elif p.category in _JUDGMENT_CATEGORIES:
             globs = _JUDGMENT_GLOBS  # cross-stack mechanisms (Go/Node/nginx), #42
         else:
@@ -444,6 +465,28 @@ def collect_from_proposals(
             )
             survivors.append((Outcome(p, "routed", rel, (s, e), (rel,),
                                       "logging-quality gap — routed to human/oracle review"), fact))
+            continue
+
+        # Messaging-quality gap (S3): `missing-poison-pill-handling` refutes against the engine's own
+        # consumer facts (a dead-letter route handles the poison pill); `unordered-consumer` and
+        # `missing-saga-compensation` are judgment with no fact to refute. Survivors route to review.
+        if p.category in _MESSAGING_CATEGORIES:
+            if (p.category == "missing-poison-pill-handling" and fs is not None
+                    and _poison_pill_handled(fs, p.target)):
+                res.outcomes.append(Outcome(p, "refuted", rel, (s, e), (rel,),
+                    "the consumer already has a dead-letter route — the poison pill is handled"))
+                continue
+            target = p.target or Path(rel).stem
+            fact = Fact(
+                "resiliency.gap",
+                {"category": p.category, "target": target, "severity": p.severity,
+                 "rationale": p.rationale, "rederivation": "judgment", "checked": [rel],
+                 "note": "messaging-resilience judgment — routed to human/oracle review"},
+                ctx.evidence(rel, s, e, "llm.gap_finder", source_tier=LLM),
+                Symbol(f"{rel}:{s}-{e}", "gap"),
+            )
+            survivors.append((Outcome(p, "routed", rel, (s, e), (rel,),
+                                      "messaging-resilience judgment — routed to human/oracle review"), fact))
             continue
 
         # Confirmation probe (§9.4): the rule firing at the pointer confirms the gap AND graduates

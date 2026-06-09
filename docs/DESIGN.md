@@ -243,6 +243,7 @@ pass** the provenance validator and is auto-downgraded to `needs-review`.
 | Infra + deployment + capacity | `Deployment` | hosting (**VM**\|**PCF**), org/space, unit (jar/war/buildpack), startCommand, routes, envBindings, **instances/mem/disk limits + pool sizes (capacity)**, stack, healthCheck, manifestPath | P2 |
 | Dependencies | `Dependency` | name/version/scope/type (runtime\|service-binding), source (pom/gradle/VCAP), **criticality** (critical-path?) | P2 |
 | API + messaging contracts | `Interface` | style (rest\|grpc\|soap\|**async**); endpoints/channels{method/path or channel, handler, role, **idempotent?, retrySafe?**}; broker (Kafka/Rabbit/JMS), auth, deliveryGuarantee. **Optional**: ingest an existing OpenAPI/AsyncAPI 3.x doc (the API *spec*, not OpenAI) if present; never generated | P2 |
+| Messaging consumer resilience | `Messaging` | consumers{channel, broker, handler, resilience{deadLetter, deadLetterMechanism, retry, idempotentConsumer}} — the consumer side `Interface` (contracts) doesn't cover. Tier-A from `@KafkaListener`/`@RabbitListener`/`@SqsListener`/`@JmsListener` + `@RetryableTopic`/`@DltHandler`/DLQ config; ordering/poison-pill/saga → Tier-B `map-messaging` | P2 |
 | Jobs | `ScheduledJob` | trigger (cron/fixedDelay), expression, handler, **idempotent?, retrySafe?, dedupeKey** | P2 |
 | Delivery | `DeliveryPipeline` | ci (Jenkins/GitLab/ADO), stages, artifactRepo, promotion, manifestRefs | P2 |
 | Topology | `Topology` | nodes (service/store/broker/external), edges{protocol,dir}, pcfSpaces | P2 |
@@ -277,11 +278,11 @@ That trims the catalog from 22 kinds to ~19 — less schema/collector/validator 
 health checks, scaling), **not** the platform beneath it. Kinds added to the schema after this catalog
 that are platform-infra concerns should be pruned/folded: drop `NetworkTopology` and `DrBackup`; fold
 `DataStore` → `Dependency` and `RateLimiting` → the resiliency signatures; trim `SecurityPosture` to
-app-level controls. Two extraction gaps follow from the same scope and are **P0**: consumer-side
-**messaging resilience** (DLQ / poison-pill / ordering / idempotent-consumer — today `Interface`
-covers only contracts) and **logging format + quality** (the prerequisite for log-based `Alert`s). See
-`SCOPE-AND-COVERAGE.md` (scope + coverage contract) and HYBRID-PLAN §9.7 (S1–S5) for the full matrix
-and build order.
+app-level controls. Two extraction gaps followed from the same scope and were **P0** — both now closed:
+consumer-side **messaging resilience** (S3: the `Messaging` kind — DLQ / idempotent-consumer Tier-A,
+poison-pill / ordering / saga Tier-B) and **logging format + quality** (S2: parsed statements + quality
+on `Observability`, the prerequisite for log-based `Alert`s). See `SCOPE-AND-COVERAGE.md` (scope +
+coverage contract) and HYBRID-PLAN §9.7 (S1–S5) for the full matrix and build order.
 
 **New derived analyses & projections (reuse facts we already extract):**
 - **`ReadinessScore` (kind)** — PRR checks + KB-coverage roll-up; P1 emits the coverage

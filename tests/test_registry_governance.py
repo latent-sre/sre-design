@@ -4,9 +4,22 @@ silently skip its schema or its projection renderer."""
 
 from __future__ import annotations
 
+import json
+
+from sre_kb.collectors.llm.gap_finder import gap_categories
 from sre_kb.config import schemas_dir
 from sre_kb.registry import kind_meta, kinds, renderer_for, schema_for
 from sre_kb.render.project import _PROJECTION_RENDERERS
+
+
+def test_every_gap_category_is_in_the_resiliencygap_schema_enum():
+    """Lock-step: every category the gap-finder can emit must be a valid `ResiliencyGap.category`,
+    or its scaffolded artifact fails structural validation at the gate. This guards the easy miss of
+    adding a category in code but forgetting the schema enum (it caught the S2 logging categories)."""
+    schema = json.loads((schemas_dir() / "v1alpha1" / "ResiliencyGap.schema.json").read_text())
+    enum = set(schema["properties"]["spec"]["properties"]["category"]["enum"])
+    missing = gap_categories() - enum
+    assert not missing, f"gap categories absent from the ResiliencyGap schema enum: {sorted(missing)}"
 
 
 def test_every_kind_has_an_existing_schema():

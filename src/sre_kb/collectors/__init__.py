@@ -21,6 +21,7 @@ from sre_kb.collectors.java_spring import (
     flow_builder,
     jobs,
     log_statements,
+    messaging,
     observability,
     resiliency,
 )
@@ -43,6 +44,7 @@ _FILE_COLLECTORS: list[CollectorProtocol] = [
     resiliency.collect,
     observability.collect,
     log_statements.collect,
+    messaging.collect,
     jobs.collect,
     # .NET / Steeltoe (self-gating: no *.cs/*.csproj -> emit nothing)
     dotnet_build.collect,

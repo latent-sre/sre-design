@@ -82,6 +82,16 @@ def test_load_shed_and_backpressure_signatures() -> None:
         assert c in concerns()
 
 
+def test_dead_letter_signature_matches_dlq_mechanisms() -> None:
+    assert "dead-letter" in concerns()
+    assert fires("dead-letter", "@RetryableTopic(attempts = \"3\")")           # Spring Kafka
+    assert fires("dead-letter", "@DltHandler public void dlt(Order o) {}")
+    assert fires("dead-letter", "spring.cloud.stream.kafka.bindings.in.consumer.enableDlq: true")
+    assert fires("dead-letter", "  arguments: { x-dead-letter-exchange: dlx }")  # RabbitMQ
+    # silent on prose — a false fire would drop a real consumer-without-dlq gap (§9.5 ⑤)
+    assert not fires("dead-letter", "// route failures to a dead letter queue eventually")
+
+
 def test_unknown_concern_never_fires() -> None:
     assert not fires("not-a-concern", "@CircuitBreaker")
     assert "circuit-breaker" in concerns()

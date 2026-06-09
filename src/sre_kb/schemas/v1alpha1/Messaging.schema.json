@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sre.kb/schemas/v1alpha1/Messaging.schema.json",
+  "title": "Messaging",
+  "description": "Consumer-side async-resilience posture (HYBRID-PLAN S3). The Interface kind carries the messaging *contract* (channels); this carries each consumer's *resilience* — the DLQ/retry/idempotency mechanisms detected deterministically. Ordering/partition safety, poison-pill adequacy, and saga compensation are judgment calls routed to the map-messaging skill (Tier-B), not here.",
+  "type": "object",
+  "required": ["kind", "spec"],
+  "properties": {
+    "kind": { "const": "Messaging" },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["consumers"],
+      "properties": {
+        "consumers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["channel", "broker", "handler"],
+            "properties": {
+              "channel": { "type": "string" },
+              "broker": { "type": "string" },
+              "handler": { "type": "string" },
+              "resilience": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "deadLetter": { "type": "boolean" },
+                  "deadLetterMechanism": { "type": ["string", "null"] },
+                  "retry": { "type": "boolean" },
+                  "idempotentConsumer": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

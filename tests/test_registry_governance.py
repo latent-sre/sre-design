@@ -58,3 +58,14 @@ def test_known_kinds_declare_expected_renderers():
 def test_kind_meta_unknown_is_empty():
     assert kind_meta("NotAKind") == {}
     assert renderer_for("NotAKind") is None
+
+
+def test_novel_name_rule_is_lock_step_with_the_schema_pattern():
+    """The slug rule for proposedCategory exists in code and schema; like the category enum, the
+    two copies must not drift — a collector-accepted name failing the schema pattern would die at
+    structural validation."""
+    from sre_kb.collectors.llm.gap_finder import _NOVEL_NAME
+
+    schema = json.loads((schemas_dir() / "v1alpha1" / "ResiliencyGap.schema.json").read_text())
+    pattern = schema["properties"]["spec"]["properties"]["proposedCategory"]["pattern"]
+    assert pattern == _NOVEL_NAME.pattern

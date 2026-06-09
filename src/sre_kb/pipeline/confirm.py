@@ -346,8 +346,11 @@ def _emit_disabled_gap(layout, root: Path, gap: Fact, service: str) -> None:
 def confirm_emitted_categories() -> set[str]:
     """Gap categories the confirm loop itself can graduate — beyond the gap-finder's, the
     present-but-disabled direction's `disabled-resilience`. Used to validate a reviewer's verdict and
-    to drive graduation-from-confirms."""
-    return {"disabled-resilience"}
+    to drive graduation-from-confirms. Single-sourced from the gap-finder's shared constant so the
+    open-discovery channel and this loop can't disagree about who owns a category."""
+    from sre_kb.collectors.llm.gap_finder import CONFIRM_EMITTED_CATEGORIES
+
+    return set(CONFIRM_EMITTED_CATEGORIES)
 
 
 def record_confirm_graduation(root: Path, outcomes: list[ConfirmOutcome],

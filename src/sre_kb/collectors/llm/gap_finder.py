@@ -32,7 +32,7 @@ from sre_kb.collectors.base import ScanContext
 from sre_kb.inventory_signatures import is_tracing_dependency
 from sre_kb.models.facts import Fact, FactSet, Symbol
 from sre_kb.signatures import fires
-from sre_kb.taxonomy import severity_rank
+from sre_kb.taxonomy import reconcile_severity, severity_rank
 from sre_kb.tiers import AST, LLM
 
 # Conventional location of the LLM's output inside the (untrusted) target repo.
@@ -205,6 +205,19 @@ def is_valid_novel_category(name: str) -> bool:
     return name != NOVEL_CATEGORY and bool(_NOVEL_NAME.match(name))
 
 
+# Categories other engine channels emit (the confirm loop's present-but-disabled direction). They
+# have no probe HERE, but they are taxonomy — a proposal naming one must not ride the open-discovery
+# channel (it would collide with the confirm loop's artifact naming); it falls through to
+# `unconfirmable` like any probe-less known category. pipeline/confirm.py reads this same constant,
+# so the two channels can't disagree about what the confirm loop owns.
+CONFIRM_EMITTED_CATEGORIES = frozenset({"disabled-resilience"})
+
+# A novel discovery may anchor anywhere the engine can ground bytes: code + config/build (the
+# observability universe) plus the judgment-only stacks (TypeScript/JSX, nginx/envoy conf) — the
+# unanticipated-stack case is exactly what the channel exists for.
+_NOVEL_GLOBS = tuple(dict.fromkeys(_OBSERVABILITY_GLOBS + _JUDGMENT_GLOBS))
+
+
 def target_concerns(category: str) -> tuple[str, ...]:
     """The deterministic concern(s) a confirmed `category` would graduate into a signature for — the
     shared-signature concerns Tier-A keys off. Empty for `swallowed-failure` (graduates via the AST
@@ -218,13 +231,16 @@ def target_concerns(category: str) -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class Proposal:
-    """One gap hypothesis from the LLM. `anchor` is excerpt TEXT, never a line number."""
+    """One gap hypothesis from the LLM. `anchor` is excerpt TEXT, never a line number. `novel` is
+    the explicit out-of-taxonomy marker: an unknown category WITHOUT it is treated as a typo'd
+    taxonomy category and dropped, never silently routed around the probes."""
 
     category: str
     anchor: str
     target: str | None = None
     severity: str = "medium"
     rationale: str | None = None
+    novel: bool = False
 
 
 @dataclass
@@ -269,12 +285,20 @@ def load_proposals(path: Path) -> list[Proposal]:
         category = str(it.get("category") or it.get("pattern") or "").strip().lower()
         if not anchor or not category:
             continue  # a typeless/anchorless proposal can't be grounded
+        # Normalize severity into the gap enum (high|medium|low): reconcile alternate schemes
+        # (sevN/pN/critical), clamp `critical` to high (the criticality floor owns `critical`),
+        # and treat anything unrecognized as medium — an out-of-enum value from the untrusted
+        # file must not push the artifact into structural rejection.
+        severity = reconcile_severity(str(it.get("severity") or "medium")) or "medium"
+        if severity == "critical":
+            severity = "high"
         out.append(Proposal(
             category=category,
             anchor=anchor,
             target=(str(it["target"]) if it.get("target") else None),
-            severity=str(it.get("severity") or "medium").strip().lower(),
+            severity=severity,
             rationale=(str(it["rationale"]) if it.get("rationale") else None),
+            novel=bool(it.get("novel")),
         ))
     return out
 
@@ -442,16 +466,28 @@ def collect_from_proposals(
     `max_novel`, their own tighter budget. `fs` (the engine's fact set) lets the
     observability-coverage categories refute a claimed-missing pillar the facts already prove."""
     res = GapResult()
-    known = gap_categories()
+    # `known` includes the confirm loop's categories: they have no probe here, but a proposal naming
+    # one must fall through to `unconfirmable`, not ride the novel channel under the confirm loop's
+    # artifact name.
+    known = gap_categories() | set(CONFIRM_EMITTED_CATEGORIES)
     survivors: list[tuple[Outcome, Fact]] = []
     novel: list[tuple[Outcome, Fact]] = []
     for p in proposals:
-        if p.category not in known and not is_valid_novel_category(p.category):
+        is_novel = p.category not in known
+        if is_novel and not p.novel:
+            # No explicit novel marker: a misspelled taxonomy category must not bypass its probe
+            # by looking unknown — refuse to guess and drop it, naming the remedy.
+            res.outcomes.append(Outcome(p, "unconfirmable",
+                                        note=f"unknown category {p.category!r} without the explicit "
+                                             '"novel": true marker — dropped (a typo of a taxonomy '
+                                             "category must not evade its probe)"))
+            continue
+        if is_novel and not is_valid_novel_category(p.category):
             res.outcomes.append(Outcome(p, "unconfirmable",
                                         note="out-of-taxonomy category name is not slug-shaped — dropped"))
             continue
-        if p.category not in known:
-            globs = ALL_GLOBS  # a novel discovery may anchor anywhere in the verbatim universe
+        if is_novel:
+            globs = _NOVEL_GLOBS  # code + config/build + the judgment-only stacks (TS, nginx)
         elif (p.category in _OBSERVABILITY_CATEGORIES or p.category in _LOGGING_CATEGORIES
                 or p.category in _MESSAGING_CATEGORIES):
             globs = _OBSERVABILITY_GLOBS  # logging/messaging/coverage anchors live in code + config
@@ -465,7 +501,7 @@ def collect_from_proposals(
             continue
         rel, s, e = loc
 
-        if p.category not in known:
+        if is_novel:
             # Open discovery: no probe can exist for a category the engine has never seen — it is
             # locate-grounded only and routed to human review, exactly like a judgment call.
             target = p.target or Path(rel).stem

@@ -13,6 +13,7 @@ from pathlib import Path
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.collectors.llm import gap_finder
 from sre_kb.collectors.llm.gap_finder import Proposal
+from sre_kb.pipeline import run as run_pipeline
 from sre_kb.pipeline.gap_finder import run_gap_finder
 from sre_kb.tiers import LLM, artifact_tier
 from sre_kb.validation.provenance import verify_evidence
@@ -413,7 +414,8 @@ def test_out_of_taxonomy_category_is_routed_as_novel_not_dropped():
     grounded, marked `novel` with the proposed name as data, routed to review. Before this channel
     it died as `unconfirmable` and the LLM could not surface anything outside the taxonomy."""
     res = gap_finder.collect_from_proposals(_ctx(), [
-        Proposal("missing-cache-invalidation", _SHIP, target="shipping-api", severity="high"),
+        Proposal("missing-cache-invalidation", _SHIP, target="shipping-api", severity="high",
+                 novel=True),
     ])
     [out] = res.outcomes
     assert out.result == "routed" and "novel" in out.note
@@ -426,9 +428,9 @@ def test_out_of_taxonomy_category_is_routed_as_novel_not_dropped():
 
 def test_novel_with_unslug_name_or_fabricated_anchor_is_dropped():
     res = gap_finder.collect_from_proposals(_ctx(), [
-        Proposal("Not A Slug!!", _SHIP, target="shipping-api"),          # garbage name
-        Proposal("novel", _SHIP, target="shipping-api"),                 # reserved marker
-        Proposal("plausible-new-risk", "return fabricated.call();"),     # fabricated citation
+        Proposal("Not A Slug!!", _SHIP, target="shipping-api", novel=True),      # garbage name
+        Proposal("novel", _SHIP, target="shipping-api", novel=True),             # reserved marker
+        Proposal("plausible-new-risk", "return fabricated.call();", novel=True), # fabricated citation
     ])
     assert res.facts == []
     assert [o.result for o in res.outcomes] == ["unconfirmable", "unconfirmable", "unlocatable"]
@@ -438,8 +440,9 @@ def test_novel_budget_is_separate_and_tighter():
     """Novel discoveries spend `max_novel`, not the taxonomy budget — the open invitation can
     neither crowd out known categories nor flood a reviewer."""
     res = gap_finder.collect_from_proposals(_ctx(), [
-        Proposal("missing-cache-invalidation", _SHIP, target="shipping-api", severity="high"),
-        Proposal("another-new-risk", _SHIP, target="shipping-api", severity="low"),
+        Proposal("missing-cache-invalidation", _SHIP, target="shipping-api", severity="high",
+                 novel=True),
+        Proposal("another-new-risk", _SHIP, target="shipping-api", severity="low", novel=True),
         Proposal("data-loss-path", _SHIP, target="shipping-api", severity="high"),
     ], max_novel=1, max_candidates=None)
     by_cat = {o.proposal.category: o.result for o in res.outcomes}
@@ -454,7 +457,8 @@ def test_novel_gap_scaffolds_named_by_proposed_category_and_validates():
     from sre_kb.validation.structural import validate_doc as _validate
 
     res = gap_finder.collect_from_proposals(_ctx(), [
-        Proposal("missing-cache-invalidation", _SHIP, target="shipping-api", severity="high"),
+        Proposal("missing-cache-invalidation", _SHIP, target="shipping-api", severity="high",
+                 novel=True),
     ])
     doc = scaffold_gap(res.facts[0], "checkout")
     assert _validate(doc) == []  # category=novel + proposedCategory pass the schema
@@ -462,3 +466,80 @@ def test_novel_gap_scaffolds_named_by_proposed_category_and_validates():
     assert doc["spec"]["proposedCategory"] == "missing-cache-invalidation"
     assert doc["status"] == "needs-review" and doc["spec"]["sourceTier"] == "llm"
     assert not doc.get("crossRefs")  # not necessarily resiliency — no ResiliencyPattern backlink
+
+
+def test_unknown_category_without_the_marker_is_dropped_not_routed():
+    """A typo'd taxonomy category must not evade its probe by looking novel: 'missing-timeouts'
+    (plural) at a @TimeLimiter-guarded site is dropped, where the marked novel path would have
+    routed it to a reviewer as a high-severity find the probe refutes under the right spelling."""
+    res = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("missing-timeouts", _SHIP, target="shipping-api", severity="high"),
+    ])
+    [out] = res.outcomes
+    assert out.result == "unconfirmable" and "novel" in out.note
+    assert res.facts == []
+
+
+def test_confirm_loop_category_does_not_ride_the_novel_channel():
+    """disabled-resilience belongs to the confirm loop (no probe here): even marked novel it must
+    fall through to unconfirmable, not be published under the confirm loop's artifact name."""
+    for marked in (False, True):
+        res = gap_finder.collect_from_proposals(_ctx(), [
+            Proposal("disabled-resilience", _SHIP, target="shipping-api", novel=marked),
+        ])
+        [out] = res.outcomes
+        assert out.result == "unconfirmable", out.note
+        assert res.facts == []
+
+
+def test_novel_anchor_in_a_judgment_only_stack_locates(tmp_path):
+    """The unanticipated-stack case is what the channel exists for: a novel anchor in nginx conf
+    (a judgment-only glob, outside ALL_GLOBS) must locate, not die unlocatable."""
+    (tmp_path / "nginx.conf").write_text("limit_req zone=api burst=20;\n", encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x", commit=LOCAL_COMMIT)
+    res = gap_finder.collect_from_proposals(ctx, [
+        Proposal("unbounded-burst-queue", "limit_req zone=api burst=20;", novel=True),
+    ])
+    [out] = res.outcomes
+    assert out.result == "routed", out.note
+
+
+def test_untrusted_severity_is_normalized_into_the_gap_enum(tmp_path):
+    """An out-of-enum severity from the untrusted proposals file must not push the artifact into
+    structural rejection: critical clamps to high, garbage becomes medium."""
+    import json as _json
+
+    from sre_kb.collectors.llm.gap_finder import load_proposals
+
+    f = tmp_path / "p.json"
+    f.write_text(_json.dumps({"proposals": [
+        {"category": "data-loss-path", "anchor": "x();", "severity": "critical"},
+        {"category": "data-loss-path", "anchor": "y();", "severity": "Sev1"},
+        {"category": "data-loss-path", "anchor": "z();", "severity": "bogus"},
+    ]}), encoding="utf-8")
+    sevs = [p.severity for p in load_proposals(f)]
+    assert sevs[0] == "high" and sevs[2] == "medium"
+    assert all(s in {"high", "medium", "low"} for s in sevs)
+
+
+def test_main_pipeline_applies_the_novel_budget(tmp_path):
+    """The max_novel cap must hold on the primary `run` path, not only in run_gap_finder."""
+    import json as _json
+    import shutil
+
+    src = Path(__file__).parent / "fixtures" / "sample-gap-finder"
+    root = tmp_path / "repo"
+    shutil.copytree(src, root)
+    props = {"proposals": [
+        {"category": f"novel-risk-{i}", "anchor": _SHIP, "target": "shipping-api",
+         "severity": "medium", "novel": True}
+        for i in range(6)
+    ]}
+    (root / ".sre" / "gap-proposals.json").write_text(_json.dumps(props), encoding="utf-8")
+    r = run_pipeline(str(root), work_root=str(tmp_path / "w"), run_id="cap", to_stage="validate")
+    import yaml as _yaml
+
+    novel_docs = [d for p in (r.root / "kb").rglob("*.yaml")
+                  if (d := _yaml.safe_load(p.read_text()))["kind"] == "ResiliencyGap"
+                  and d["spec"]["category"] == "novel"]
+    assert len(novel_docs) == 3  # gap_finder.max_novel default, enforced on the run path

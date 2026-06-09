@@ -28,5 +28,6 @@ phases:
     - sre-generate-slos
     - sre-generate-dashboards
     - generate-alerts
+    - generate-runbooks
   consume:
     - sre-incident-response

@@ -893,8 +893,10 @@ reviews. Completion is tracked in the §8 table; the rationale lives here.
   it can't drift; survivors land Tier-B `needs-review` (reusing the `resiliency.gap` → `ResiliencyGap`
   path, anchored on the config/build line). Logging posture folds in as the structured-logging signal,
   not a separate skill. The orchestrator threads its fact set into the gap-finder; the standalone CLI
-  runs without one (grounds + routes, no fact-refute). *(NB: `readiness.py` still hard-codes
-  `tracing-enabled: False`; wiring it to the same dependency check is a small follow-up.)*
+  runs without one (grounds + routes, no fact-refute). *(Follow-up closed: `readiness.py`'s
+  `tracing-enabled` PRR check now reads the shared `is_tracing_dependency` (inventory_signatures) — the
+  same data-driven check the gap-finder's `missing-tracing` refutation uses, so the PRR grade and the
+  refutation can't drift; `tests/test_tracing_signal.py`.)*
 - **R7 — `grafana` + `thousandeyes` alert adapters. ✅ Done.** Backend parity reached 6/6 via the
   neutral-intent → adapter seam (`render/alerts.py` `_grafana_burn`/`_grafana_log`/`_thousandeyes_burn`):
   the engine lifts each backend's template *structure* and feeds its own deterministically generated

@@ -451,6 +451,7 @@ status-authority note at the top):
 | N5 | inventory signatures · load-shed/backpressure probes · findings narrative | ✅ | #38–41 |
 | #7 Tier-B | `map-api-contracts` — baseline-spec breaking-change diff + version-policy (Tier-A) + semantic-break skill re-grounding (Tier-B) | ✅ | |
 | #19 Tier-B | `generate-alerts` — log-pattern alert drafter, grounded on the parsed log-statement facts | ✅ | |
+| #20 Tier-B | `generate-runbooks` — runbook-content drafter, closed-world grounded on the run's artifacts | ✅ | |
 | infra | full scan/publish credential split (§9.3 #5) | 🟡 scan role done; publish role + CI open | gate before live publish |
 
 The per-phase detail below remains the authoritative narrative for each ✅.
@@ -1060,6 +1061,19 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   hash-checked citation), never auto-verified. Exposed via `sre-kb generate-alerts` (report-first, like
   the gap-finder spike). `generate-runbooks` is the sibling next item. (`pipeline/alerts_draft.py`,
   `cli.py`, `.github/skills/generate-alerts/`; `tests/test_generate_alerts.py`.)
+- **S9 — `generate-runbooks` Tier-B drafter (coverage #20). ✅ Done.** The sibling drafting skill. The
+  scaffolder writes a runbook only for a swallowed-publish Alert; every other Alert (a burn-rate alert)
+  ships with none, and the diagnosis/remediation prose is a judgment. So the `generate-runbooks` skill
+  drafts it and `pipeline/runbooks_draft.py` re-grounds each — not the byte-locate contract (runbook
+  prose isn't a code claim) but the **closed-world reference grounding** the findings narrative (N5)
+  uses: the trigger `alertRef` must resolve to a real Alert (an unknown one is dropped; an Alert that
+  already has a runbook — or a second proposal for the same one in a run — is refused, so no duplicate),
+  and every `Kind/name` citation in the drafted prose is grounded against the run's artifacts so a
+  hallucinated flow/dependency is named, never silently kept. Survivors scaffold as `needs-review`,
+  `source_tier=llm` `Runbook` artifacts with the GENERATED banner, byte-grounded to the same code their
+  target Alert cites. Exposed via `sre-kb generate-runbooks`. With S8 this closes the two P1 drafting
+  skills (SCOPE §8.5). (`pipeline/runbooks_draft.py`, `cli.py`, `.github/skills/generate-runbooks/`;
+  `tests/test_generate_runbooks.py`.)
 
 #### Decision — LLM transport (2026-06-09)
 

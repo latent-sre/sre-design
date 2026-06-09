@@ -700,6 +700,42 @@ def generate_alerts_cmd(
         typer.echo(f"  report -> {report}")
 
 
+@app.command("generate-runbooks")
+def generate_runbooks_cmd(
+    target: str = typer.Option(..., "--target", help="Local path of the target repo."),
+    proposals: Path = typer.Option(
+        None, "--proposals",
+        help="Runbook proposals JSON (default: <target>/.sre/runbook-proposals.json)."
+    ),
+    service: str = typer.Option(None, "--service", help="Service name (default: target dir name)."),
+    report: Path = typer.Option(None, "--report", help="Write the re-grounding report JSON here."),
+) -> None:
+    """Tier-B generate-runbooks (coverage #20): ingest the skill's drafted runbooks and re-ground each
+    — the trigger Alert must resolve to a real run artifact (an Alert that already has a runbook is
+    refused), and every Kind/name reference in the prose is grounded against the run's artifacts.
+    Survivors scaffold as needs-review Runbook artifacts. The engine never calls a model.
+    """
+    from sre_kb.pipeline.runbooks_draft import run_generate_runbooks
+
+    result = run_generate_runbooks(target, proposals_path=proposals, service=service)
+    kept, dropped = result.kept(), result.dropped()
+    typer.echo(
+        f"generate-runbooks: {len(result.outcomes)} proposal(s) -> {len(kept)} drafted "
+        f"(needs-review), {len(dropped)} dropped"
+    )
+    for o in result.outcomes:
+        flagged = f"  [ungrounded: {', '.join(o.ungrounded_refs)}]" if o.ungrounded_refs else ""
+        typer.echo(f"  [{o.result:<17}] {o.proposal.alert_ref}  — {o.note}{flagged}")
+    if report is not None:
+        payload = [
+            {"alertRef": o.proposal.alert_ref, "result": o.result,
+             "ungroundedRefs": list(o.ungrounded_refs), "note": o.note}
+            for o in result.outcomes
+        ]
+        report.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        typer.echo(f"  report -> {report}")
+
+
 @app.command("copilot-gap-validate")
 def copilot_gap_validate_cmd(
     target: str = typer.Option(..., "--target", help="Local path of the target repo."),

@@ -1,0 +1,14 @@
+{"proposals": [
+  {"alertRef": "create-order-latency-burn-rate", "relatedFlow": "create-order",
+   "symptoms": ["p99 latency on the create-order route is burning the error budget"],
+   "diagnosis": ["Check the order-kafka publish path in Flow/create-order for backpressure",
+                 "Inspect downstream dependency latency"],
+   "remediation": ["Scale out or shed load on the slow dependency",
+                   "Confirm the burn-rate window is not a transient spike"],
+   "escalation": "orders on-call"},
+  {"alertRef": "order-created-publish-failures",
+   "symptoms": ["publish failures"],
+   "remediation": ["check the broker"]},
+  {"alertRef": "nonexistent-alert",
+   "remediation": ["do something"]}
+]}

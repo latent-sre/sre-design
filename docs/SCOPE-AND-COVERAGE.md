@@ -77,7 +77,7 @@ Status legend: ✅ solid · ◐ partial · ❌ gap · (S) schema/kind exists but
 | 12 | Resiliency patterns used | `ResiliencyPattern` | A | ✅✅ | flagship; 10 signatures |
 | 13 | Logging | `Observability` | A/B | ✅ | S2: statements parsed (level dist, parameterization); deterministic **quality** (req/trace-ID correlation context, alert-fatigue signals) + Tier-B `sre-assess-logging` judgment |
 | 14 | Observability | `Observability` | A/B | ✅ | metrics/traces/health + coverage skill |
-| 15 | Feature flags | `FeatureFlag` (S) | A | ❌(S) | schema exists, **no detector** |
+| 15 | Feature flags | `FeatureFlag` | A | ✅ | `common.feature_flags`: config blocks + `@ConditionalOnProperty` + flag-SDK calls (LaunchDarkly/Unleash/FF4J) |
 | 16 | Built-in fallbacks | `Fallback` | A | ✅ | |
 | 17 | Flows + where a request can fail | `Flow` + `BlastRadius` | A | ✅✅ | flagship |
 | 18 | **Logging format (parse the statements)** | `Observability` (feeds #19) | A | ✅ | S2: `java_spring.log_statements` parses framework/level/parameterization from the AST — the log-based-alert prerequisite |

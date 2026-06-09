@@ -250,7 +250,7 @@ pass** the provenance validator and is auto-downgraded to `needs-review`.
 | Blast radius | `BlastRadius` | node (service/store/broker/dep), impactedFlows/services/SLOs (reverse-reachability), containment{resiliency/fallback refs}, coTenancy{sharedDB/broker/pcfSpace}, **stateful{dataLossRisk,RPO,RTO}**, **dependencyCriticality**, severityHint | **P1**(min) / P2(full) |
 | Resiliency patterns | `ResiliencyPattern` | type (cb/retry/bulkhead/timeout/ratelimit), library, targetSymbol, config | **P1** |
 | Logging + observability | `Observability` | **logging**{framework (logback/log4j2), format (json/pattern), patternString, correlationFields, levels}; metrics{name,type,meter}; tracing (Sleuth/OTel); healthIndicators; actuatorEndpoints | **P1**(logging) / P2(rest) |
-| Feature flags | `FeatureFlag` | provider (Togglz/config), key, defaultState, guardedSymbols | P2 |
+| Feature flags | `FeatureFlag` | provider (config/spring-config/LaunchDarkly/Unleash/FF4J/Flagsmith), name, defaultState, killSwitch — detected from config blocks, `@ConditionalOnProperty`, and flag-SDK calls (`common.feature_flags`) | P2 |
 | Built-in fallbacks | `Fallback` | trigger (exception/timeout/breaker-open), fallbackSymbol, behavior, forFlowStep | **P1** |
 | Flows + failure points | `Flow` | trigger, steps{symbol,kind,failureModes[],**retrySafe?**}, sinks, **sloRef?** | **P1** |
 | Alerts (proposed) | `Alert` | alertType (burn-rate\|threshold), sloRef?, signalSource (log-pattern/metric), expr (per backend), severity, forFlow, logFormatRef, rationale | **P1** |

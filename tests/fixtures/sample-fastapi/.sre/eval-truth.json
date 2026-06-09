@@ -1,0 +1,16 @@
+{
+  "service": "orders-api",
+  "_doc": "Labeled extraction truth for the S5 eval harness — the Python/FastAPI stack (python_fastapi.endpoints + inventory signatures): endpoints, tech stack, dependency, and the deterministic idempotency gaps on mutating routes.",
+  "artifacts": [
+    {"kind": "TechStack", "name": "orders-api"},
+    {"kind": "Interface", "name": "orders-api"},
+    {"kind": "Dependency", "name": "orders-postgres"},
+    {"kind": "Deployment", "name": "orders-api"},
+    {"kind": "ResiliencyGap", "name": "p-o-s-t-orders-missing-idempotency"},
+    {"kind": "ResiliencyGap", "name": "p-o-s-t-sync-missing-idempotency"}
+  ],
+  "detectors": [
+    "python_fastapi.endpoints",
+    "common.manifest_pcf"
+  ]
+}

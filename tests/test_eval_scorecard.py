@@ -34,8 +34,9 @@ def test_every_labeled_fixture_scores_clean(fixture, tmp_path):
 
 
 def test_scorecard_covers_a_broad_fixture_set():
-    """A floor on coverage breadth so the scorecard can't silently shrink back to a single fixture."""
-    assert len(_labeled_fixtures()) >= 7
+    """A floor on coverage breadth so the scorecard can't silently shrink. Spans both AST stacks
+    (Java/.NET) and the polyglot endpoint collectors (Python/Node/Go)."""
+    assert len(_labeled_fixtures()) >= 12
 
 
 def test_labeled_fixture_scores_clean(tmp_path):

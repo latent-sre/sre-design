@@ -1,0 +1,19 @@
+{
+  "service": "account-service",
+  "_doc": "Labeled extraction truth for the S5 eval harness — a multi-flow Java service: two Flows, the dependency + blast radius, and the per-route idempotency gaps.",
+  "artifacts": [
+    {"kind": "Flow", "name": "open-account"},
+    {"kind": "Flow", "name": "close-account"},
+    {"kind": "Dependency", "name": "accounts-db"},
+    {"kind": "BlastRadius", "name": "account-repository"},
+    {"kind": "TechStack", "name": "account-service"},
+    {"kind": "Interface", "name": "account-service"},
+    {"kind": "Deployment", "name": "account-service"},
+    {"kind": "ResiliencyGap", "name": "p-o-s-t-api-v1-accounts-open-missing-idempotency"},
+    {"kind": "ResiliencyGap", "name": "p-o-s-t-api-v1-accounts-close-missing-idempotency"}
+  ],
+  "detectors": [
+    "java_spring.annotations",
+    "common.manifest_pcf"
+  ]
+}

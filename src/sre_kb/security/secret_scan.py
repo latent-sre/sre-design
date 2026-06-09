@@ -357,11 +357,16 @@ def redact_text(text: str) -> tuple[str, int]:
     return "".join(out), count
 
 
-def redact_tree(root: Path) -> int:
-    """Redact regex-pattern secrets, writing back in the file's original text encoding."""
+def redact_tree(root: Path, *, skip_prefixes: tuple[str, ...] = (".git",)) -> int:
+    """Redact regex-pattern secrets, writing back in the file's original text encoding. The skip
+    default mirrors scan_tree's: redaction must not rewrite files the gate deliberately exempts
+    (git internals it never scanned, first-party assets a caller skipped)."""
     total = 0
     for p in sorted(root.rglob("*")):
         if not p.is_file() or p.is_symlink():
+            continue
+        rel = p.relative_to(root).as_posix()
+        if any(rel == pre or rel.startswith(pre + "/") for pre in skip_prefixes):
             continue
         decoded = _decoded_file(p)
         if decoded is None:

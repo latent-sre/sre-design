@@ -90,10 +90,11 @@ def test_draft_signature_variants():
     d = draft_signature(
         ConfirmedCategory("missing-timeout", confirmed=5, anchors=["Foo.java:10"]),
         target_concerns("missing-timeout"),
+        known=True,
     )
     assert "signatures.py concern(s): timeout" in d and "Foo.java:10" in d
-    assert "AST swallow detector" in draft_signature(ConfirmedCategory("swallowed-failure", confirmed=5), ())
-    assert "judgment-call" in draft_signature(ConfirmedCategory("data-loss-path", confirmed=5), ())
+    assert "AST swallow detector" in draft_signature(ConfirmedCategory("swallowed-failure", confirmed=5), (), known=True)
+    assert "judgment-call" in draft_signature(ConfirmedCategory("data-loss-path", confirmed=5), (), known=True)
 
 
 # --- CLI ------------------------------------------------------------------------------------------

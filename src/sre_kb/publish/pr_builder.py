@@ -218,7 +218,7 @@ def assemble_pr(
         # Explicit operator override: redact detected secrets rather than publish them raw, then
         # re-gate. If anything survives redaction (e.g. a future detector with no redactor), fail
         # closed — block the publish rather than leak a residual secret.
-        redact_tree(tree)
+        redact_tree(tree, skip_prefixes=(".sre/schemas", ".git"))
         enforce_secret_gate(tree, skip_prefixes=(".sre/schemas", ".git"))
     if dry_run:
         return tree, f"dry-run: staged PR tree at {tree} (would target {sre_repo})"

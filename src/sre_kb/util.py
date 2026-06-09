@@ -48,7 +48,7 @@ def slug(text: str) -> str:
 
 
 def member_of(symbol_fqn: str) -> str:
-    """Return the member portion of 'pkg.Type#member', else the type name."""
+    """Return the member portion of 'pkg.Type#member', else the whole symbol unchanged."""
     return symbol_fqn.split("#")[-1] if symbol_fqn else "x"
 
 

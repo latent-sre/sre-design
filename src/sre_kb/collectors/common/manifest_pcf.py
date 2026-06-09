@@ -19,6 +19,8 @@ def collect(ctx: ScanContext) -> list[Fact]:
         except yaml.YAMLError as exc:
             facts.append(parse_error_fact(ctx, rel, "common.manifest_pcf", exc))
             continue
+        if not isinstance(data, dict):
+            continue  # a non-mapping root (list/scalar) is not a PCF manifest
         for app in data.get("applications") or []:
             if not isinstance(app, dict):
                 continue

@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/Dependency.schema.json",
   "title": "Dependency",
+  "description": "One external dependency of the service (HTTP API, datastore, broker), with where it was declared, its engine where known, and its criticality to the service's flows.",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

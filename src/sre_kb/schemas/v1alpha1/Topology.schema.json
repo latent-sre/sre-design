@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/Topology.schema.json",
   "title": "Topology",
+  "description": "The app-centric dependency graph: services and the datastores/brokers/externals they bind or call, as nodes and typed edges. Estate runs merge several services into one shared topology.",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

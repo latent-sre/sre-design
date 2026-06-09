@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/Runbook.schema.json",
   "title": "Runbook",
+  "description": "Operator guidance for one alert/failure mode: trigger, symptoms, diagnosis, remediation, and escalation. Generated content carries the verify-before-executing banner and cites the scanned commit.",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/BlastRadius.schema.json",
   "title": "BlastRadius",
+  "description": "Engine-computed failure impact for one node (dependency/broker/datastore): the flows and services degraded when it fails, containment present or absent, co-tenancy across services, and whether state makes failure lossy. Labeled a best-effort lower bound \u2014 flow gaps may hide impact.",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

@@ -181,4 +181,14 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "properties": [f.attrs for f in config_facts],
         }, [config_facts[0].evidence], "verified", confidence(Signal.DIRECT), service))
 
+    # --- FeatureFlag (coverage matrix #15: config blocks / @ConditionalOnProperty / flag-SDK calls) ---
+    for ff in fs.of("feature.flag"):
+        a = ff.attrs
+        docs.append(emit("FeatureFlag", a["name"], {
+            "name": a["name"],
+            "provider": a.get("provider"),
+            "defaultState": a.get("defaultState", "unknown"),
+            "killSwitch": a.get("killSwitch", False),
+        }, [ff.evidence], "verified", confidence(Signal.DIRECT), service))
+
     return docs

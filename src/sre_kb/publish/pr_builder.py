@@ -84,6 +84,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false  # validate-only job; no token left in .git/config
       - name: Require CODEOWNERS team
         run: |
           if grep -q 'REPLACE_ME__owning_team' .github/CODEOWNERS; then

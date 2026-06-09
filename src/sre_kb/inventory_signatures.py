@@ -157,9 +157,5 @@ def engines() -> list[str]:
     return [s.engine for s in _DATASTORES]
 
 
-def broker_kinds() -> list[str]:
-    return [s.kind for s in _BROKERS]
-
-
 def stacks() -> tuple[StackSig, ...]:
     return _STACKS

@@ -326,7 +326,7 @@ def _locate(
         return None
     for path in ctx.files(*globs):
         rel = ctx.rel(path)
-        stripped = [ln.strip() for ln in ctx.read_lines(rel)]
+        stripped = ctx.stripped_lines(rel)  # memoized: stripping every file per proposal dominated
         for i in range(len(stripped) - len(needles) + 1):
             # whole-line equality, not substring: a contiguous run of whole source lines (per the
             # docstring). Substring matching let a near-miss anchor (`return x` vs `return xs`) locate
@@ -455,6 +455,23 @@ def _confirm(ctx: ScanContext, rel: str, start: int, end: int, category: str):
 
 # --------------------------------------------------------------------------- collect
 
+def _routed_fact(ctx: ScanContext, p: Proposal, rel: str, s: int, e: int, *,
+                 rederivation: str, note: str, extra: dict | None = None) -> tuple[Outcome, Fact]:
+    """A locate-grounded proposal routed to human/oracle review — the one Tier-B Fact + Outcome
+    shape every probe-less channel shares (observability / logging / messaging / judgment / novel).
+    `extra` overrides attrs for channels that recode the category (the novel marker)."""
+    target = p.target or Path(rel).stem
+    attrs = {"category": p.category, "target": target, "severity": p.severity,
+             "rationale": p.rationale, "rederivation": rederivation, "checked": [rel], "note": note}
+    attrs.update(extra or {})
+    fact = Fact(
+        "resiliency.gap", attrs,
+        ctx.evidence(rel, s, e, "llm.gap_finder", source_tier=LLM),
+        Symbol(f"{rel}:{s}-{e}", "gap"),
+    )
+    return Outcome(p, "routed", rel, (s, e), (rel,), note), fact
+
+
 def collect_from_proposals(
     ctx: ScanContext, proposals: list[Proposal], *, fs: FactSet | None = None,
     max_candidates: int | None = None, max_novel: int | None = None,
@@ -504,18 +521,12 @@ def collect_from_proposals(
         if is_novel:
             # Open discovery: no probe can exist for a category the engine has never seen — it is
             # locate-grounded only and routed to human review, exactly like a judgment call.
-            target = p.target or Path(rel).stem
-            fact = Fact(
-                "resiliency.gap",
-                {"category": NOVEL_CATEGORY, "proposedCategory": p.category, "target": target,
-                 "severity": p.severity, "rationale": p.rationale, "rederivation": "novel",
-                 "checked": [rel],
-                 "note": "out-of-taxonomy discovery — no deterministic probe; routed to human review"},
-                ctx.evidence(rel, s, e, "llm.gap_finder", source_tier=LLM),
-                Symbol(f"{rel}:{s}-{e}", "gap"),
-            )
-            novel.append((Outcome(p, "routed", rel, (s, e), (rel,),
-                                  f"novel discovery ({p.category!r}) — routed to human review"), fact))
+            novel.append(_routed_fact(
+                ctx, p, rel, s, e, rederivation="novel",
+                note=f"novel discovery ({p.category!r}) — out-of-taxonomy, no deterministic probe; "
+                     "routed to human review",
+                extra={"category": NOVEL_CATEGORY, "proposedCategory": p.category},
+            ))
             continue
 
         # Observability-coverage gap (R6): refute against the engine's own facts — a claimed-missing
@@ -526,17 +537,10 @@ def collect_from_proposals(
                 res.outcomes.append(Outcome(p, "refuted", rel, (s, e), (rel,),
                     f"the engine's facts already cover {pillar} — the gap does not hold"))
                 continue
-            target = p.target or Path(rel).stem
-            fact = Fact(
-                "resiliency.gap",
-                {"category": p.category, "target": target, "severity": p.severity,
-                 "rationale": p.rationale, "rederivation": "judgment", "checked": [rel],
-                 "note": "observability-coverage gap — not refuted by engine facts; routed to review"},
-                ctx.evidence(rel, s, e, "llm.gap_finder", source_tier=LLM),
-                Symbol(f"{rel}:{s}-{e}", "gap"),
-            )
-            survivors.append((Outcome(p, "routed", rel, (s, e), (rel,),
-                                      "observability-coverage gap — routed to human/oracle review"), fact))
+            survivors.append(_routed_fact(
+                ctx, p, rel, s, e, rederivation="judgment",
+                note="observability-coverage gap — not refuted by engine facts; routed to human/oracle review",
+            ))
             continue
 
         # Logging-quality gap (S2): `missing-log-context` refutes against the engine's own logging
@@ -547,17 +551,10 @@ def collect_from_proposals(
                 res.outcomes.append(Outcome(p, "refuted", rel, (s, e), (rel,),
                     "the engine's facts already prove request/trace correlation context — the gap does not hold"))
                 continue
-            target = p.target or Path(rel).stem
-            fact = Fact(
-                "resiliency.gap",
-                {"category": p.category, "target": target, "severity": p.severity,
-                 "rationale": p.rationale, "rederivation": "judgment", "checked": [rel],
-                 "note": "logging-quality gap — routed to human/oracle review"},
-                ctx.evidence(rel, s, e, "llm.gap_finder", source_tier=LLM),
-                Symbol(f"{rel}:{s}-{e}", "gap"),
-            )
-            survivors.append((Outcome(p, "routed", rel, (s, e), (rel,),
-                                      "logging-quality gap — routed to human/oracle review"), fact))
+            survivors.append(_routed_fact(
+                ctx, p, rel, s, e, rederivation="judgment",
+                note="logging-quality gap — routed to human/oracle review",
+            ))
             continue
 
         # Messaging-quality gap (S3): `missing-poison-pill-handling` refutes against the engine's own
@@ -569,17 +566,10 @@ def collect_from_proposals(
                 res.outcomes.append(Outcome(p, "refuted", rel, (s, e), (rel,),
                     "the consumer already has a dead-letter route — the poison pill is handled"))
                 continue
-            target = p.target or Path(rel).stem
-            fact = Fact(
-                "resiliency.gap",
-                {"category": p.category, "target": target, "severity": p.severity,
-                 "rationale": p.rationale, "rederivation": "judgment", "checked": [rel],
-                 "note": "messaging-resilience judgment — routed to human/oracle review"},
-                ctx.evidence(rel, s, e, "llm.gap_finder", source_tier=LLM),
-                Symbol(f"{rel}:{s}-{e}", "gap"),
-            )
-            survivors.append((Outcome(p, "routed", rel, (s, e), (rel,),
-                                      "messaging-resilience judgment — routed to human/oracle review"), fact))
+            survivors.append(_routed_fact(
+                ctx, p, rel, s, e, rederivation="judgment",
+                note="messaging-resilience judgment — routed to human/oracle review",
+            ))
             continue
 
         # Confirmation probe (§9.4): the rule firing at the pointer confirms the gap AND graduates
@@ -616,17 +606,10 @@ def collect_from_proposals(
                                                 f"the {refuter} signature fires in scope — the gap does not hold"))
                     continue
             # No deterministic probe — locate-grounded only, routed to the oracle as needs-review.
-            target = p.target or Path(rel).stem
-            fact = Fact(
-                "resiliency.gap",
-                {"category": p.category, "target": target, "severity": p.severity,
-                 "rationale": p.rationale, "rederivation": "judgment", "checked": [rel],
-                 "note": "judgment call — no deterministic probe; routed to human/oracle review"},
-                ctx.evidence(rel, s, e, "llm.gap_finder", source_tier=LLM),
-                Symbol(f"{rel}:{s}-{e}", "gap"),
-            )
-            survivors.append((Outcome(p, "routed", rel, (s, e), (rel,),
-                                      "judgment call — routed to human/oracle review"), fact))
+            survivors.append(_routed_fact(
+                ctx, p, rel, s, e, rederivation="judgment",
+                note="judgment call — no deterministic probe; routed to human/oracle review",
+            ))
             continue
 
         if p.category not in _REFUTING_CONCERNS:

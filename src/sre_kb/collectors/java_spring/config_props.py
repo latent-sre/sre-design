@@ -3,9 +3,7 @@ time-limiter, actuator exposure). Each fact cites the defining line."""
 
 from __future__ import annotations
 
-import yaml
-
-from sre_kb.collectors.base import ScanContext, parse_error_fact
+from sre_kb.collectors.base import ScanContext, load_yaml_mapping
 from sre_kb.models.facts import Fact
 from sre_kb.util import dig, find_line
 
@@ -15,10 +13,10 @@ def collect(ctx: ScanContext) -> list[Fact]:
     for path in ctx.files("application.yml", "application.yaml", "application-*.yml"):
         rel = ctx.rel(path)
         lines = ctx.read_lines(rel)
-        try:
-            data = yaml.safe_load(ctx.read_text(rel)) or {}
-        except yaml.YAMLError as exc:
-            facts.append(parse_error_fact(ctx, rel, "java_spring.config_props", exc))
+        data, err = load_yaml_mapping(ctx, rel, "java_spring.config_props")
+        if err is not None:
+            facts.append(err)
+        if data is None:
             continue
 
         slo = dig(data, "management", "metrics", "distribution", "slo")

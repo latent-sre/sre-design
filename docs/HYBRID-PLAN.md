@@ -12,8 +12,8 @@ and a phased plan to combine their strengths.
 
 > **Status authority (consolidated 2026-06-07).** This doc is the **single source of truth** for the
 > plan + live status: **§8** is the implementation-status tracker, **§9** the rolling reassessment
-> (incl. **§9.7**, the open backlog). The only other docs are `DESIGN.md` (architecture) and
-> `PHASE-4-GAP-FINDER.md` (the gap-finder spike). The separate review/reassessment snapshots
+> (incl. **§9.7**, the open backlog). The companion docs are `DESIGN.md` (architecture) and
+> `SCOPE-AND-COVERAGE.md` (scope + coverage contract). The separate review/reassessment snapshots
 > (Rounds 1–3 + the parallel competitive review) were **folded in here and retired** — their
 > reasoning remains in git history. **When anything disagrees with §8, §8 wins.**
 
@@ -558,7 +558,7 @@ model (the founding invariant). The §7.3 adversarial-LLM corpus is the regressi
 
 ### Phase 4 — Tier-B LLM gap-finder 🟡 (spike)
 
-The first Tier-B collector, as a spike (`docs/PHASE-4-GAP-FINDER.md`). Copilot proposes resiliency
+The first Tier-B collector (shipped; `collectors/llm/gap_finder.py`). Copilot proposes resiliency
 gaps the AST missed (§7.9 recall mode), quoting verbatim excerpts; the engine — never the LLM —
 locates each (`collectors/llm/gap_finder.py`), stamps `path:line:hash`, and runs deterministic
 probes via the shared `signatures.py` (§7.4) / AST detectors. Refutation-probe absence gaps

@@ -171,6 +171,29 @@ The §4 matrix + the SRE rubric **are** the coverage contract. Turn them into an
 - Report a scorecard; **precision will be structurally lower for Tier-B/semantic rows — that's
   expected, not a bug.** Stage 2 is unlocked when the rows you intend to trust clear their bar.
 
+### The measurement recipe (today, gap-finder; generalize to all Tier-B)
+
+The Tier-B half already has a working, reproducible measurement loop — `copilot-gap-validate`. It is
+the seed of the harness above; the same shape extends to every discover/confirm skill. The engine
+**never calls a model**, so the model boundary is an explicit manual step:
+
+1. `sre-kb run --target <service> --to-stage scaffold` — produces a fresh context pack.
+2. In VS Code, run Copilot with the relevant `SKILL.md` and save the answer to
+   `<service>/.sre/gap-proposals.json` (the discover output; a `confirm` exchange file is the
+   confirm-loop analogue, §6).
+3. Write a target truth file, e.g.
+   `{"expected": [{"category": "missing-timeout", "target": "payments-api"}],
+   "controls": [{"category": "missing-timeout", "target": "shipping-api"}]}`.
+4. Measure: `sre-kb copilot-gap-validate --target <service> --truth <service>/.sre/gap-truth.json
+   --report .work/gap-validation.json`.
+
+The report separates **raw proposal quality** from **post-grounding quality**: proposal
+recall/precision, kept recall/precision, grounded rate, missed-expected, proposed controls, and
+false-positive survivors. Archive the proposals + truth + report together so a claim is reproducible.
+(First real-Copilot sample run: `sample-gap-finder` measured 4/4 proposed/grounded/kept/confirmed,
+recall and precision `1.00`, zero false-positive survivors — see HYBRID-PLAN §9.5. Service-scale noise
+remains open.)
+
 ## 10. Deltas vs. the existing docs (what this conversation actually changed)
 
 DESIGN.md and HYBRID-PLAN.md already encode most of this (app-team, PCF, Copilot-only-LLM, the kinds,

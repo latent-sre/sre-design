@@ -99,8 +99,8 @@ adjudicates (`challenge-worklist`), then `challenge-apply` re-gates monotonicall
 (downgrade-only). The in-process `LLMChallenger` hook stays dormant by design: the oracle is
 Copilot via the worklist, so the engine never calls a model.
 
-Landed as a spike: the fenced Tier-B LLM gap-finder collector (Phase 4, `collectors/llm/`,
-`ResiliencyGap` — see [`PHASE-4-GAP-FINDER.md`](PHASE-4-GAP-FINDER.md)) with refutation probes
+Landed: the fenced Tier-B LLM gap-finder collector (Phase 4, `collectors/llm/`,
+`ResiliencyGap`) with refutation probes
 (`missing-timeout`, `unguarded-critical-dependency`), confirmation probes (`swallowed-failure`,
 `undocumented-job`), judgment routing (`data-loss-path`, `missing-idempotency`,
 `unbounded-resource`), and a first-slice **Python/FastAPI** collector. A first real-Copilot run

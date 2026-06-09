@@ -40,8 +40,8 @@ Implemented:
   (`source_tier=llm`), and re-derives/refutes it via the shared `signatures` library. Refutation
   gaps land `ResiliencyGap` / `needs-review`; confirmation gaps can graduate to Tier-A when the
   deterministic rule fires. The first real-Copilot sample validation measured 4/4 recall and no
-  false-positive survivors; service-scale noise remains open.
-  `sre-kb gap-finder`; see [`docs/PHASE-4-GAP-FINDER.md`](docs/PHASE-4-GAP-FINDER.md).
+  false-positive survivors; service-scale noise remains open. Run via `sre-kb gap-finder`; the
+  measurement recipe is in [`docs/SCOPE-AND-COVERAGE.md`](docs/SCOPE-AND-COVERAGE.md) §9.
 - **Scan → scaffold → validate** (5 layers: schema, provenance hash, cross-ref, gating,
   and an adversarial challenge pass that grounds each claim against its cited evidence)
   for ~28 kinds incl. Flow, Alert (log-pattern + SLO burn-rate), Runbook, BlastRadius,

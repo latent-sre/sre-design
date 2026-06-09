@@ -449,6 +449,7 @@ status-authority note at the top):
 | R8 | supply-chain (offline wheel + `--require-hashes` lockfile + Renovate digest-pin + `detect-secrets`) | ✅ | |
 | N4 | central `taxonomy.yaml` + severity-vocab reconciliation | ✅ | #37 |
 | N5 | inventory signatures · load-shed/backpressure probes · findings narrative | ✅ | #38–41 |
+| #7 Tier-B | `map-api-contracts` — baseline-spec breaking-change diff + version-policy (Tier-A) + semantic-break skill re-grounding (Tier-B) | ✅ | |
 | infra | full scan/publish credential split (§9.3 #5) | 🟡 scan role done; publish role + CI open | gate before live publish |
 
 The per-phase detail below remains the authoritative narrative for each ✅.
@@ -1026,6 +1027,25 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   task with where to read context and where to save output; `sre-kb scan-worklist --run <id>` shows it,
   and the `sre-target-scan` agent reads it and produces every output in one pass. Generalizes the proven
   `challenge-worklist → Copilot → challenge-apply` pattern to the whole LLM half.
+- **S7 — `map-api-contracts` Tier-B half (coverage #7 versioning). ✅ Done.** The OpenAPI/AsyncAPI
+  ingest + code-vs-spec drift landed earlier (#65); this adds the versioning/breaking-change half,
+  tiered as the engine demands. **Tier-A (deterministic):** `common.openapi` now diffs the current spec
+  against a committed baseline (`.sre/api-baseline/`, the last-released contract) and classifies the
+  changes that are *provable from the two documents* — `operation-removed` (breaking), `operation-added`
+  (non-breaking), `required-parameter-added` (breaking) — plus a semver **version-policy** that fails
+  when a breaking change ships without a major bump. Each change is byte-grounded to the spec line that
+  proves it (the baseline file for a removal, the current spec otherwise) and surfaces in the
+  `Interface` artifact's `contract` block (`baselineVersion`/`changes`/`versionPolicy`); self-gating, so
+  a repo with no baseline is unaffected. **Tier-B (judgment):** a `map-api-contracts` pointer-generator
+  skill proposes the *semantic* breaks the shape diff can't see (units/default/enum meaning, an
+  auth/status contract change). `pipeline/contract.py` re-grounds each on the same non-circular contract
+  the gap-finder uses — locate the anchor verbatim in the current spec, **refute** anything the
+  deterministic diff already flags as structural, **route** genuine semantic breaks to review
+  (`source_tier=llm`, never auto-verified). Shipped report-first via `sre-kb map-contracts` (mirroring
+  the Phase-4 gap-finder spike); folding the routed survivors into the `Interface` artifact during `run`
+  is the documented follow-up. (`collectors/common/openapi.py`, `synth/inventory.py`,
+  `schemas/v1alpha1/Interface.schema.json`, `pipeline/contract.py`, `cli.py`,
+  `.github/skills/map-api-contracts/`; `tests/test_openapi.py`, `tests/test_map_contracts.py`.)
 
 #### Decision — LLM transport (2026-06-09)
 

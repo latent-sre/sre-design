@@ -15,6 +15,7 @@ phases:
     - sre-flow-analysis
     - sre-estate
     - map-messaging
+    - map-api-contracts
   assess:
     - sre-gap-finder
     - sre-confirm-boundaries

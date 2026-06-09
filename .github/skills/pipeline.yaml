@@ -17,6 +17,7 @@ phases:
   assess:
     - sre-gap-finder
     - sre-observability-coverage
+    - sre-assess-logging
     - sre-blast-radius
     - sre-prr-review
     - sre-security-posture

@@ -70,7 +70,7 @@ Status legend: ✅ solid · ◐ partial · ❌ gap · (S) schema/kind exists but
 | 5 | Deployment | `Deployment` | A | ✅ | PCF manifest |
 | 6 | Dependencies | `Dependency` | A | ✅ | |
 | 7 | API contracts | `Interface` | A/B | ◐ | deterministic endpoints; OpenAPI/AsyncAPI ingest + versioning gaps → skill |
-| 8 | **Messaging** | *(no kind)* | A/B | ❌ | **biggest gap**: contracts partly in `Interface`, but **no consumer resilience** — DLQ, poison-pill, ordering, idempotent-consumer |
+| 8 | **Messaging** | `Messaging` + `Interface` | A/B | ✅ | S3: `Messaging` kind + `java_spring.messaging` consumer-resilience (DLQ/retry/idempotent-consumer, Tier-A) + Tier-A gaps; ordering/poison-pill/saga → Tier-B `map-messaging` |
 | 9 | Jobs | `ScheduledJob` | A | ✅ | idempotent?/dedupeKey fields exist |
 | 10 | Delivery | `DeliveryPipeline` | A | ◐ | CI/CD discovery |
 | 11 | Topology (app→deps) | `Topology` | A | ✅ | app-centric, not platform |
@@ -133,7 +133,7 @@ discover and confirm modes** (confirm judgment is domain-specific). On an untrus
 
 ## 7. Skills to author (maps onto the resiliency-skills catalog, per DEEP-COMPARISON R6/R7)
 
-Existing: `sre-criticality`, `sre-flow-analysis`, `sre-estate`, `sre-gap-finder`,
+Existing: `sre-criticality`, `sre-flow-analysis`, `sre-estate`, `map-messaging`, `sre-gap-finder`,
 `sre-observability-coverage`, `sre-assess-logging`, `sre-blast-radius`, `sre-prr-review`,
 `sre-security-posture`, `sre-generate-slos`, `sre-generate-dashboards`, `sre-incident-response`.
 
@@ -141,7 +141,7 @@ New (each pointer-generator, discover+confirm, read-only on targets; add to `.gi
 
 | Skill | Covers | Priority |
 |---|---|---|
-| `map-messaging` | #8 consumer resilience: DLQ, poison-pill, ordering, idempotent-consumer | **P0** |
+| ~~`map-messaging`~~ ✅ | #8 consumer resilience: DLQ + idempotent-consumer (Tier-A); ordering/poison-pill/saga (Tier-B) | **done** |
 | ~~`assess-logging`~~ ✅ | #13 + #18: log *format* parse (Tier-A) + quality judgment (Tier-B) — unblocks #19 | **done** |
 | `map-api-contracts` | #7: OpenAPI/AsyncAPI ingest, undocumented endpoints, versioning | P1 |
 | `map-architecture` | #2 + #3: architecture narrative, design patterns | P1 |
@@ -150,10 +150,10 @@ New (each pointer-generator, discover+confirm, read-only on targets; add to `.gi
 
 ## 8. Build order (priorities)
 
-1. **Close the two P0 extraction gaps:** `map-messaging` (consumer resilience) and ~~`assess-logging`
-   (format + quality)~~ ✅. These are the highest-value holes for an app team on PCF, and #18 gates
-   #19. **`assess-logging` is done** (S2): statements parsed deterministically (Tier-A) with the
-   quality assessment + Tier-B judgment skill; `map-messaging` (S3) is next.
+1. **Close the two P0 extraction gaps:** ~~`map-messaging` (consumer resilience)~~ ✅ and
+   ~~`assess-logging` (format + quality)~~ ✅. **Both done** (S2 + S3): logging statements parsed with
+   the quality assessment, and consumer-side messaging resilience (DLQ/idempotency Tier-A;
+   ordering/poison-pill/saga Tier-B). The two highest-value app-team holes on PCF are closed.
 2. **Graduate idempotency-on-mutating-route to Tier-A.** The pieces exist (HTTP verb in endpoints +
    `idempotency` signature); make "POST/PUT or consumer handler with no idempotency guard in scope"
    a deterministic gap. Cheap, verifiable, high value.

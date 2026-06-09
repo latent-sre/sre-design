@@ -966,11 +966,25 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   log_statements.py`, `synth/scaffold.py`, `collectors/llm/gap_finder.py`,
   `.github/skills/sre-assess-logging/`; `tests/test_log_statements.py`, `test_logging_quality.py`,
   `test_logging_gap.py`.)
-- **S3 — `map-messaging` skill: consumer-side async resilience. 🔲 Open (P0).** Today messaging exists
-  only as *contracts* (`Interface`); there is no consumer-resilience detection. Add DLQ routing,
-  poison-pill handling, ordering/partition safety, idempotent-consumer. Saga / distributed-transaction
-  compensation stays **permanently Tier-B judgment** (no deterministic ground truth). Biggest gap for
-  a PCF app team on Kafka/Rabbit/SQS.
+- **S3 — `map-messaging`: consumer-side async resilience. ✅ Done (P0).** Tiered. **Tier-A
+  (deterministic):** a new `Messaging` kind + `java_spring.messaging` collector detects every consumer
+  (`@KafkaListener`/`@RabbitListener`/`@SqsListener`/`@JmsListener`) and its resilience — a dead-letter
+  route (`@RetryableTopic`/`@DltHandler` from the AST, or a binder DLQ in config), retry, and an
+  idempotency guard (via the shared `dead-letter`/`idempotency` signatures) — and emits the descriptive
+  `Messaging` artifact plus two deterministic, byte-grounded Tier-A gaps that verify through the same
+  `ResiliencyGap` gate as the R5 param-completeness gaps: `consumer-without-dlq` (a poison pill blocks
+  the partition) and `non-idempotent-consumer` (a redelivery double-processes). DLQ detection reads AST
+  annotations + config files, never the type text, so a comment can't suppress a real gap (§9.5 ⑤).
+  **Tier-B (judgment):** a `map-messaging` skill + three categories — `unordered-consumer`
+  (ordering/partition safety), `missing-poison-pill-handling` (refuted against the engine's own
+  consumer facts), and `missing-saga-compensation` (**permanently Tier-B** — no deterministic ground
+  truth). (`schemas/v1alpha1/Messaging.schema.json`, `collectors/java_spring/messaging.py`,
+  `signatures.py`, `synth/scaffold.py`, `collectors/llm/gap_finder.py`, `.github/skills/map-messaging/`;
+  `tests/test_messaging*.py`.) **Governance fix en route:** a new
+  `test_every_gap_category_is_in_the_resiliencygap_schema_enum` locks the gap-category code against the
+  `ResiliencyGap` schema enum — it surfaced that the S2 logging and the N5 backpressure/load-shed
+  categories were emittable but absent from the enum (a scaffolded gap would have failed validation);
+  all are now in the enum.
 - **S4 — Confirm loop in the LLM gate. 🔲 Open.** Today the LLM only *discovers* (gap-finder). Add a
   *confirm* exchange (a file beside `gap-proposals.json`) where the engine hands a skill its own
   present/absent boundary calls and the skill disputes/affirms them **with anchors** the engine

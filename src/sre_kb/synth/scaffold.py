@@ -278,6 +278,36 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
             )
         )
 
+    # --- Messaging (consumer-side async resilience, S3) ---
+    consumers = fs.of("message.consumer")
+    if consumers:
+        docs.append(
+            _doc(
+                "Messaging",
+                "messaging",
+                {
+                    "consumers": [
+                        {
+                            "channel": c.attrs["channel"],
+                            "broker": c.attrs["broker"],
+                            "handler": c.attrs["handler"],
+                            "resilience": {
+                                "deadLetter": c.attrs.get("deadLetter", False),
+                                "deadLetterMechanism": c.attrs.get("deadLetterMechanism"),
+                                "retry": c.attrs.get("retry", False),
+                                "idempotentConsumer": c.attrs.get("idempotentConsumer", False),
+                            },
+                        }
+                        for c in consumers
+                    ]
+                },
+                [c.evidence for c in consumers],
+                "verified",
+                confidence(Signal.DIRECT, len(consumers)),  # listener annotations are explicit
+                service,
+            )
+        )
+
     # --- SloSli (full from catalog, else detect-or-needs-review) ---
     if objective:
         target = objective.attrs.get("target")

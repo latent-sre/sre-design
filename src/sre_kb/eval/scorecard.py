@@ -29,7 +29,7 @@ import yaml
 from sre_kb.pipeline import run as run_pipeline
 from sre_kb.workspace import RunLayout
 
-ArtifactKey = tuple[str, str]  # (kind, name)
+type ArtifactKey = tuple[str, str]  # (kind, name)
 
 
 def _pr(matched: int, produced: int, expected: int) -> dict[str, float | None]:

@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/Architecture.schema.json",
   "title": "Architecture",
+  "description": "The service's architecture narrative: components, layers, and design patterns/styles in use. Largely Tier-B (LLM judgment over the scanned structure), so it lands needs-review.",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

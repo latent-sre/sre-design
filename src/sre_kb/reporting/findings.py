@@ -73,6 +73,12 @@ def collect_findings(docs: list[dict]) -> list[dict]:
 
 _PRESENCE_CONCERN = {"resiliency.circuitbreaker": "circuit-breaker", "resiliency.fallback": "fallback"}
 
+# The REAL Tier-B absence facts are `resiliency.gap` (the Phase-4 gap-finder); a category asserts
+# the absence of the concern(s) it probes for. Only categories overlapping the Tier-A presence
+# vocabulary above can produce a detectable disagreement. (The `gap.<concern>` shape predates the
+# gap-finder and is kept for compatibility, but nothing in the engine emits it.)
+_GAP_CATEGORY_CONCERNS = {"unguarded-critical-dependency": ("circuit-breaker", "fallback")}
+
 
 def _conflict_target(fact) -> str | None:
     a = fact.attrs
@@ -82,15 +88,22 @@ def _conflict_target(fact) -> str | None:
 def detect_tier_conflicts(facts: list) -> list[dict]:
     """Flag (concern, target) pairs where Tier-A and Tier-B assert opposite presence."""
     claims: dict[tuple[str, str], dict[str, set[bool]]] = {}
-    for f in facts:
-        concern, present = _PRESENCE_CONCERN.get(f.type), True
-        if concern is None and f.type.startswith("gap."):
-            concern, present = f.attrs.get("concern") or f.type.split(".", 1)[1], False
+
+    def record(f, concern: str, present: bool) -> None:
         target = _conflict_target(f)
-        if concern is None or not target:
-            continue
+        if not target:
+            return
         tier = getattr(f.evidence, "source_tier", "ast")
         claims.setdefault((concern, target), {}).setdefault(tier, set()).add(present)
+
+    for f in facts:
+        if (concern := _PRESENCE_CONCERN.get(f.type)) is not None:
+            record(f, concern, True)
+        elif f.type == "resiliency.gap":
+            for concern in _GAP_CATEGORY_CONCERNS.get(f.attrs.get("category"), ()):
+                record(f, concern, False)
+        elif f.type.startswith("gap."):
+            record(f, f.attrs.get("concern") or f.type.split(".", 1)[1], False)
 
     conflicts: list[dict] = []
     for (concern, target), by_tier in sorted(claims.items()):

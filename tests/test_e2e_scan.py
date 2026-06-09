@@ -126,3 +126,12 @@ def test_provenance_tamper_is_caught(result):
     flow = next(d for (k, _), d in _load(result.root).items() if k == "Flow")
     tampered = {**flow, "evidence": [{**flow["evidence"][0], "lines": {"start": 1, "end": 1}}]}
     assert verify_evidence(tampered, FIXTURE.resolve())
+
+
+def test_report_carries_stage_timings(result):
+    """The engine's own observability: a slow run must say where the time went."""
+    import json
+
+    report = json.loads((result.root / "reports" / "validation_report.json").read_text())
+    assert set(report["timingsMs"]) == {"scanMs", "scaffoldMs", "validateMs"}
+    assert all(isinstance(v, int) and v >= 0 for v in report["timingsMs"].values())

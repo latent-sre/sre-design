@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/Alert.schema.json",
   "title": "Alert",
+  "description": "An alerting rule grounded in the scan: SLO burn-rate (multi-window/multi-burn-rate on an ingested objective) or a log-pattern alert keyed on a parsed log statement. Rendered per backend by the alert adapters; `expr` carries the tool-neutral intent, never a hand-written query.",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

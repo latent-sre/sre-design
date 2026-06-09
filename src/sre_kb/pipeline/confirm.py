@@ -125,7 +125,7 @@ def build_confirm_worklist(run_id: str, gap_facts: list[Fact],
         items.append({
             "claimId": _claim_id(f),
             "direction": "absence",
-            "artifact": f"ResiliencyGap/{a['target'] and _slug(a['target'], a['category'])}",
+            "artifact": f"ResiliencyGap/{_slug(a['target'], a['category'])}",
             "category": a["category"],
             "target": a.get("target"),
             "concern": list(concerns),

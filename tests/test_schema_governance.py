@@ -48,3 +48,23 @@ def test_unverified_against_live_flags_only_live_claims(tmp_path) -> None:
     # a byte-grounded artifact carries no such flag
     flow = next(d for (k, _), d in docs.items() if k == "Flow")
     assert "unverifiedAgainstLive" not in flow
+
+
+def test_api_version_triangle_is_lock_step():
+    """One version, declared three ways: the registry's apiVersion, the envelope's const, and the
+    schema directory name must agree — a future v1beta1 bump that misses one corner would let
+    artifacts claim a version their schemas don't implement."""
+    import json
+
+    import yaml
+
+    from sre_kb.config import registry_path, schemas_dir
+
+    registry = yaml.safe_load(registry_path().read_text())
+    envelope = json.loads((schemas_dir() / "_envelope.schema.json").read_text())
+    declared = registry["apiVersion"]                       # sre.kb/v1alpha1
+    assert envelope["properties"]["apiVersion"]["const"] == declared
+    version_dir = declared.split("/", 1)[1]                 # v1alpha1
+    assert (schemas_dir() / version_dir).is_dir()
+    assert all(version_dir in (row.get("schema") or "")     # every kind row points into that dir
+               for row in registry["kinds"].values())

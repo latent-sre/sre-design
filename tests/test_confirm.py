@@ -219,5 +219,5 @@ def test_draft_signature_for_disabled_resilience_describes_a_proactive_collector
     from sre_kb.graduation import ConfirmedCategory, draft_signature
 
     cat = ConfirmedCategory(category="disabled-resilience", confirmed=5)
-    draft = draft_signature(cat, ())
+    draft = draft_signature(cat, (), known=True)
     assert "PROACTIVE Tier-A disable collector" in draft and "enabled: false" in draft

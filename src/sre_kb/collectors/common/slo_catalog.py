@@ -6,9 +6,7 @@ and the flow gets an error-budget burn-rate Alert instead of a needs-review thre
 
 from __future__ import annotations
 
-import yaml
-
-from sre_kb.collectors.base import ScanContext, parse_error_fact
+from sre_kb.collectors.base import ScanContext, load_yaml_mapping
 from sre_kb.models.facts import Fact
 from sre_kb.util import find_line
 
@@ -18,13 +16,11 @@ def collect(ctx: ScanContext) -> list[Fact]:
     for path in ctx.files("sre-slo.yml", "sre-slo.yaml"):
         rel = ctx.rel(path)
         lines = ctx.read_lines(rel)
-        try:
-            data = yaml.safe_load(ctx.read_text(rel)) or {}
-        except yaml.YAMLError as exc:
-            facts.append(parse_error_fact(ctx, rel, "common.slo_catalog", exc))
+        data, err = load_yaml_mapping(ctx, rel, "common.slo_catalog")
+        if err is not None:
+            facts.append(err)
+        if data is None:
             continue
-        if not isinstance(data, dict):
-            continue  # a non-mapping root (list/scalar) is not an SLO catalog
         for s in data.get("slos") or []:
             if not isinstance(s, dict):
                 continue

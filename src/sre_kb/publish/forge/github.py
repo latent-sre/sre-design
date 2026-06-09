@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from sre_kb.publish.forge.base import ForgePublishError
 from sre_kb.publish.manifest import merge_tree

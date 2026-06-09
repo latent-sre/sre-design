@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/ServiceCatalogEntry.schema.json",
   "title": "ServiceCatalogEntry",
+  "description": "The Backstage-style catalog row: component type, lifecycle, owning system, APIs provided, and dependencies \u2014 the projection a catalog ingests.",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

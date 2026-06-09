@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/TechStack.schema.json",
   "title": "TechStack",
+  "description": "The detected stack: languages, frameworks, runtime, build tool, operationally notable libraries, and the PCF buildpack context.",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

@@ -14,9 +14,7 @@ default, and the Tier-B `missing-timeout` probe already covers timeout *absence*
 
 from __future__ import annotations
 
-import yaml
-
-from sre_kb.collectors.base import ScanContext, parse_error_fact
+from sre_kb.collectors.base import ScanContext, load_yaml_mapping
 from sre_kb.models.facts import Fact, Symbol
 from sre_kb.util import dig, fqn
 
@@ -82,12 +80,10 @@ def collect(ctx: ScanContext) -> list[Fact]:
     configs: list[tuple[str, dict]] = []
     for path in ctx.files(*_CONFIG_GLOBS):
         rel = ctx.rel(path)
-        try:
-            data = yaml.safe_load(ctx.read_text(rel)) or {}
-        except yaml.YAMLError as exc:
-            facts.append(parse_error_fact(ctx, rel, "java_spring.resiliency_params", exc))
-            continue
-        if isinstance(data, dict):
+        data, err = load_yaml_mapping(ctx, rel, "java_spring.resiliency_params")
+        if err is not None:
+            facts.append(err)
+        if data is not None:
             configs.append((rel, data))
     checked = [rel for rel, _ in configs]
 

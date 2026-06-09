@@ -1,10 +1,13 @@
-.PHONY: install test lint fmt clean offline-wheel lock
+.PHONY: install test cov lint fmt clean offline-wheel lock
 
 install:
 	python -m pip install -e ".[dev]"
 
 test:
 	python -m pytest -q
+
+cov:
+	python -m pytest -q --cov=sre_kb --cov-fail-under=90
 
 lint:
 	python -m ruff check src tests
@@ -20,4 +23,4 @@ offline-wheel:
 	./scripts/build-offline.sh
 
 clean:
-	rm -rf .work .pytest_cache .ruff_cache **/__pycache__
+	rm -rf .work .pytest_cache .ruff_cache .hypothesis .coverage **/__pycache__

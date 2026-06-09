@@ -17,9 +17,8 @@ skill, which re-grounds against exactly these facts.
 
 from __future__ import annotations
 
-import yaml
 
-from sre_kb.collectors.base import ScanContext, parse_error_fact
+from sre_kb.collectors.base import ScanContext, load_yaml_mapping
 from sre_kb.models.facts import Fact, Symbol
 from sre_kb.util import find_line
 
@@ -116,11 +115,8 @@ def _baseline_specs(ctx: ScanContext) -> dict[str, tuple[str, dict]]:
         rel = ctx.rel(path)
         if not rel.startswith(prefix):
             continue
-        try:
-            data = yaml.safe_load(ctx.read_text(rel)) or {}
-        except yaml.YAMLError:
-            continue
-        if isinstance(data, dict) and _spec_kind(data) == "openapi":
+        data, _ = load_yaml_mapping(ctx, rel, "common.openapi")  # baseline is advisory: no error fact
+        if data is not None and _spec_kind(data) == "openapi":
             out[path.name] = (rel, data)
     return out
 
@@ -183,12 +179,10 @@ def collect(ctx: ScanContext) -> list[Fact]:
         if rel.startswith(baseline_prefix):
             continue  # baseline specs are the diff reference only, never the current-spec ingest
         lines = ctx.read_lines(rel)
-        try:
-            data = yaml.safe_load(ctx.read_text(rel)) or {}
-        except yaml.YAMLError as exc:
-            facts.append(parse_error_fact(ctx, rel, "common.openapi", exc))
-            continue
-        if not isinstance(data, dict):
+        data, err = load_yaml_mapping(ctx, rel, "common.openapi")
+        if err is not None:
+            facts.append(err)
+        if data is None:
             continue
         kind = _spec_kind(data)
         if kind is None:

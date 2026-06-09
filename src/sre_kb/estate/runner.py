@@ -13,6 +13,7 @@ from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.config import load_config
 from sre_kb.estate.topology import build_estate
 from sre_kb.render.diagrams import mermaid_topology
+from sre_kb.util import slug
 from sre_kb.validation.gating import final_status
 from sre_kb.validation.provenance import verify_evidence_roots
 from sre_kb.validation.report import write_report
@@ -47,17 +48,18 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
         root = Path(t).resolve()
         if not root.exists():
             raise FileNotFoundError(f"target not found: {root}")
-        ctx = ScanContext(root=root, repo=f"file://{root.name}", commit=LOCAL_COMMIT)
-        if roots.get(ctx.repo, root) != root:
-            # Evidence is keyed by the basename-derived repo id; a silent overwrite would verify
-            # the first service's provenance against the second service's files.
-            raise ValueError(
-                f"duplicate estate target basename {root.name!r}: "
-                f"{roots[ctx.repo]} and {root} — give the target directories distinct names"
-            )
+        # Repo identity is the full file URI — collision-free by construction, so two targets
+        # that share a basename (team-a/api + team-b/api) each verify provenance against their
+        # OWN root (the old basename-derived key silently crossed them).
+        ctx = ScanContext(root=root, repo=root.as_uri(), commit=LOCAL_COMMIT)
+        if ctx.repo in roots:
+            continue  # the same target listed twice (shell-glob overlap) is idempotent
         fs = scan(ctx)
         app = fs.first("pcf.app")
-        services.append({"service": app.attrs["name"] if app else root.name, "ctx": ctx, "fs": fs})
+        name = (app.attrs.get("name") if app else None) or root.name
+        if any(s["service"] == name for s in services):
+            name = slug(f"{root.parent.name}-{root.name}")  # same-named services stay distinct nodes
+        services.append({"service": name, "ctx": ctx, "fs": fs})
         roots[ctx.repo] = root
 
     docs = build_estate(services)

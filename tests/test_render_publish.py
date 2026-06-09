@@ -162,3 +162,40 @@ def test_manifest_merge_routes_diverged_file_to_proposed(tmp_path):
 
     assert (dest / "runbooks" / "r.md").read_text(encoding="utf-8") == "human edit\n"
     assert (dest / ".proposed" / "runbooks" / "r.md").read_text(encoding="utf-8") == "v2\n"
+
+
+def test_generated_workflow_engine_install_is_configurable(tmp_path):
+    """The engine is not on public PyPI: publish.engine_index_url / engine_spec decide where the
+    generated CI installs the pinned engine from — without them it would fail on every run of the
+    published repo (the distribution story made explicit)."""
+    from sre_kb.publish.pr_builder import _stage_repo_root_hardening
+
+    _stage_repo_root_hardening(tmp_path, {
+        "engine_index_url": "https://pypi.internal.example/simple",
+        "engine_spec": "sre-kb==0.0.1",
+    })
+    wf = (tmp_path / ".github" / "workflows" / "validate-sre-kb.yml").read_text()
+    assert 'pip install --index-url https://pypi.internal.example/simple "$(cat .sre/version)"' in wf
+    assert (tmp_path / ".sre" / "version").read_text() == "sre-kb==0.0.1\n"
+    # the unconfigured default still pins this engine's own version
+    _stage_repo_root_hardening(tmp_path, {})
+    from sre_kb import __version__
+    assert (tmp_path / ".sre" / "version").read_text() == f"sre-kb=={__version__}\n"
+
+
+def test_generated_editor_settings_map_every_kind_to_its_vendored_schema(tmp_path):
+    """Review-time validation for free: the published repo carries a yaml-language-server mapping
+    from each kind's KB glob to the VENDORED schema — pinned to the version the artifacts were
+    written against, not whatever the engine ships today."""
+    import json as _json
+
+    from sre_kb.publish.pr_builder import _stage_repo_root_hardening
+    from sre_kb.registry import kinds
+
+    _stage_repo_root_hardening(tmp_path, {})
+    settings = _json.loads((tmp_path / ".vscode" / "settings.json").read_text())
+    mapping = settings["yaml.schemas"]
+    assert mapping[".sre/schemas/v1alpha1/Flow.schema.json"] == "catalog/*/kb/**/Flow/*.yaml"
+    assert len(mapping) == len(kinds())  # every registered kind is covered
+    for schema_path in mapping:          # every mapped schema is actually vendored beside it
+        assert (tmp_path / schema_path).is_file(), schema_path

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-Key = tuple[str, str]
+type Key = tuple[str, str]
 
 
 def _key(doc: dict) -> Key:

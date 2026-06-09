@@ -27,7 +27,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Protocol
+from collections.abc import Callable
 
 from sre_kb.signatures import fires
 

@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/Flow.schema.json",
   "title": "Flow",
+  "description": "A user/business-visible request flow: trigger, the ordered steps through code and dependencies (each with its failure modes), terminal sinks, and the SLO that governs it. The unit blast radius, alerts, and runbooks key on.",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

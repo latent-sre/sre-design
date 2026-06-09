@@ -7,9 +7,9 @@ name = "sre-kb"
 version = "0.0.1"
 description = "Deterministic engine that turns a code repo into a populated, validated SRE knowledge base + GitHub Copilot skills."
 readme = "README.md"
-# Floor stays 3.11 for now (no 3.12+ syntax is used yet); 3.13 is the working/dev base and is
-# tested in CI. Intent is to raise this floor to >=3.13 once we adopt 3.12+ features (PEP 695, etc.).
-requires-python = ">=3.11"
+# 3.13 is the floor: the working/dev base, what CI tests, and what the code targets (PEP 695 type
+# statements; ruff infers its target from this).
+requires-python = ">=3.13"
 dependencies = [
     "jsonschema>=4.21",
     "pyyaml>=6.0",
@@ -26,7 +26,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.4"]
+# pytest-cov: the CI coverage floor; hypothesis: property tests over the parser-shaped
+# helpers (slug/duration/secret-scan) whose input domain is untrusted text.
+dev = ["pytest>=8.0", "ruff>=0.4", "pytest-cov>=5.0", "hypothesis>=6.100"]
 
 [project.scripts]
 sre-kb = "sre_kb.cli:main"

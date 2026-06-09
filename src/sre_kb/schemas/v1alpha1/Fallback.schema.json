@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/Fallback.schema.json",
   "title": "Fallback",
+  "description": "A built-in degradation path: what triggers it, the symbol that implements it, and the behavior the caller gets instead of the failure (e.g. a breaker's fallbackMethod).",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

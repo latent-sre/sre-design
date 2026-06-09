@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/Interface.schema.json",
   "title": "Interface",
+  "description": "The service's inbound surface: REST/messaging style, the concrete endpoints/channels extracted from code, and the spec contract (documented vs undocumented vs spec-only) when an OpenAPI/AsyncAPI baseline exists.",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

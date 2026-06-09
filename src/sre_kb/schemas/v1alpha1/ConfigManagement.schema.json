@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/ConfigManagement.schema.json",
   "title": "ConfigManagement",
+  "description": "How the service is configured: config sources (files/env/config-server), active profiles, refresh scope, and the operationally notable properties extracted from them.",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

@@ -130,7 +130,7 @@ class GraduationTracker:
         return [c for _, c in sorted(self.categories.items()) if c.is_candidate(threshold)]
 
 
-def draft_signature(cat: ConfirmedCategory, concerns: tuple[str, ...], *, known: bool = True) -> str:
+def draft_signature(cat: ConfirmedCategory, concerns: tuple[str, ...], *, known: bool) -> str:
     """The assisted auto-draft: a human-reviewable sketch of the deterministic rule a promotion-ready
     category should become. The engine never edits its own rules — this is a suggestion to merge.
     `known=False` marks a novel (out-of-taxonomy) category from the open-discovery channel."""

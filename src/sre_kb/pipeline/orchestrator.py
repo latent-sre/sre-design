@@ -83,6 +83,8 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         raise FileNotFoundError(f"target not found: {target_path}")
 
     ctx = ScanContext(root=target_path, repo=f"file://{target_path.name}", commit=LOCAL_COMMIT)
+    timings: dict[str, int] = {}  # per-stage wall ms — where did a slow scan go? (report-only)
+    t0 = time.perf_counter()
     fs = run_collectors(ctx)
 
     # Tier-B (HYBRID-PLAN §7.9/§9.3): if Copilot left gap proposals (`.sre/gap-proposals.json`),
@@ -116,8 +118,10 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
                 )
                 + "\n"
             )
+    timings["scanMs"] = int((time.perf_counter() - t0) * 1000)
     if to_stage == "scan":
         return RunResult(run_id, layout.root, len(fs.facts), 0, {})
+    t0 = time.perf_counter()
 
     docs = scaffold(fs, ctx)
     if gap_facts:  # Tier-A (R5) + Tier-B gap artifacts join the candidate set, same service
@@ -132,8 +136,10 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
             (ctx_dir / f"{d['kind']}-{d['metadata']['name']}.md").write_text(
                 build_context_pack(ctx, d), encoding="utf-8"
             )
+    timings["scaffoldMs"] = int((time.perf_counter() - t0) * 1000)
     if to_stage == "scaffold":
         return RunResult(run_id, layout.root, len(fs.facts), len(docs), {})
+    t0 = time.perf_counter()
 
     crossref_problems = check_crossrefs(docs)
     challenger = GroundingChallenger()
@@ -208,6 +214,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
                 _dest_dir(layout, d["status"], "ReadinessScore") / f"{d['metadata']['name']}.yaml", d
             )
 
+    timings["validateMs"] = int((time.perf_counter() - t0) * 1000)
     report = {
         "run_id": run_id,
         "target": str(target_path),
@@ -215,6 +222,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         "docs": len(docs),
         "by_status": by_status,
         "by_tier": by_tier,
+        "timingsMs": timings,  # the engine's own observability: where a slow run spent its time
         "tierConflicts": detect_tier_conflicts(fs.facts),  # §7.1: Tier-A vs Tier-B disagreements
         "records": records,
     }

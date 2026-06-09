@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/ReadinessScore.schema.json",
   "title": "ReadinessScore",
+  "description": "The production-readiness roll-up: PRR check results, the 0-100 score and grade, coverage counts, and the named gaps. Recomputed status-aware after gating, so it only credits verified coverage.",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

@@ -52,7 +52,7 @@ def _direct_requires(lines: list[str]) -> list[tuple[str, int]]:
             in_block = True
             continue
         elif line.startswith("require "):
-            body = line[len("require "):].strip()
+            body = line.removeprefix("require ").strip()
         else:
             continue
         m = _REQUIRE.match(body)

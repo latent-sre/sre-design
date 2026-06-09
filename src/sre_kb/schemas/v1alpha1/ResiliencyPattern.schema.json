@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/ResiliencyPattern.schema.json",
   "title": "ResiliencyPattern",
+  "description": "One resilience mechanism present in code (breaker/retry/timeout/bulkhead/rate-limiter...): the library, the symbol it guards, and its fallback where declared. The presence half the gap-finder's absence claims are checked against.",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

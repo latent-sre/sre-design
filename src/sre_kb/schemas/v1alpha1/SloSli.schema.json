@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sre.kb/schemas/v1alpha1/SloSli.schema.json",
   "title": "SloSli",
+  "description": "The service-level objectives for a flow: SLI, target, and window per objective, with the source recorded (an ingested sre-slo.yml catalog yields full objectives; otherwise needs-review placeholders).",
   "type": "object",
   "required": ["kind", "spec"],
   "properties": {

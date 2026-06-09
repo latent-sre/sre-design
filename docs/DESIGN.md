@@ -232,6 +232,27 @@ generatedBy: { tool, toolVersion, driver: "copilot"|"engine", promptVersion, gen
 keystone: a Copilot-asserted citation that doesn't exist, or has drifted, **cannot
 pass** the provenance validator and is auto-downgraded to `needs-review`.
 
+### Schema lifecycle (`apiVersion: sre.kb/v1alpha1`)
+
+The version string follows the Kubernetes API convention: **`v1alpha1` = experimental, no
+compatibility promise**. While every kind sits at alpha:
+
+- **Anything may change between engine versions** — fields renamed/removed, enums reshaped,
+  kinds pruned (it already happened: 4 kinds removed in S1). A consumer pins the engine
+  version it scanned with; the vendored `.sre/schemas` in the published repo are the
+  authoritative contract *for that repo's artifacts*, which is what makes a KB self-describing
+  even across engine upgrades.
+- **What is stable even in alpha:** the envelope's load-bearing core — `apiVersion`/`kind`/
+  `metadata.name`, `evidence[].excerptHash` semantics, the `status` vocabulary, and the
+  downgrade-only gating contract. Tools may rely on these; everything under `spec` is
+  per-kind and alpha.
+- **Promotion to `v1beta1`** is the signal that external consumers (a Backstage ingest, an
+  incident agent) may depend on `spec` shapes: it requires the eval scorecard floors of
+  SCOPE §3 to hold, every kind to carry a golden example, and — from then on — additive-only
+  changes within the version plus a documented conversion note for anything that moves.
+  Until a second version exists, no conversion machinery is built (YAGNI); the registry
+  (`schemas/registry.yaml`) is where a per-kind version would be declared when it does.
+
 ---
 
 ## Schema & `kind` catalog (maps every focus area)

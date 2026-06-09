@@ -83,7 +83,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false  # validate-only job; no token left in .git/config
       - name: Require CODEOWNERS team
@@ -92,9 +92,9 @@ jobs:
             echo "::error::Replace REPLACE_ME__owning_team and enable Code Owner review."
             exit 1
           fi
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.13"  # matches the engine's requires-python floor
       - name: Install pinned engine
         run: python -m pip install "$(cat .sre/version)"
       - name: Validate KB artifacts

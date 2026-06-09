@@ -26,8 +26,8 @@ jobs:
         run: make install
       - name: Lint (make lint)
         run: make lint
-      - name: Test (make test)
-        run: make test
+      - name: Test + coverage floor (make cov)
+        run: make cov
 
   # Supply-chain integrity (HYBRID-PLAN R8): the runtime deps install ONLY from the pinned, hashed
   # lockfile — a tampered or unexpected artifact fails the hash check. Regenerate with `make lock`.
@@ -40,6 +40,11 @@ jobs:
           python-version: "3.13"
       - name: Hash-verified install of the locked runtime deps
         run: python -m pip install --require-hashes -r requirements.lock
+      # The other half of supply-chain risk: hashes prove integrity, not absence of known vulns.
+      - name: Known-vulnerability audit of the locked deps
+        run: |
+          python -m pip install pip-audit
+          python -m pip_audit -r requirements.lock --no-deps
 
   # Independent second secret gate (HYBRID-PLAN R8 / §9.3 #5): detect-secrets over the whole repo,
   # complementing the engine's own publish-time scan. New secrets (not in .secrets.baseline) fail.

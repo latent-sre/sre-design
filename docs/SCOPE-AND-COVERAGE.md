@@ -181,8 +181,13 @@ The §4 matrix + the SRE rubric **are** the coverage contract. **The eval harnes
   labeled kinds, so partial labeling doesn't penalize an unlabeled-but-correct artifact.
 - It reports a scorecard; **precision will be structurally lower for Tier-B/semantic rows — that's
   expected, not a bug** (the per-area `verified` count surfaces the Tier-A/Tier-B split). Stage 2 is
-  unlocked when the rows you intend to trust clear their bar. `sample-spring-pcf` and `sample-messaging`
-  are labeled and score 1.0/1.0; label more fixtures to widen the scorecard.
+  unlocked when the rows you intend to trust clear their bar. **Seven fixtures are labeled and score
+  1.0/1.0** — `sample-spring-pcf` and `sample-messaging` plus `sample-dotnet-steeltoe` (the .NET/Steeltoe
+  stack), `sample-jobs` (#9 ScheduledJob), `sample-feature-flags` (#15), `sample-logging` (#13/#18), and
+  `sample-api` (#7 contracts) — so the scorecard now spans both supported languages and the jobs / flags
+  / logging / contract areas. A CI guard (`test_every_labeled_fixture_scores_clean`) re-scores each on
+  every run, so a regression that drops or fabricates an artifact in a scored area fails the build. Label
+  more fixtures to widen the scorecard further.
 
 ### The measurement recipe (today, gap-finder; generalize to all Tier-B)
 

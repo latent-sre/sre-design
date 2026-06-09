@@ -1,0 +1,13 @@
+{
+  "service": "service",
+  "_doc": "Labeled extraction truth for the S5 eval harness — coverage #7 API contracts (the common.openapi ingest + drift) and the deterministic idempotency gaps on mutating routes.",
+  "artifacts": [
+    {"kind": "Interface", "name": "service"},
+    {"kind": "ResiliencyGap", "name": "p-o-s-t-api-v1-orders-missing-idempotency"},
+    {"kind": "ResiliencyGap", "name": "d-e-l-e-t-e-api-v1-orders-id-missing-idempotency"}
+  ],
+  "detectors": [
+    "common.openapi",
+    "java_spring.annotations"
+  ]
+}

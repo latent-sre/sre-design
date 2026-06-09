@@ -1,0 +1,26 @@
+{
+  "service": "orders-dotnet",
+  "_doc": "Labeled extraction truth for the S5 eval harness — the .NET/Steeltoe Tier-A stack (the dotnet_steeltoe collectors), the dual of sample-spring-pcf for the second supported language.",
+  "artifacts": [
+    {"kind": "Flow", "name": "create-order"},
+    {"kind": "ResiliencyPattern", "name": "inventory"},
+    {"kind": "Fallback", "name": "reserve-async-fallback"},
+    {"kind": "Alert", "name": "orders-created-publish-failures"},
+    {"kind": "Runbook", "name": "orders-created-publish-failures"},
+    {"kind": "BlastRadius", "name": "inventory"},
+    {"kind": "BlastRadius", "name": "orders-created"},
+    {"kind": "BlastRadius", "name": "orders-db-context"},
+    {"kind": "Dependency", "name": "orders-kafka"},
+    {"kind": "Dependency", "name": "orders-pg"},
+    {"kind": "Deployment", "name": "orders-dotnet"},
+    {"kind": "TechStack", "name": "orders-dotnet"},
+    {"kind": "Interface", "name": "orders-dotnet"},
+    {"kind": "ResiliencyGap", "name": "p-o-s-t-api-v1-orders-missing-idempotency"}
+  ],
+  "detectors": [
+    "dotnet_steeltoe.annotations",
+    "dotnet_steeltoe.resiliency",
+    "dotnet_steeltoe.build",
+    "common.manifest_pcf"
+  ]
+}

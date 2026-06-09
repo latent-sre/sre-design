@@ -2,11 +2,13 @@
 
 Date: 2026-06-09
 
-> **Scope.** This is a focused follow-up to `docs/DEEP-COMPARISON-2026-06-07.md`. That review covered
-> publish hardening, secret gates, the skill taxonomy, and role separation. It deliberately did **not**
-> cover the *rendering / templating layer* or *schema/YAML/JSON formatting* — the dimensions this round
+> **Scope.** This is a focused follow-up to an earlier `resiliency-skills` comparison (which covered
+> publish hardening, secret gates, the skill taxonomy, and role separation; since retired — see git
+> history). That review deliberately did **not** cover the *rendering / templating layer* or
+> *schema/YAML/JSON formatting* — the dimensions this round
 > targets, motivated by the goal of making the codebase "elite to scan and understand." The earlier
-> backlog (R1–R13) is unchanged and not re-litigated here.
+> publish-hardening / skill-taxonomy backlog (tracked in HYBRID-PLAN) is unchanged and not
+> re-litigated here.
 
 ## Evidence boundary
 
@@ -107,8 +109,9 @@ the scans surfaced:
   for content-addressable hashing; sre-design intentionally uses `sort_keys=False` to preserve authorial
   order for human-readable artifacts, and already canonicalizes via JSON `sort_keys=True` *only* where
   it needs a content signature (`drift/diff.py`). A blanket switch would hurt readability and add a
-  dependency for no current consumer. (If/when manifest-hash clobber-protection lands — backlog R1 —
-  revisit a dedicated canonical-dump helper, scoped to that path.)
+  dependency for no current consumer. (If/when manifest-hash clobber-protection lands — the
+  manifest-backed no-clobber publish work in HYBRID-PLAN — revisit a dedicated canonical-dump helper,
+  scoped to that path.)
 
 ## Schema/YAML comparison summary
 

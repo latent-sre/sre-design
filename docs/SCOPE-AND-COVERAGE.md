@@ -10,7 +10,7 @@ Date: 2026-06-09
 >   `apiVersion/kind` artifact backbone, the three neutralities, PCF reality). Still authoritative.
 > - `docs/HYBRID-PLAN.md` — the implementation plan + **live status** (§8 tracker, §9 reassessment,
 >   §9.7 backlog). Still the single source of truth for status.
-> - `docs/DEEP-COMPARISON-2026-06-07.md` / `-06-09.md` — point-in-time comparisons vs. `resiliency-skills`.
+> - `docs/DEEP-COMPARISON-2026-06-09.md` — point-in-time comparison vs. `resiliency-skills`.
 >
 > This doc adds three things those don't yet state explicitly: a **scope boundary** (app team, not
 > platform-infra), a **coverage matrix** (every focus area → Tier-A collector vs Tier-B skill → status

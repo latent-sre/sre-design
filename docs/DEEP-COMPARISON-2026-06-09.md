@@ -119,26 +119,36 @@ false` on nested objects. The substantive differences:
 |---|---|---|---|
 | Governance reuse | Centralized `_envelope.schema.json`, `$ref`'d `$defs`, applied via a 2-pass validator | Governance block inlined + `$defs` duplicated in every schema | **Keep sre-design's** (DRY, one evolution point) |
 | Per-kind schema scope | Only `kind` + `spec` | Whole-artifact shape | sre-design's is lighter; keep |
-| Registry | `schemas/registry.yaml` (kind → schema/collectors/prompt/phase/renderer) | `registry.py` dataclass (kind → schema/dest/renderer) | sre-design's is **richer**; one gap below |
+| Registry | `schemas/registry.yaml` (kind → schema/collectors/prompt/phase/renderer) | `registry.py` dataclass (kind → schema/dest/renderer) | sre-design's is **richer**; lock-step both ways after this change |
 | Evidence model | Byte-grounded `evidence[]` (path/line/`excerptHash`/detector/tier) | provenance block only | **sre-design's is materially stronger** |
 | Golden examples | Full envelope + evidence per kind (`tests/fixtures/golden/`) | `examples/golden/` per kind | both good |
 
-### Remaining schema/registry recommendations (small, optional)
+### Schema/registry follow-ups — resolved after architecture inspection
 
-These are genuine but minor; none block anything and none are implemented here:
+Three follow-ups were flagged from the scan. Implementing them required first checking that each
+*maps to sre-design's actual architecture* rather than transplanting a `resiliency-skills` shape. Two
+did not map; one did, and it pulled in a real adjacent fix.
 
-- **R-S1 — Separate control-plane kinds in `registry.yaml`.** `resiliency-skills/registry.py` cleanly
-  splits deliverable `DATA_KINDS` from orchestration `CONTROL_KINDS` (`ScanPlan`, `ScanState`, …). A
-  parallel `controlKinds:` section in `registry.yaml` would make "this kind has no data schema by
-  design" explicit rather than implicit.
-- **R-S2 — Add publish-destination metadata to the registry.** `resiliency-skills` routes
-  schema→`dest`→renderer from one table; sre-design's registry already covers schema/renderer but
-  publish destination lives in `publish/` code. Folding `dest` into the registry row would keep the
-  "add a kind in one place" invariant true for the publish path too (complements backlog R5).
-- **R-S3 — A short `schemas/README.md`** documenting the envelope-plus-spec contract and the two-pass
-  validation rule, so the (correct) reason root `additionalProperties` lives only on the envelope is
-  discoverable — and a future contributor doesn't "helpfully" add it per-kind. (`resiliency-skills`
-  documents its governance block in `engine/schemas/_provenance.md`.)
+- **R-S3 — `schemas/README.md` (DONE).** Added a short README documenting the four schema files, the
+  two-pass validation contract, and an explicit ⚠️ on why per-kind schemas must **not** set root
+  `additionalProperties: false` (root strictness lives on the shared envelope by design). This makes
+  the (correct) design discoverable so a future contributor doesn't "helpfully" add it per-kind. The
+  sibling repo documents its governance block in `engine/schemas/_provenance.md`; this is the analogue.
+- **R-S1b — Orphan-schema governance test (DONE, adjacent to R-S1).** The original framing ("split
+  control-plane kinds") does **not** apply: sre-design has no orchestration artifact kinds
+  (`ScanPlan`/`ScanState`/… are `resiliency-skills` concepts), and validation already degrades
+  gracefully for a kind without a schema (the envelope still applies). But inspecting the registry
+  surfaced a *real* one-directional gap: `test_registry_governance` checked every registry kind has a
+  schema file, but **not** the reverse. A schema file dropped in without a registry row would never be
+  routed and would silently rot. Closed with `test_no_schema_file_is_orphaned_from_the_registry`
+  (registry ↔ schema files now lock-step both ways; today 28/28, no orphans).
+- **R-S2 — Publish-destination in the registry (REJECTED, with rationale).** `resiliency-skills` routes
+  each kind to a per-kind `dest` subdir (`alerts/intent`, `runbooks`, `metadata`, …). sre-design does
+  **not** use per-kind destinations: KB artifacts are laid out by **status** (`kb/verified`,
+  `kb/needs-review`) and publish copies the whole `kb/` tree plus `projections/` (`publish/pr_builder.py`,
+  `workspace/layout.py`). Adding a `dest` field to the registry would be config nothing consumes —
+  dead config that invites drift. Skipped on purpose; revisit only if the publish model ever moves to
+  per-kind routing.
 
 ## Bottom line
 
@@ -146,5 +156,6 @@ The single highest-value, lowest-risk improvement from `resiliency-skills` was i
 and this change adopts it at the right altitude: a shared sandboxed Jinja2 environment, prose rendered
 from `.j2` templates, escaping centralized into one auditable module, structured/graph output kept in
 Python, and the dormant `jinja2` dependency finally earning its place — all with byte-identical output
-and the test suite green. The schema layer is already the stronger of the two repos; the remaining
-registry/doc items (R-S1–R-S3) are incremental polish, not corrections.
+and the test suite green. The schema layer is already the stronger of the two repos; the follow-up
+items are incremental polish — a documented schema contract and a tightened registry↔schema invariant —
+and one (`R-S2`) was correctly rejected as not matching sre-design's status-based publish model.

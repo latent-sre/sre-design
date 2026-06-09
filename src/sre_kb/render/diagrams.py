@@ -4,14 +4,11 @@ from __future__ import annotations
 
 import re
 
-
-# Untrusted strings (service/path from annotations, resource names from manifests) flow into
-# Mermaid labels/messages. Strip the metacharacters that could break out of a label or inject
-# diagram syntax, mirroring the sanitization applied to node ids — render-integrity, not RCE.
-def _mm(text: object) -> str:
-    s = re.sub(r"\s+", " ", str(text))
-    return re.sub(r'[;:|<>"#%(){}\[\]`\\]', "", s).strip()
-
+# Untrusted strings (service/path from annotations, resource names from manifests) flow into Mermaid
+# labels/messages. `_mm` strips the metacharacters that could break out of a label or inject diagram
+# syntax — render-integrity, not RCE. It lives in `render.templating` (registered there as the
+# `mermaid` Jinja filter too) so the sanitizer has exactly one definition across templates and Python.
+from sre_kb.render.templating import mermaid as _mm
 
 _PARTICIPANT = {
     "http-egress": "Downstream",

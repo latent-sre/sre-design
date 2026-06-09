@@ -1,0 +1,26 @@
+{{ generated }}
+# SRE guardrails for `{{ service | inline }}`
+
+This service has a validated SRE knowledge base. When editing code here, respect:
+
+## Reliability guardrails
+{% for r in rules %}- {{ r }}
+{% else %}- (none detected)
+{% endfor %}
+{%- if advisories %}
+
+## Advisory (LLM-proposed, unverified)
+Not byte-grounded — verify before acting; do not enforce these as hard rules.
+{% for a in advisories %}- {{ a }}
+{% endfor %}
+{%- endif %}
+{%- if flows %}
+
+## Critical flows
+{% for f in flows %}- `{{ f.name | inline }}` — {{ f.line }}
+{% endfor %}
+{%- endif %}
+
+## Conventions
+- Every reliability claim in the KB cites `path:line`; keep code and KB in sync.
+- Treat generated runbooks as drafts: verify before executing during an incident.

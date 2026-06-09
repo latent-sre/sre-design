@@ -35,9 +35,9 @@ sre-kb = "sre_kb.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-# Schemas and the default config ship inside the package so a wheel-installed engine
-# resolves them at runtime.
-sre_kb = ["schemas/*.json", "schemas/*.yaml", "schemas/**/*.json", "data/*.yaml"]
+# Schemas, the default config, and the render templates ship inside the package so a
+# wheel-installed engine resolves them at runtime.
+sre_kb = ["schemas/*.json", "schemas/*.yaml", "schemas/**/*.json", "data/*.yaml", "render/templates/*.j2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

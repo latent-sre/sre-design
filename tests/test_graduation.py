@@ -160,3 +160,17 @@ def test_save_is_atomic_and_preserves_prior_on_failure(tmp_path, monkeypatch):
     reloaded = GraduationTracker.load(tmp_path)
     assert reloaded.categories["missing-timeout"].confirmed == 1  # prior tally intact, not lost
     assert not list((tmp_path / ".sre").glob(".graduation-*.tmp"))  # no temp leak
+
+
+def test_hand_edited_garbage_tracker_loads_as_empty(tmp_path):
+    """load() promises no crash on hand-edits: a value that breaks the shape (non-numeric tally,
+    scalar category record) is corrupt — an empty tracker, not a ValueError."""
+    sre = tmp_path / ".sre"
+    sre.mkdir()
+    (sre / "graduation-tracker.yaml").write_text(
+        "categories:\n  missing-timeout:\n    confirmed: lots\n", encoding="utf-8"
+    )
+    assert GraduationTracker.load(tmp_path).categories == {}
+
+    (sre / "graduation-tracker.yaml").write_text("categories:\n  missing-timeout: oops\n", encoding="utf-8")
+    assert GraduationTracker.load(tmp_path).categories == {}

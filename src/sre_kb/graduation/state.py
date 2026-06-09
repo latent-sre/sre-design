@@ -57,16 +57,19 @@ class GraduationTracker:
         except yaml.YAMLError:
             return cls()
         cats: dict[str, ConfirmedCategory] = {}
-        for name, raw in (doc.get("categories") or {}).items():
-            raw = raw or {}
-            cats[str(name)] = ConfirmedCategory(
-                category=str(name),
-                confirmed=int(raw.get("confirmed", 0)),
-                false_positives=int(raw.get("false_positives", 0)),
-                last_run=raw.get("last_run"),
-                anchors=[str(a) for a in (raw.get("anchors") or [])],
-                promoted=bool(raw.get("promoted", False)),
-            )
+        try:
+            for name, raw in (doc.get("categories") or {}).items():
+                raw = raw or {}
+                cats[str(name)] = ConfirmedCategory(
+                    category=str(name),
+                    confirmed=int(raw.get("confirmed", 0)),
+                    false_positives=int(raw.get("false_positives", 0)),
+                    last_run=raw.get("last_run"),
+                    anchors=[str(a) for a in (raw.get("anchors") or [])],
+                    promoted=bool(raw.get("promoted", False)),
+                )
+        except (AttributeError, TypeError, ValueError):
+            return cls()  # a hand-edit that breaks the shape (e.g. `confirmed: lots`) is corrupt
         return cls(categories=cats)
 
     def save(self, root: Path) -> None:

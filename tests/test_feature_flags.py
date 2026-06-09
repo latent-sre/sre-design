@@ -50,6 +50,18 @@ def test_scaffolds_verified_featureflag_artifacts():
     assert ff["kill-switch-payments"]["spec"]["killSwitch"] is True
 
 
+def test_go_sdk_flag_call_is_detected(tmp_path):
+    # Go calls carried no string args, so the *.go glob in _sdk_flags was dead code.
+    (tmp_path / "main.go").write_text(
+        'package main\n\nfunc f() {\n\ton := ldclient.BoolVariation("new-checkout", user, false)\n\t_ = on\n}\n',
+        encoding="utf-8",
+    )
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    flags = {f.attrs["name"]: f.attrs for f in feature_flags.collect(ctx)}
+    assert flags["new-checkout"]["provider"] == "launchdarkly"
+    assert flags["new-checkout"]["defaultState"] == "unknown"
+
+
 def test_self_gating_on_a_plain_repo(tmp_path):
     (tmp_path / "Plain.java").write_text("package x;\npublic class Plain {}\n", encoding="utf-8")
     ctx = ScanContext(root=tmp_path, repo="file://x")

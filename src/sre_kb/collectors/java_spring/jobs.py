@@ -55,7 +55,10 @@ def collect(ctx: ScanContext) -> list[Fact]:
                 attrs = {"name": f"{t.name}.{m.name}", "jobType": job_type, "trigger": handler}
                 if schedule:
                     attrs["schedule"] = schedule
-                if "@DisallowConcurrentExecution" in m.annotations:
+                # Quartz declares @DisallowConcurrentExecution with @Target(TYPE), so it sits on
+                # the enclosing class; the method check is kept for lenient/non-compiling sources.
+                if ("@DisallowConcurrentExecution" in t.annotations
+                        or "@DisallowConcurrentExecution" in m.annotations):
                     attrs["concurrency"] = "forbid"
                 facts.append(
                     Fact(

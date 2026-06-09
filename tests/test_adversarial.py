@@ -121,3 +121,18 @@ def test_forge_empty_tree_raises_clear_error(tmp_path):
         GitHubForge(runner=runner, http_post=lambda *a: {}, token="T").open_pr(
             tmp_path, sre_repo="o/r", branch="b", title="t", body="x"
         )
+
+
+# --- A non-mapping YAML root must not crash the whole scan ---
+
+def test_non_mapping_manifest_and_slo_catalog_do_not_crash_the_scan(tmp_path):
+    # `yaml.safe_load` happily returns a list/scalar; `.get(...)` on it aborted the entire
+    # scan of an untrusted target repo instead of skipping the file.
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.collectors.common import manifest_pcf, slo_catalog
+
+    (tmp_path / "manifest.yml").write_text("- not\n- a-dict\n", encoding="utf-8")
+    (tmp_path / "sre-slo.yml").write_text("just a string\n", encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    assert manifest_pcf.collect(ctx) == []
+    assert slo_catalog.collect(ctx) == []

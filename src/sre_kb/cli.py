@@ -181,16 +181,24 @@ def confirm_gap(
     false_positive: bool = typer.Option(
         False, "--false-positive", help="Record a dismissed/false gap instead of a confirmation."
     ),
+    novel: bool = typer.Option(
+        False, "--novel",
+        help="Accept an out-of-taxonomy category proposed by the open-discovery channel.",
+    ),
 ) -> None:
     """Record a human verdict on a needs-review gap, feeding the graduation tally (HYBRID-PLAN §9.3 #3)."""
-    from sre_kb.collectors.llm.gap_finder import gap_categories
+    from sre_kb.collectors.llm.gap_finder import gap_categories, is_valid_novel_category
     from sre_kb.graduation import GraduationTracker
     from sre_kb.pipeline.confirm import confirm_emitted_categories
 
     known = gap_categories() | confirm_emitted_categories()
-    if category not in known:
+    if category not in known and not novel:
         typer.echo(f"unknown gap category: {category}", err=True)
         typer.echo(f"known: {', '.join(sorted(known))}", err=True)
+        typer.echo("(an out-of-taxonomy category from the open-discovery channel needs --novel)", err=True)
+        raise typer.Exit(code=2)
+    if category not in known and not is_valid_novel_category(category):
+        typer.echo(f"invalid novel category name (want kebab-case): {category}", err=True)
         raise typer.Exit(code=2)
     tracker = GraduationTracker.load(target)
     cat = tracker.refute(category) if false_positive else tracker.confirm(category, run=run_id, anchor=anchor)
@@ -208,15 +216,17 @@ def graduation_candidates(
 ) -> None:
     """Show graduation status; for each promotion-ready category, draft the deterministic signature to
     review and merge (assisted promotion — the engine never edits its own rules)."""
-    from sre_kb.collectors.llm.gap_finder import target_concerns
+    from sre_kb.collectors.llm.gap_finder import gap_categories, target_concerns
     from sre_kb.config import load_config
     from sre_kb.graduation import GraduationTracker, draft_signature
+    from sre_kb.pipeline.confirm import confirm_emitted_categories
 
     threshold = int((load_config().get("graduation") or {}).get("confirmation_threshold", 5))
     tracker = GraduationTracker.load(target)
     if not tracker.categories:
         typer.echo("no gap confirmations recorded yet")
         raise typer.Exit(code=0)
+    known = gap_categories() | confirm_emitted_categories()
     ready = 0
     for name, cat in sorted(tracker.categories.items()):
         is_ready = cat.is_candidate(threshold)
@@ -224,7 +234,7 @@ def graduation_candidates(
         state = "promoted" if cat.promoted else ("READY to graduate" if is_ready else f"{cat.confirmed}/{threshold}")
         typer.echo(f"{name}: {state}  (confirmed={cat.confirmed}, false-positives={cat.false_positives})")
         if is_ready:
-            typer.echo(draft_signature(cat, target_concerns(name)))
+            typer.echo(draft_signature(cat, target_concerns(name), known=name in known))
     typer.echo(f"\n{ready} categor{'y' if ready == 1 else 'ies'} ready to graduate (threshold {threshold}).")
 
 

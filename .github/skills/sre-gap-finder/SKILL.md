@@ -64,6 +64,13 @@ A JSON object the engine ingests (`collectors/llm/gap_finder.load_proposals`), w
 `swallowed-failure`, `data-loss-path`, `missing-idempotency`, `undocumented-job`,
 `unbounded-resource`). `anchor` is bytes copied **exactly** from one UNTRUSTED block.
 
+**Out-of-taxonomy discoveries.** If you find a real, byte-anchored risk that fits **no** taxonomy
+category, propose it anyway with a new kebab-case `category` name (e.g.
+`missing-cache-invalidation`). The engine routes it through the open-discovery channel:
+locate-grounded, always `needs-review`, under a tighter noise budget (`gap_finder.max_novel`) — so
+spend it only on your highest-confidence finds. Repeated reviewer confirmations
+(`sre-kb confirm-gap <name> --novel`) graduate the category into the taxonomy.
+
 Current engine behavior:
 - `missing-timeout`, `unguarded-critical-dependency`: refutation probes; kept as Tier-B
   `needs-review` only when the relevant resilience signatures do not fire in scope.

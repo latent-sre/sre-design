@@ -238,6 +238,11 @@ def scan_tree(
         if not p.is_file() or p.is_symlink():
             continue
         rel = p.relative_to(root).as_posix()
+        if ".git" in p.relative_to(root).parts:
+            # Git internals are never engine-produced content, and .git/config legitimately
+            # holds a credential on CI (actions/checkout persists its token there) — scanning
+            # it would wedge the generated fail-closed gate on every run.
+            continue
         if any(rel == pre or rel.startswith(pre + "/") for pre in skip_prefixes):
             continue  # first-party assets (e.g. vendored schemas) are not target-derived content
         files += 1

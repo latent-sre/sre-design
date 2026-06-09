@@ -132,8 +132,12 @@ class CachingProvider:
         if path.exists():
             return path.read_text(encoding="utf-8")
         response = self.inner.complete(prompt)
-        self.dir.mkdir(parents=True, exist_ok=True)
-        path.write_text(response, encoding="utf-8")
+        if response:
+            # An empty response is the inner provider's failure signal (timeout/exec error,
+            # parsed as `indeterminate`) — caching it would make one transient failure a
+            # permanent verdict; leave the slot empty so a re-run retries the oracle.
+            self.dir.mkdir(parents=True, exist_ok=True)
+            path.write_text(response, encoding="utf-8")
         return response
 
     def __call__(self, prompt: str) -> str:

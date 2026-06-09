@@ -58,6 +58,25 @@ def test_positional_scheduled_value_is_cron_only_when_cron_shaped():
     assert _schedule({"fixedRate": "60000"}) == ("scheduled", "fixedRate=60000")
 
 
+def test_class_level_disallow_concurrent_execution_marks_concurrency(tmp_path):
+    """Quartz's @DisallowConcurrentExecution is @Target(TYPE) — it sits on the class, never the
+    method, so the method-only check could never fire in compilable Java."""
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.collectors.java_spring import jobs
+
+    (tmp_path / "NightlyJob.java").write_text(
+        "package x;\n"
+        "@DisallowConcurrentExecution\n"
+        "class NightlyJob {\n"
+        '    @Scheduled(cron = "0 0 2 * * *")\n'
+        "    void run() {}\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    [fact] = jobs.collect(ScanContext(root=tmp_path, repo="file://x"))
+    assert fact.attrs["concurrency"] == "forbid"
+
+
 def test_scheduled_jobs_are_tier_a_verified_and_grounded(result):
     jobs = _jobs(result.root)
     cron = jobs["invoice-jobs-nightly-invoice-run"]

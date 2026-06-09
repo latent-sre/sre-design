@@ -47,3 +47,13 @@ def test_cotenancy_blast_radius_for_shared_db(docs):
 def test_unshared_resources_are_not_cotenancy(docs):
     assert ("BlastRadius", "order-kafka-cotenancy") not in docs
     assert ("BlastRadius", "billing-kafka-cotenancy") not in docs
+
+
+def test_duplicate_target_basenames_are_rejected(tmp_path):
+    """Evidence is keyed by `file://<basename>`: two targets named `api` would silently share one
+    key and the first service's provenance would verify against the second service's files."""
+    for team in ("team-a", "team-b"):
+        (tmp_path / team / "api").mkdir(parents=True)
+    with pytest.raises(ValueError, match="duplicate estate target basename"):
+        run_estate([str(tmp_path / "team-a" / "api"), str(tmp_path / "team-b" / "api")],
+                   work_root=str(tmp_path / "w"), run_id="dup")

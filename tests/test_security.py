@@ -81,6 +81,22 @@ def test_scan_tree_enforces_file_budget(tmp_path):
         scan_tree(tmp_path, max_files=2)
 
 
+def test_scan_tree_skips_git_internals(tmp_path):
+    """The generated CI gate runs `sre-kb secret-scan .` after actions/checkout, which persists
+    its token into .git/config — scanning git internals wedged the gate on every run."""
+    from sre_kb.security.secret_scan import scan_tree
+
+    git = tmp_path / ".git"
+    git.mkdir()
+    (git / "config").write_text(
+        '[http "https://github.com/"]\n'
+        "\textraheader = AUTHORIZATION: basic eC1hY2Nlc3MtdG9rZW46Z2hwX1NFQ1JFVA==\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "ok.yaml").write_text("kind: Flow\n", encoding="utf-8")
+    assert scan_tree(tmp_path) == []
+
+
 def test_secret_scan_decodes_utf16_text(tmp_path):
     key = "AKIA" + "W" * 16
     path = tmp_path / "creds.yml"

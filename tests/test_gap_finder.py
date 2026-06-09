@@ -399,3 +399,64 @@ def test_refutation_probe_generalizes_to_the_real_dotnet_gap():
     rel = "src/main/java/com/acme/order/client/InventoryClient.java"
     sverdict, _, _ = gap_finder._rederive(sctx, rel, 26, 26, "missing-timeout", "inventory")
     assert sverdict == "refuted"
+
+
+# --------------------------------------------------------------- open discovery (novel categories)
+
+_SHIP = 'return restTemplate.getForObject(baseUrl + "/quote?order=" + orderId, Quote.class);'
+
+
+def test_out_of_taxonomy_category_is_routed_as_novel_not_dropped():
+    """The open-discovery channel (SCOPE §6): a category nobody anticipated still lands — locate-
+    grounded, marked `novel` with the proposed name as data, routed to review. Before this channel
+    it died as `unconfirmable` and the LLM could not surface anything outside the taxonomy."""
+    res = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("missing-cache-invalidation", _SHIP, target="shipping-api", severity="high"),
+    ])
+    [out] = res.outcomes
+    assert out.result == "routed" and "novel" in out.note
+    [fact] = res.facts
+    assert fact.attrs["category"] == "novel"
+    assert fact.attrs["proposedCategory"] == "missing-cache-invalidation"
+    assert fact.attrs["rederivation"] == "novel"
+    assert fact.evidence.source_tier == LLM  # never graduates without a probe
+
+
+def test_novel_with_unslug_name_or_fabricated_anchor_is_dropped():
+    res = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("Not A Slug!!", _SHIP, target="shipping-api"),          # garbage name
+        Proposal("novel", _SHIP, target="shipping-api"),                 # reserved marker
+        Proposal("plausible-new-risk", "return fabricated.call();"),     # fabricated citation
+    ])
+    assert res.facts == []
+    assert [o.result for o in res.outcomes] == ["unconfirmable", "unconfirmable", "unlocatable"]
+
+
+def test_novel_budget_is_separate_and_tighter():
+    """Novel discoveries spend `max_novel`, not the taxonomy budget — the open invitation can
+    neither crowd out known categories nor flood a reviewer."""
+    res = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("missing-cache-invalidation", _SHIP, target="shipping-api", severity="high"),
+        Proposal("another-new-risk", _SHIP, target="shipping-api", severity="low"),
+        Proposal("data-loss-path", _SHIP, target="shipping-api", severity="high"),
+    ], max_novel=1, max_candidates=None)
+    by_cat = {o.proposal.category: o.result for o in res.outcomes}
+    assert by_cat["missing-cache-invalidation"] == "routed"   # highest severity kept
+    assert by_cat["another-new-risk"] == "capped"             # over the novel budget
+    assert by_cat["data-loss-path"] == "routed"               # taxonomy budget untouched
+    assert len(res.facts) == 2
+
+
+def test_novel_gap_scaffolds_named_by_proposed_category_and_validates():
+    from sre_kb.pipeline.gap_finder import scaffold_gap
+    from sre_kb.validation.structural import validate_doc as _validate
+
+    res = gap_finder.collect_from_proposals(_ctx(), [
+        Proposal("missing-cache-invalidation", _SHIP, target="shipping-api", severity="high"),
+    ])
+    doc = scaffold_gap(res.facts[0], "checkout")
+    assert _validate(doc) == []  # category=novel + proposedCategory pass the schema
+    assert doc["metadata"]["name"] == "shipping-api-missing-cache-invalidation"
+    assert doc["spec"]["proposedCategory"] == "missing-cache-invalidation"
+    assert doc["status"] == "needs-review" and doc["spec"]["sourceTier"] == "llm"
+    assert not doc.get("crossRefs")  # not necessarily resiliency — no ResiliencyPattern backlink

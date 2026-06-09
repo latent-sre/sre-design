@@ -27,8 +27,11 @@ render:
 
 # Tier-B LLM gap-finder (HYBRID-PLAN §7.9). Noise budget: keep at most this many confirmed gaps
 # per run, highest-severity first, so a cry-wolf run can't flood a reviewer. ~ (null) = no cap.
+# `max_novel` is the separate, tighter budget for out-of-taxonomy (novel) discoveries — the
+# open-discovery channel is an open invitation, so it earns less reviewer attention per run.
 gap_finder:
   max_candidates: 25
+  max_novel: 3
 
 # Graduation loop (HYBRID-PLAN §9.3 #3): a gap category a reviewer confirms (`sre-kb confirm-gap`)
 # this many times, with zero false positives, becomes a promotion candidate — the engine then drafts

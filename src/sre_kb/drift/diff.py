@@ -1,5 +1,8 @@
-"""Diff two sets of KB artifacts. The excerptHash makes drift exact: a moved/changed
-cited line changes the artifact, so re-scanning a newer commit surfaces real drift."""
+"""Diff two sets of KB artifacts on their content signature (kind + spec + status).
+
+Evidence (paths/lines/excerptHash) is deliberately excluded from the signature — it changes on
+every re-scan/commit, so including it would report drift for artifacts whose substance is
+unchanged. A spec or status change is real drift; evidence churn alone is not."""
 
 from __future__ import annotations
 

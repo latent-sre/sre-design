@@ -23,6 +23,8 @@ def collect(ctx: ScanContext) -> list[Fact]:
         except yaml.YAMLError as exc:
             facts.append(parse_error_fact(ctx, rel, "common.slo_catalog", exc))
             continue
+        if not isinstance(data, dict):
+            continue  # a non-mapping root (list/scalar) is not an SLO catalog
         for s in data.get("slos") or []:
             if not isinstance(s, dict):
                 continue

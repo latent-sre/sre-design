@@ -63,7 +63,13 @@ def readiness_spec(fs: FactSet, docs: list[dict], budget_findings: list) -> dict
         "grade": _grade(score),
         "coverage": {
             "flows": len(fs.of("flow.flow")),
-            "flowsWithAlerts": sum(1 for d in docs if d["kind"] == "Alert"),
+            # Distinct flows an Alert actually references (crossRefs kind=Flow) — counting Alert
+            # artifacts here read "flows: 1, flowsWithAlerts: 2" when two alerts covered one flow.
+            "flowsWithAlerts": len({
+                ref.get("name")
+                for d in docs if d["kind"] == "Alert"
+                for ref in (d.get("crossRefs") or []) if ref.get("kind") == "Flow"
+            }),
             "kinds": len(set(kinds)),
             "needsReview": sum(1 for d in docs if d.get("status") == "needs-review"),
         },

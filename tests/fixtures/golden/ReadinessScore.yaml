@@ -22,7 +22,7 @@ spec:
   grade: B
   coverage:
     flows: 1
-    flowsWithAlerts: 2
+    flowsWithAlerts: 1
     kinds: 16
     needsReview: 2
   gaps:

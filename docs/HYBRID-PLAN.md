@@ -943,11 +943,15 @@ The product scope was sharpened with the user: **we are an application team on P
 platform infrastructure.** That lens turns "are we over-engineering?" into a concrete prune, and
 surfaces two P0 extraction gaps. These supersede nothing above; they are new open work.
 
-- **S1 — Kind prune (app-team scope). 🔲 Open.** Drop the infra-shaped kinds an app team doesn't own:
-  remove `NetworkTopology` and `DrBackup`; fold `DataStore` → `Dependency` ("app binds Postgres", not
-  the DB as infra) and `RateLimiting` → the resiliency signatures (it already is one); trim
-  `SecurityPosture` to app controls (authz/secret handling), dropping infra security. Sheds schema +
-  render + validate weight. See `SCOPE-AND-COVERAGE.md` §2/§5.
+- **S1 — Kind prune (app-team scope). ✅ Done.** Removed `NetworkTopology` and `DrBackup` (platform
+  networking / DR-backup) and `RateLimiting` (already a resilience signature) — all schema-only, never
+  produced; **folded `DataStore` → `Dependency`** ("app binds Postgres", carrying its `engine`; the
+  infra fields backup/RPO/RTO are platform-DR an app team doesn't own). `SecurityPosture` is **kept**:
+  its schema is already app-scoped (authn/authz/secrets) with no infra-security fields to trim. Sheds
+  4 schemas + 4 golden examples + their registry rows; registry/golden governance stays in lock-step,
+  and `eval` over the labeled fixtures still scores 1.0/1.0. (`schemas/registry.yaml`,
+  `schemas/v1alpha1/Dependency.schema.json`, `synth/inventory.py`; `tests/test_inventory.py`.) See
+  `SCOPE-AND-COVERAGE.md` §2/§5.
 - **S2 — `assess-logging`: log *format* + *quality*. ✅ Done (P0).** Tiered, as the engine's
   philosophy demands. **Tier-A (deterministic):** a new `java_spring.log_statements` collector parses
   the log statements from the AST — the logging API (slf4j/log4j2/jul/commons-logging, cited to its

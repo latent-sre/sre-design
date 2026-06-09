@@ -1,5 +1,6 @@
-"""P2 inventory kinds: TechStack, Deployment, Dependency, Interface, DataStore,
-ConfigManagement — deterministic roll-ups, all verified, on the fixture."""
+"""P2 inventory kinds: TechStack, Deployment, Dependency, Interface,
+ConfigManagement — deterministic roll-ups, all verified, on the fixture.
+(DataStore folded into Dependency in S1 — see test_datastore_engine_folded_into_dependency.)"""
 
 from __future__ import annotations
 
@@ -46,10 +47,11 @@ def test_dependencies_classified(docs):
     assert http["criticality"] == "contained"  # behind a circuit breaker
 
 
-def test_datastore(docs):
-    spec = docs[("DataStore", "orders-postgres")]["spec"]
-    assert spec["engine"] == "postgres"
-    assert "OrderRepository" in spec["accessedBy"]
+def test_datastore_engine_folded_into_dependency(docs):
+    # S1: the former DataStore kind is gone; a datastore/broker binding carries its engine here
+    assert docs[("Dependency", "orders-postgres")]["spec"]["engine"] == "postgres"
+    assert docs[("Dependency", "order-kafka")]["spec"]["engine"] == "kafka"
+    assert ("DataStore", "orders-postgres") not in docs  # kind pruned
 
 
 def test_interface_unifies_rest_and_async(docs):

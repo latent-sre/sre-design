@@ -85,20 +85,21 @@ Status legend: ✅ solid · ◐ partial · ❌ gap · (S) schema/kind exists but
 | 20 | Create runbooks from deep scan | `Runbook` (render) | A+B | ◐ | renders; content drafting → skill |
 | R | **SRE rubric** (timeouts, retries+backoff, swallowing, unbounded loops/queues, no-pagination, conn-pooling, leaks, migration safety, config-vs-code, idempotency, async DLQ/poison/ordering, load-shed, saga) | `ResiliencyGap` + above | A/B | ◐ | strong on *absence-of-mechanism* (timeouts/swallowing/fallback); weak on *anti-pattern* detection (resource/op-safety) and semantic (saga/ordering) |
 
-## 5. Kinds to prune or fold (follows from §2)
+## 5. Kinds to prune or fold (follows from §2) — ✅ done (S1)
 
-These carry schema + render + validation weight for concerns an application team does not own:
+These carried schema + render + validation weight for concerns an application team does not own:
 
-| Kind | Action | Why |
-|---|---|---|
-| `NetworkTopology` | **Drop** | platform networking |
-| `DrBackup` | **Drop** | platform DR/backup (keep only app-data the app controls) |
-| `DataStore` | **Fold into `Dependency`** | we care "app binds Postgres," not the DB as infra |
-| `RateLimiting` | **Fold into resiliency** | already a signature; app-level only |
-| `SecurityPosture` | **Trim** | keep app controls (authz/secret handling), drop infra security |
+| Kind | Action | Status | Why |
+|---|---|---|---|
+| `NetworkTopology` | **Drop** | ✅ removed | platform networking |
+| `DrBackup` | **Drop** | ✅ removed | platform DR/backup (keep only app-data the app controls) |
+| `DataStore` | **Fold into `Dependency`** | ✅ folded (`Dependency.engine`) | we care "app binds Postgres," not the DB as infra |
+| `RateLimiting` | **Fold into resiliency** | ✅ removed | already a signature; app-level only |
+| `SecurityPosture` | **Trim** | ✅ kept as-is | schema is already app-scoped (authn/authz/secrets); no infra fields to drop |
 
 Pruning is the concrete answer to "are we over-engineering?": *yes, on infra-shaped kinds we don't
-own* — not on the core extract→metadata→populate loop, which is well-proportioned.
+own* — not on the core extract→metadata→populate loop, which is well-proportioned. **Done in S1:** 4
+schemas + 4 golden examples + their registry rows removed; `DataStore.engine` folded onto `Dependency`.
 
 ## 6. The LLM gate — discover + confirm, as skills
 

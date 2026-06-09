@@ -241,7 +241,7 @@ pass** the provenance validator and is auto-downgraded to `needs-review`.
 | Tech stack | `TechStack` | languages/frameworks (+version+source), runtime, buildTool, pcf{buildpack,stack} | P2 |
 | Architecture (+ design patterns) | `Architecture` | components, layers, boundaries, styleTags, **patterns (CQRS/Saga/…)**, c4Level | P2 |
 | Infra + deployment + capacity | `Deployment` | hosting (**VM**\|**PCF**), org/space, unit (jar/war/buildpack), startCommand, routes, envBindings, **instances/mem/disk limits + pool sizes (capacity)**, stack, healthCheck, manifestPath | P2 |
-| Dependencies | `Dependency` | name/version/scope/type (runtime\|service-binding), source (pom/gradle/VCAP), **criticality** (critical-path?) | P2 |
+| Dependencies | `Dependency` | name/version/scope/type (datastore\|broker\|service-binding\|http\|library), source (pom/gradle/VCAP), **engine** (postgres/kafka — folded in from DataStore, S1), **criticality** (critical-path?) | P2 |
 | API + messaging contracts | `Interface` | style (rest\|grpc\|soap\|**async**); endpoints/channels{method/path or channel, handler, role, **idempotent?, retrySafe?**}; broker (Kafka/Rabbit/JMS), auth, deliveryGuarantee. **Optional**: ingest an existing OpenAPI/AsyncAPI 3.x doc (the API *spec*, not OpenAI) if present; never generated | P2 |
 | Messaging consumer resilience | `Messaging` | consumers{channel, broker, handler, resilience{deadLetter, deadLetterMechanism, retry, idempotentConsumer}} — the consumer side `Interface` (contracts) doesn't cover. Tier-A from `@KafkaListener`/`@RabbitListener`/`@SqsListener`/`@JmsListener` + `@RetryableTopic`/`@DltHandler`/DLQ config; ordering/poison-pill/saga → Tier-B `map-messaging` | P2 |
 | Jobs | `ScheduledJob` | trigger (cron/fixedDelay), expression, handler, **idempotent?, retrySafe?, dedupeKey** | P2 |
@@ -256,7 +256,7 @@ pass** the provenance validator and is auto-downgraded to `needs-review`.
 | Alerts (proposed) | `Alert` | alertType (burn-rate\|threshold), sloRef?, signalSource (log-pattern/metric), expr (per backend), severity, forFlow, logFormatRef, rationale | **P1** |
 | Runbooks | `Runbook` | trigger(alertRef), symptoms, diagnosis{step,evidenceRef}, remediation, escalation, relatedFlow | **P1** |
 | SLO / SLI | `SloSli` | objectives{sli (latency/availability/error-rate), target, window}, source (code/config\|catalog\|needs-review), forFlow, errorBudget | **P1**(detect) / P2(full) |
-| Data stores | `DataStore` | engine, entities, migrations (Flyway/Liquibase), pool (HikariCP), **backup/restore**, **RPO/RTO**, sharedBy[] (co-tenancy) | P2 |
+| Data stores | ~~`DataStore`~~ → `Dependency` | **Folded into `Dependency` (S1)** — a datastore binding carries its `engine`; the infra fields (backup/restore, RPO/RTO) are platform-DR an app team doesn't own | — |
 | Config management | `ConfigManagement` | sources (env/`application.yml`/Spring Cloud Config), `@RefreshScope`, profile matrix, **drives→** `FeatureFlag`/`Fallback` refs | P2 |
 | Readiness + coverage | `ReadinessScore` | prrChecks{timeout-on-every-egress, healthcheck, SLO-defined, runbook-for-top-flows, structured-logging, …}, coverage{flowsWithAlerts %, flowGaps #, needsReview #}, score, gaps[] | **P1**(coverage) / P2(full PRR) |
 | (Backstage projection) | `ServiceCatalogEntry` | type, lifecycle, system, providesApis, dependsOn | P1 |
@@ -296,11 +296,12 @@ coverage contract) and HYBRID-PLAN §9.7 (S1–S5) for the full matrix and build
   that make Copilot **preserve** circuit-breakers/timeouts/fallbacks/idempotency when
   editing, so the KB prevents reliability regressions, not just documents them. **P1**.
 
-**Still-additional kinds (same envelope/machinery):** `NetworkTopology` (incl.
-ThousandEyes paths/ASGs), `RateLimiting`, and **`DrBackup`** (extends `DataStore`). A
+**Pruned to app-team scope (S1):** `NetworkTopology` (platform networking, incl.
+ThousandEyes paths/ASGs), `RateLimiting` (already a resilience signature), and **`DrBackup`**
+(platform DR/backup) were **removed**; `DataStore` **folded into `Dependency`** (`engine`). A
 **`SecurityPosture`** collector (record secret *locations/types*, never values) remains a
-future item; the **redact pass + publish-time secret-scan gate** that protect the PR are
-**built** — see *Secret safety* below.
+future item — the kind is kept and app-scoped; the **redact pass + publish-time secret-scan gate**
+that protect the PR are **built** — see *Secret safety* below.
 
 Adding a kind = schema + prompt + (optional) collector + one `registry.yaml` row.
 
@@ -608,9 +609,10 @@ it never invents it.
   service, broker, or share a PCF org/space, a shared-resource failure's radius spans
   all tenants — detected from `pcf.service-binding` / shared-store facts. This is the
   on-prem risk cloud tooling routinely misses.
-- **Stateful radius (`DataStore`):** for store nodes, the radius carries
-  `dataLossRisk` + the store's `RPO/RTO` and backup/restore facts, so a DB incident's
-  impact is expressed as data-loss/recovery time, not just "down."
+- **Stateful radius (datastore nodes):** for store nodes, the radius carries
+  `dataLossRisk`, so a DB incident's impact is expressed as data loss, not just "down."
+  (RPO/RTO/backup were platform-DR fields pruned with `DataStore` in S1 — the radius keeps the
+  app-observable data-loss risk, not the infra recovery targets.)
 - **Dependency criticality:** nodes on a critical path (no fallback, on a high-SLO
   flow) are flagged `dependencyCriticality: critical`, sharpening severity.
 - **Drives prioritization:** `severityHint` feeds Alert `severity` and Runbook depth;

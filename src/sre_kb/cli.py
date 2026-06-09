@@ -543,8 +543,9 @@ def confirm_worklist_cmd(
     run_id: str = typer.Option(..., "--run"),
     work_root: str = typer.Option(".work", "--work-root"),
 ) -> None:
-    """Show the S4 confirm worklist: the engine's Tier-A absence claims for Copilot to affirm or
-    dispute with a verbatim anchor (the engine re-grounds each dispute via `confirm-apply`)."""
+    """Show the S4 confirm worklist: the engine's Tier-A boundary calls for Copilot to affirm or
+    dispute with a verbatim anchor — absence ("present here") and presence ("disabled here"). The
+    engine re-grounds each dispute via `confirm-apply`."""
     import json
 
     from sre_kb.workspace import RunLayout
@@ -556,9 +557,12 @@ def confirm_worklist_cmd(
         raise typer.Exit(code=0)
     data = json.loads(path.read_text())
     for item in data["items"]:
+        verb = "active" if item.get("direction") == "presence" else "absent"
         typer.echo(f"  {item['artifact']}  [{item['claimId']}]  "
-                   f"absent: {' / '.join(item['concern'])} @ {item['path']}:{item['line']}")
-    typer.echo(f"{len(data['items'])} absence claim(s) to confirm — see {path}")
+                   f"{verb}: {' / '.join(item['concern'])} @ {item['path']}:{item['line']}")
+    n_pres = sum(1 for i in data["items"] if i.get("direction") == "presence")
+    typer.echo(f"{len(data['items'])} boundary call(s) to confirm "
+               f"({len(data['items']) - n_pres} absence, {n_pres} presence) — see {path}")
 
 
 @app.command("confirm-apply")
@@ -568,8 +572,9 @@ def confirm_apply_cmd(
     target: str = typer.Option(None, "--target", help="Scanned repo to re-ground against (default: from the run report)."),
     work_root: str = typer.Option(".work", "--work-root"),
 ) -> None:
-    """Apply confirm verdicts: re-ground each dispute and reject any refuted absence gap (a dispute
-    can only drop a false-positive gap; the engine re-derives the mechanism's presence itself)."""
+    """Apply confirm verdicts: re-ground each dispute. An absence dispute that re-derives drops a
+    false-positive gap (→ rejected); a presence dispute that re-derives a disable emits a new Tier-A
+    disabled-resilience gap. The engine makes every deterministic call."""
     import json
 
     from sre_kb.pipeline.confirm import regate_run
@@ -592,7 +597,9 @@ def confirm_apply_cmd(
     for o in outcomes:
         typer.echo(f"  {o.artifact}: {o.result}  ({o.note})")
     refuted = sum(1 for o in outcomes if o.result == "refuted")
-    typer.echo(f"confirmed {len(outcomes)} claim(s); {refuted} gap(s) refuted → rejected.")
+    disabled = sum(1 for o in outcomes if o.result == "disabled-confirmed")
+    typer.echo(f"confirmed {len(outcomes)} claim(s); {refuted} absence gap(s) → rejected, "
+               f"{disabled} present-but-disabled gap(s) emitted.")
 
 
 @app.command("gap-finder")

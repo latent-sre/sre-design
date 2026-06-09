@@ -452,6 +452,7 @@ status-authority note at the top):
 | #7 Tier-B | `map-api-contracts` — baseline-spec breaking-change diff + version-policy (Tier-A) + semantic-break skill re-grounding (Tier-B) | ✅ | |
 | #19 Tier-B | `generate-alerts` — log-pattern alert drafter, grounded on the parsed log-statement facts | ✅ | |
 | #20 Tier-B | `generate-runbooks` — runbook-content drafter, closed-world grounded on the run's artifacts | ✅ | |
+| S4b | confirm-loop present-but-disabled direction (presence boundary calls → byte-proven `disabled-resilience` gap) | ✅ | graduation-from-confirms still open |
 | infra | full scan/publish credential split (§9.3 #5) | 🟡 scan role done; publish role + CI open | gate before live publish |
 
 The per-phase detail below remains the authoritative narrative for each ✅.
@@ -1008,8 +1009,20 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   *idempotency-on-mutating-route* to a deterministic Tier-A gap (every POST/PUT/PATCH/DELETE route with
   no idempotency guard in scope — the HTTP dual of `non-idempotent-consumer`), which is exactly the
   kind of absence claim the confirm loop lets a reviewer dispute (a guard in a global filter the engine
-  can't see). The false-negative "present-but-disabled" direction and graduation-from-confirms remain
-  follow-ups; the absence-claim half (the one the plan prioritized) is complete.
+  can't see).
+  **Present-but-disabled direction ✅ done (S4b):** the confirm loop's false-negative dual. The engine
+  also hands the skill its Tier-A *presence* mechanisms (a `resiliency.circuitbreaker` carrying a named
+  instance) as boundary calls; the skill can dispute one as present-but-DISABLED, quoting the config
+  that disables it. The engine re-grounds by locating the anchor, requiring it name the instance
+  (whole-token), and firing a deterministic `enabled: false` disable signal — only then emitting a new,
+  byte-grounded Tier-A `disabled-resilience` ResiliencyGap (verified-eligible), catching a disabled
+  breaker the presence signature alone would miss. Non-circular and monotonic: an absence dispute can
+  only drop a false-positive gap, a presence dispute can only add a byte-proven disabled gap; neither
+  can fabricate. (`pipeline/confirm.py`, `pipeline/orchestrator.py`, `ResiliencyGap` schema,
+  `tests/fixtures/sample-disabled-cb`, `tests/test_confirm*.py`.) **Graduation-from-confirms** (feeding
+  confirm verdicts into the §7.9 graduation tracker) and the proactive Tier-A disable collector (a
+  config scan that catches `enabled: false` without the LLM pointing first — the natural graduation of
+  this category) remain the open follow-ups.
 - **S5 — Eval harness (rubric-as-spec). ✅ Done.** `eval/scorecard.py` generalizes
   `copilot-gap-validate`'s precision/recall from gaps-only to **all extraction**: it runs the
   deterministic pipeline over a labeled fixture (`<fixture>/.sre/eval-truth.json`, the §4 coverage

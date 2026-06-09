@@ -109,12 +109,15 @@ model). The gate has two loops:
 
 - **Discover (recall)** — a skill proposes byte-anchored gaps the engine missed. *Exists today* for
   resiliency; widen the taxonomy to all Tier-B areas (§7).
-- **Confirm (precision) — ✅ done (S4, absence-claims)** — the engine hands a skill its own absence
-  boundary calls (`confirm/boundary-calls.json`, from the Tier-A absence gaps); the skill affirms or
-  disputes **with anchors**, and the engine re-grounds at the cited bytes (`pipeline/confirm.py`,
-  `sre-confirm-boundaries` skill, `confirm-apply`). A dispute can only *drop* a false-positive gap, and
-  only by pointing at real code where the engine's own signature fires in scope. The false-negative
-  "present-but-disabled" direction and graduation-from-confirms are the remaining follow-ups.
+- **Confirm (precision) — ✅ done (S4, both directions)** — the engine hands a skill its own boundary
+  calls (`confirm/boundary-calls.json`); the skill affirms or disputes **with anchors**, and the engine
+  re-grounds at the cited bytes (`pipeline/confirm.py`, `sre-confirm-boundaries` skill, `confirm-apply`).
+  Two directions, both byte-re-derived by the engine: an **absence** dispute can only *drop* a
+  false-positive gap (point at real code where the engine's signature fires in scope); a **presence**
+  dispute (the false-negative "present-but-disabled" direction) can only *add* a byte-proven Tier-A
+  `disabled-resilience` gap — the engine offers each active mechanism (a named circuit breaker), and a
+  dispute confirms only when a deterministic `enabled: false` disable signal fires for that instance.
+  Graduation-from-confirms remains the open follow-up.
 
 ```
 run 1: engine emits {present, absent} with evidence

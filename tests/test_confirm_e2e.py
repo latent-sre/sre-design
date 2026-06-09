@@ -4,12 +4,15 @@ moves the false-positive gap to rejected; everything else stands."""
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import yaml
 
 from sre_kb.pipeline import run as run_pipeline
 from sre_kb.pipeline.confirm import regate_run
 from sre_kb.workspace import RunLayout
+
+DISABLED_CB = Path(__file__).parent / "fixtures" / "sample-disabled-cb"
 
 # A consumer with a real dead-letter recoverer the engine's annotation/config probe doesn't see, so
 # it wrongly asserts consumer-without-dlq — exactly the false positive the confirm loop catches.
@@ -72,3 +75,37 @@ def test_affirm_leaves_the_gap_verified(tmp_path):
                           {"verdicts": [{"claimId": "consumer-without-dlq:t", "verdict": "affirm"}]})
     assert all(o.result != "refuted" for o in outcomes)
     assert name in _kb(layout)  # still present, unchanged
+
+
+# --- presence direction (present-but-disabled) end-to-end --------------------------------------
+
+def _run_disabled(tmp_path):
+    res = run_pipeline(str(DISABLED_CB), work_root=str(tmp_path / "w"), run_id="d", to_stage="validate")
+    return RunLayout(tmp_path / "w", "d"), res
+
+
+def test_run_offers_the_present_breaker_as_a_presence_boundary_call(tmp_path):
+    layout, _ = _run_disabled(tmp_path)
+    wl = json.loads((layout.root / "confirm" / "boundary-calls.json").read_text())
+    presence = [i for i in wl["items"] if i.get("direction") == "presence"]
+    assert any(i["claimId"] == "present:circuit-breaker:inventory" for i in presence)
+
+
+def test_disabled_dispute_emits_a_verified_tier_a_gap(tmp_path):
+    layout, _ = _run_disabled(tmp_path)
+    assert "ResiliencyGap/inventory-disabled-resilience" not in _kb(layout)  # not there before
+    verdicts = {"verdicts": [{"claimId": "present:circuit-breaker:inventory", "verdict": "dispute",
+                              "anchor": "      inventory:\n        enabled: false"}]}
+    outcomes = regate_run(layout, str(DISABLED_CB), verdicts)
+    assert any(o.result == "disabled-confirmed" for o in outcomes)
+    gap = _kb(layout).get("ResiliencyGap/inventory-disabled-resilience")
+    assert gap is not None
+    assert gap["spec"]["category"] == "disabled-resilience" and gap["spec"]["sourceTier"] == "ast"
+    assert gap["status"] == "verified"            # engine-re-derived from byte-grounded config
+
+
+def test_disabled_affirm_emits_no_gap(tmp_path):
+    layout, _ = _run_disabled(tmp_path)
+    regate_run(layout, str(DISABLED_CB),
+               {"verdicts": [{"claimId": "present:circuit-breaker:inventory", "verdict": "affirm"}]})
+    assert "ResiliencyGap/inventory-disabled-resilience" not in _kb(layout)

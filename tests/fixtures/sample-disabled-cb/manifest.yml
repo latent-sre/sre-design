@@ -1,0 +1,6 @@
+applications:
+  - name: order-service
+    memory: 1G
+    instances: 2
+    routes:
+      - route: order-service.apps.internal

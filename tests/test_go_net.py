@@ -12,7 +12,8 @@ import yaml
 
 from sre_kb.collectors import scan
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
-from sre_kb.collectors.go_net import go_mod
+from sre_kb.collectors.go_net import endpoints, go_mod
+from sre_kb.parsing import parse
 from sre_kb.pipeline import run as run_pipeline
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample-go-gin"
@@ -56,6 +57,36 @@ def test_self_gating_on_a_non_go_repo():
     assert go_mod.collect(ctx) == []  # no go.mod -> nothing
 
 
+# --------------------------------------------------------------- AST endpoints + egress
+
+def test_parser_synthesizes_go_routes_as_decorated_methods():
+    m = parse("go", 'package p\nfunc f(){ r.GET("/x", func(c *gin.Context){ http.Get("http://y") }) }\n')
+    [route] = m.types[0].methods
+    assert route.annotations == {"r.get": {"": "/x"}}
+    assert [(c.receiver, c.method) for c in route.calls if c.receiver == "http"] == [("http", "Get")]
+
+
+def test_go_routes_and_egress_extracted_with_provenance():
+    fs, _ = _facts()
+    eps = {(f.attrs["method"], f.attrs["path"]) for f in fs.of("rest.endpoint")}
+    assert eps == {("GET", "/orders/:id"), ("POST", "/orders")}  # cache.Get("key",..) is NOT a route
+    for f in fs.of("rest.endpoint"):
+        assert f.evidence.path.endswith("main.go") and f.evidence.source_tier == "ast"
+    assert {f.attrs["client"] for f in fs.of("http.egress")} == {"http"}
+
+
+def test_named_go_handler_keeps_its_name():
+    fs, _ = _facts()
+    get = next(f for f in fs.of("rest.endpoint") if f.attrs["path"] == "/orders/:id")
+    assert get.attrs["handler"] == "getOrder"
+
+
+def test_endpoints_self_gate_on_a_non_go_repo():
+    spring = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
+    ctx = ScanContext(root=spring, repo="file://spring", commit=LOCAL_COMMIT)
+    assert endpoints.collect(ctx) == []  # no *.go -> nothing
+
+
 # --------------------------------------------------------------- end-to-end KB
 
 def test_go_service_yields_a_validated_tech_stack(tmp_path):
@@ -71,6 +102,10 @@ def test_go_service_yields_a_validated_tech_stack(tmp_path):
     assert ts["spec"]["runtime"] == "go" and ts["spec"]["buildTool"] == "gomod"
     assert {"name": "gin"} in ts["spec"]["frameworks"]
     assert "github.com/gin-gonic/gin" in ts["spec"]["notableLibraries"]
+
+    itf = next(d for (kind, _), d in docs.items() if kind == "Interface")
+    paths = {e["path"] for e in itf["spec"]["endpoints"]}
+    assert {"/orders/:id", "/orders"} <= paths
 
     from sre_kb.validation import validate_kb_tree
     bad = [x for x in validate_kb_tree(r.root / "kb") if not x.ok]

@@ -541,6 +541,17 @@ tree-sitter-c-sharp==0.23.5 \
     --hash=sha256:a75994a11f6fed3f5b8c36ad6a00e5dc43205bd912c43af3a2a54fdf649664eb \
     --hash=sha256:aa88a780204cd153c4c1ae2d59c654cee1402212fa0d069823d6d34301587438
     # via sre-kb (pyproject.toml)
+tree-sitter-go==0.25.0 \
+    --hash=sha256:04b3b3cb4aff18e74e28d49b716c6f24cb71ddfdd66768987e26e4d0fa812f74 \
+    --hash=sha256:148255aca2f54b90d48c48a9dbb4c7faad6cad310a980b2c5a5a9822057ed145 \
+    --hash=sha256:30d4ada57a223dfc2c32d942f44d284d40f3d1215ddcf108f96807fd36d53022 \
+    --hash=sha256:4d338116cdf8a6c6ff990d2441929b41323ef17c710407abe0993c13417d6aad \
+    --hash=sha256:503b81a2b4c31e302869a1de3a352ad0912ccab3df9ac9950197b0a9ceeabd8f \
+    --hash=sha256:5608e089d2a29fa8d2b327abeb2ad1cdb8e223c440a6b0ceab0d3fa80bdeebae \
+    --hash=sha256:a7466e9b8d94dda94cae8d91629f26edb2d26166fd454d4831c3bf6dfa2e8d68 \
+    --hash=sha256:b852993063a3429a443e7bd0aa376dd7dd329d595819fabf56ac4cf9d7257b54 \
+    --hash=sha256:d5d62362059bf79997340773d47cc7e7e002883b527a05cca829c46e40b70ded
+    # via sre-kb (pyproject.toml)
 tree-sitter-java==0.23.5 \
     --hash=sha256:1ee45e790f8d31d416bc84a09dac2e2c6bc343e89b8a2e1d550513498eedfde7 \
     --hash=sha256:24acd59c4720dedad80d548fe4237e43ef2b7a4e94c8549b0ca6e4c4d7bf6e69 \
@@ -550,6 +561,17 @@ tree-sitter-java==0.23.5 \
     --hash=sha256:9401e7271f0b333df39fc8a8336a0caf1b891d9a2b89ddee99fae66b794fc5b7 \
     --hash=sha256:aae84449e330363b55b14a2af0585e4e0dae75eb64ea509b7e5b0e1de536846a \
     --hash=sha256:f5cd57b8f1270a7f0438878750d02ccc79421d45cca65ff284f1527e9ef02e38
+    # via sre-kb (pyproject.toml)
+tree-sitter-javascript==0.25.0 \
+    --hash=sha256:199d09985190852e0912da2b8d26c932159be314bc04952cf917ed0e4c633e6b \
+    --hash=sha256:1b852d3aee8a36186dbcc32c798b11b4869f9b5041743b63b65c2ef793db7a54 \
+    --hash=sha256:329b5414874f0588a98f1c291f1b28138286617aa907746ffe55adfdcf963f38 \
+    --hash=sha256:622a69d677aa7f6ee2931d8c77c981a33f0ebb6d275aa9d43d3397c879a9bb0b \
+    --hash=sha256:8264a996b8845cfce06965152a013b5d9cbb7d199bc3503e12b5682e62bb1de1 \
+    --hash=sha256:9dc04ba91fc8583344e57c1f1ed5b2c97ecaaf47480011b92fbeab8dda96db75 \
+    --hash=sha256:b70f887fb269d6e58c349d683f59fa647140c410cfe2bee44a883b20ec92e3dc \
+    --hash=sha256:dfcf789064c58dc13c0a4edb550acacfc6f0f280577f1e7a00de3e89fc7f8ddc \
+    --hash=sha256:e5ed840f5bd4a3f0272e441d19429b26eedc257abe5574c8546da6b556865e3c
     # via sre-kb (pyproject.toml)
 tree-sitter-python==0.25.0 \
     --hash=sha256:0fbf6a3774ad7e89ee891851204c2e2c47e12b63a5edbe2e9156997731c128bb \

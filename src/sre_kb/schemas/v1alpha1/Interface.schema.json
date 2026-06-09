@@ -13,7 +13,20 @@
       "properties": {
         "style": { "type": "string" },
         "endpoints": { "type": "array" },
-        "channels": { "type": "array" }
+        "channels": { "type": "array" },
+        "contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Drift against an ingested OpenAPI/AsyncAPI spec (#7): undocumented = code exposes but spec omits; specOnly = spec documents but no handler serves.",
+          "properties": {
+            "source": { "type": ["string", "null"] },
+            "specPath": { "type": ["string", "null"] },
+            "version": { "type": ["string", "null"] },
+            "documented": { "type": "integer" },
+            "undocumented": { "type": "array", "items": { "type": "string" } },
+            "specOnly": { "type": "array", "items": { "type": "string" } }
+          }
+        }
       }
     }
   }

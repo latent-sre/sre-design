@@ -1,6 +1,9 @@
 """P2 inventory kinds — deterministic roll-ups of facts we already collect:
-TechStack, Deployment (infra+capacity), Dependency, Interface, DataStore,
-ConfigManagement. Same envelope/validation machinery as the P1 kinds."""
+TechStack, Deployment (infra+capacity), Dependency, Interface,
+ConfigManagement. Same envelope/validation machinery as the P1 kinds.
+
+S1: the former DataStore kind folded into Dependency (a datastore binding is a Dependency carrying
+its `engine`); its infra fields (backup/RPO/RTO) are platform-DR an app team doesn't own (SCOPE §5)."""
 
 from __future__ import annotations
 
@@ -8,6 +11,7 @@ from sre_kb.collectors.base import ScanContext
 from sre_kb.inventory_signatures import (
     StackSig,
     all_manifests,
+    broker_kind,
     datastore_engine,
     is_broker,
     is_datastore,
@@ -124,6 +128,9 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
         }, [app.evidence], "verified", confidence(Signal.DIRECT), service))
 
     # --- Dependency (runtime service deps: bindings + downstream HTTP) ---
+    # S1: a datastore/broker binding folds into Dependency (app binds X), carrying its `engine` — the
+    # former DataStore kind's infra fields (backup/RPO/RTO) are platform-DR concerns an app team
+    # doesn't own (SCOPE §5).
     for sb in fs.of("pcf.service-binding"):
         name = sb.attrs["name"]
         dtype = "datastore" if is_datastore(name) else "broker" if is_broker(name) else "service-binding"
@@ -131,6 +138,8 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "name": name,
             "type": dtype,
             "source": "pcf-service-binding",
+            "engine": datastore_engine(name) if dtype == "datastore" else (
+                broker_kind(name) if dtype == "broker" else None),
             "criticality": "critical",
         }, [sb.evidence], "verified", confidence(Signal.DIRECT), service))
     for c in fs.of("config.client"):
@@ -160,23 +169,6 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
                 for c in channels
             ],
         }, ev, "verified", confidence(Signal.DIRECT), service))
-
-    # --- DataStore (per datastore binding) ---
-    repo = fs.first("db.repository")
-    for sb in fs.of("pcf.service-binding"):
-        name = sb.attrs["name"]
-        if not is_datastore(name):
-            continue
-        docs.append(emit("DataStore", name, {
-            "engine": datastore_engine(name) or "unknown",
-            "name": name,
-            "accessedBy": [repo.attrs["name"]] if repo else [],
-            "migrations": [],  # no Flyway/Liquibase detected
-            "backup": "needs-review",
-            "rpo": None,
-            "rto": None,
-            "sharedBy": [],
-        }, [sb.evidence], "verified", confidence(Signal.DERIVED), service))
 
     # --- ConfigManagement ---
     config_facts = fs.of("config.slo", "config.client", "config.timelimiter", "config.actuator")

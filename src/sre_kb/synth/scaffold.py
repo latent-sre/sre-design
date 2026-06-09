@@ -628,7 +628,7 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
             )
         )
 
-    # --- P2 inventory kinds (TechStack, Deployment, Dependency, Interface, DataStore, ConfigManagement) ---
+    # --- P2 inventory kinds (TechStack, Deployment, Dependency, Interface, ConfigManagement) ---
     docs.extend(inventory_docs(fs, ctx, service))
 
     # --- ReadinessScore (coverage roll-up) ---

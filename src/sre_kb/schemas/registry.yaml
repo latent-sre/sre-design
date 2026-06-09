@@ -80,7 +80,8 @@ kinds:
   DeliveryPipeline: { schema: schemas/v1alpha1/DeliveryPipeline.schema.json, phase: P2 }
   Topology:         { schema: schemas/v1alpha1/Topology.schema.json,         phase: P2 }
   FeatureFlag:      { schema: schemas/v1alpha1/FeatureFlag.schema.json,      phase: P2 }
-  DataStore:        { schema: schemas/v1alpha1/DataStore.schema.json,        phase: P2 }
+  # DataStore folded into Dependency (S1, SCOPE §5): a datastore binding is a Dependency carrying its
+  # `engine`; the infra fields (backup/RPO/RTO) are platform-DR an app team doesn't own.
   ConfigManagement: { schema: schemas/v1alpha1/ConfigManagement.schema.json, phase: P2 }
 
   # --- P5 render-adapter breadth (HYBRID-PLAN §9.6 — adopted from resiliency-skills) ---
@@ -109,7 +110,8 @@ kinds:
     phase: P4
 
   # --- P3/P4 (incl. deferred security workstream) ---
+  # SecurityPosture kept (S1): its schema is already app-scoped — authn/authz/secrets/controls, with
+  # no infra-security fields to drop (the SCOPE §5 "trim to app controls" is already satisfied).
+  # DrBackup, NetworkTopology, RateLimiting dropped (S1, SCOPE §5): platform-infra concerns an app
+  # team doesn't own (DR/backup, platform networking) or already a resilience signature (rate-limit).
   SecurityPosture:  { schema: schemas/v1alpha1/SecurityPosture.schema.json,  phase: P3 }
-  DrBackup:         { schema: schemas/v1alpha1/DrBackup.schema.json,         phase: P3 }
-  NetworkTopology:  { schema: schemas/v1alpha1/NetworkTopology.schema.json,  phase: P3 }
-  RateLimiting:     { schema: schemas/v1alpha1/RateLimiting.schema.json,     phase: P3 }

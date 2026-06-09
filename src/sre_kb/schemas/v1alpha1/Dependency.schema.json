@@ -15,6 +15,7 @@
         "type": { "type": "string", "enum": ["datastore", "broker", "service-binding", "http", "library"] },
         "source": { "type": "string" },
         "baseUrl": { "type": ["string", "null"] },
+        "engine": { "type": ["string", "null"], "description": "Datastore/broker engine (e.g. postgres, kafka) — folded in from the former DataStore kind (S1: app binds X, not the infra)." },
         "criticality": { "type": "string" }
       }
     }

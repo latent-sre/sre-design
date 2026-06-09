@@ -51,6 +51,20 @@ platform-infra concerns we don't own.
 Each stage is gated on the previous. The gate for stage 2 is **measured accuracy** — which is why the
 coverage matrix below doubles as the eval scorecard (§8).
 
+**The stage-2 gate, concretely** (initial floors — set now so the gate is a number before the first
+pilot; revisit with pilot data, never silently):
+
+- **Deterministic extraction (S5 scorecard):** every labeled fixture holds recall = precision =
+  detector recall = **1.0**, over a breadth floor of **≥ 12** labeled fixtures — both enforced in CI
+  (`tests/test_eval_scorecard.py`), so a regression is a red build, not drift.
+- **Tier-B gap channel (`copilot-gap-validate`):** the labeled fixture holds kept recall = kept
+  precision = **1.0** with all negative controls rejected (CI). Entry to stage 2 on *real* services
+  additionally requires, over the pilot set against human-labeled truth: kept precision **≥ 0.9**,
+  kept recall **≥ 0.75**, and **zero** false positives surviving to `verified`.
+- **Open-discovery (novel) channel:** measured separately, by reviewer verdicts rather than a truth
+  file (novelty has no pre-labeled truth): the confirmed share of routed novel gaps over the pilot
+  must stay **≥ 0.5**, else tighten `gap_finder.max_novel`.
+
 ## 4. Coverage matrix — focus areas × detection
 
 Detection sits on a difficulty gradient that decides which tier an item belongs in:
@@ -116,6 +130,9 @@ model). The gate has two loops:
   (`gap_finder.max_novel`). Reviewer confirmations (`confirm-gap <name> --novel`) accrue in the
   graduation tally; a recurring zero-FP novel category graduates into a taxonomy row — graduation
   promotes *categories*, not just signatures, so the taxonomy itself grows from the loop.
+  **Revision trigger:** the channel's own data decides the next design move — reviewers repeatedly
+  confirming high-value novel finds means the taxonomy is too narrow (widen it, raise `max_novel`);
+  a mostly-noise channel means tighten the budget. Measure before revising.
 - **Confirm (precision) — ✅ done (S4, both directions)** — the engine hands a skill its own boundary
   calls (`confirm/boundary-calls.json`); the skill affirms or disputes **with anchors**, and the engine
   re-grounds at the cited bytes (`pipeline/confirm.py`, `sre-confirm-boundaries` skill, `confirm-apply`).

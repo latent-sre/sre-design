@@ -75,16 +75,31 @@ this approval:
 - **CI + scheduled scans** of the whole portfolio, not one-at-a-time IDE sessions.
 - **Service fan-out** — scan many repos in one run.
 - **The discover→confirm loop and accuracy eval harness become real** (S4/S5), which is the gate to
-  trusting/publishing output (the maturity curve in `SCOPE-AND-COVERAGE.md`).
+  trusting/publishing output (the maturity curve in `SCOPE-AND-COVERAGE.md`). The instrumentation
+  already runs in CI today: **12 labeled fixtures hold recall = precision = detector recall = 1.0**
+  on the deterministic scorecard, and the gap-channel harness holds **5/5 kept recall and 1.0 kept
+  precision** (including one out-of-taxonomy open-discovery case) with both negative controls
+  rejected — so a model regression under automation is a red build, not drift. Stage-2 entry floors
+  for real services are defined in `SCOPE-AND-COVERAGE.md` §3 and double as this pilot's success
+  criteria.
 - **Throughput** — removes the human bottleneck on the recall/judgment work.
 
 ## Cost
 
 Token-based, and **low after caching**: most cost is the first scan of a service; re-scans replay the
-cache except where code changed. Bounded further by the gap-finder **noise budget**
-(`gap_finder.max_candidates`) and minimized context packs. Compare against the alternative: skilled
-engineer-hours doing the manual IDE loop per service, which does not scale and is far more expensive
-per service at portfolio size. A pilot will produce an exact per-service token/cost figure.
+cache except where code changed. Bounded further by the gap-finder **noise budgets**
+(`gap_finder.max_candidates`, `gap_finder.max_novel`) and minimized context packs.
+
+**Measured baseline (2026-06-09, from the engine's own labeled fixtures):** a full validated run
+emits **~7k–16k input tokens per service** of LLM-facing material (all discover context packs +
+challenge/confirm worklist items; chars/4 estimate — e.g. `sample-spring-pcf` 47 files ≈ 15.7k
+tokens, `sample-dotnet-steeltoe` 37 files ≈ 10.4k). Fixtures are deliberately small; budgeting
+**5–20× for a real service (~50k–300k input tokens first scan)** is the conservative planning
+figure, with outputs (anchored JSON verdicts/proposals) an order of magnitude smaller. At current
+enterprise Gemini pricing that is **well under a dollar per service first-scan**; re-scans replay
+the prompt-hash cache. Compare against the alternative: skilled engineer-hours doing the manual IDE
+loop per service, which does not scale and is far more expensive per service at portfolio size. The
+pilot replaces these estimates with exact per-service figures.
 
 ## Risks & mitigations
 
@@ -99,8 +114,10 @@ per service at portfolio size. A pilot will produce an exact per-service token/c
 ## Recommendation
 
 Approve a **scoped pilot**: Vertex/Gemini in our GCP tenant, the `VertexProvider` impl, run over a
-handful of services in CI. Success criteria: (1) per-service token cost within budget, (2) discover
-recall and confirm precision measured by the eval harness, (3) zero secret/data-governance findings.
+handful of services in CI. Success criteria: (1) per-service token cost within the budgeted figure
+above, (2) the stage-2 accuracy floors of `SCOPE-AND-COVERAGE.md` §3 (kept precision ≥ 0.9, kept
+recall ≥ 0.75, zero false positives surviving to `verified`, novel-channel confirmed share ≥ 0.5),
+(3) zero secret/data-governance findings.
 On success, expand to portfolio scanning. The engine stays Copilot-IDE-capable throughout, so this is
 additive and reversible.
 

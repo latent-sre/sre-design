@@ -4,11 +4,38 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from sre_kb.eval.scorecard import EvalTruth, Scorecard, load_eval_truth, score_target
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SPRING = FIXTURES / "sample-spring-pcf"
 TRUTH = SPRING / ".sre" / "eval-truth.json"
+
+
+def _labeled_fixtures() -> list[Path]:
+    """Every sample-* fixture carrying an eval-truth.json — the live scorecard surface."""
+    return sorted((p.parent.parent for p in FIXTURES.glob("*/.sre/eval-truth.json")),
+                  key=lambda p: p.name)
+
+
+@pytest.mark.parametrize("fixture", _labeled_fixtures(), ids=lambda p: p.name)
+def test_every_labeled_fixture_scores_clean(fixture, tmp_path):
+    """The scorecard guard: a labeled fixture must score perfect recall + (scoped) precision +
+    detector recall. A change that drops or fabricates an artifact in a scored area fails here —
+    accuracy is a number, not a vibe (SCOPE §9). This is what makes the labeled fixtures regression
+    fixtures, and what lets the scorecard widen safely as more fixtures are labeled."""
+    sc = score_target(fixture, load_eval_truth(fixture / ".sre" / "eval-truth.json"),
+                       work_root=str(tmp_path), run_id="ev")
+    overall = sc.overall()
+    assert overall["recall"] == 1.0, sc.per_area()
+    assert overall["precision"] == 1.0, sc.per_area()
+    assert overall["detectorRecall"] == 1.0, sc.detector_coverage()
+
+
+def test_scorecard_covers_a_broad_fixture_set():
+    """A floor on coverage breadth so the scorecard can't silently shrink back to a single fixture."""
+    assert len(_labeled_fixtures()) >= 7
 
 
 def test_labeled_fixture_scores_clean(tmp_path):

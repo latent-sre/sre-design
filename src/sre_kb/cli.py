@@ -185,10 +185,12 @@ def confirm_gap(
     """Record a human verdict on a needs-review gap, feeding the graduation tally (HYBRID-PLAN §9.3 #3)."""
     from sre_kb.collectors.llm.gap_finder import gap_categories
     from sre_kb.graduation import GraduationTracker
+    from sre_kb.pipeline.confirm import confirm_emitted_categories
 
-    if category not in gap_categories():
+    known = gap_categories() | confirm_emitted_categories()
+    if category not in known:
         typer.echo(f"unknown gap category: {category}", err=True)
-        typer.echo(f"known: {', '.join(sorted(gap_categories()))}", err=True)
+        typer.echo(f"known: {', '.join(sorted(known))}", err=True)
         raise typer.Exit(code=2)
     tracker = GraduationTracker.load(target)
     cat = tracker.refute(category) if false_positive else tracker.confirm(category, run=run_id, anchor=anchor)
@@ -593,13 +595,21 @@ def confirm_apply_cmd(
     if not tgt:
         typer.echo("no target to re-ground against (pass --target)", err=True)
         raise typer.Exit(code=1)
-    outcomes = regate_run(layout, tgt, json.loads(vpath.read_text()))
+    verdict_doc = json.loads(vpath.read_text())
+    outcomes = regate_run(layout, tgt, verdict_doc)
     for o in outcomes:
         typer.echo(f"  {o.artifact}: {o.result}  ({o.note})")
     refuted = sum(1 for o in outcomes if o.result == "refuted")
     disabled = sum(1 for o in outcomes if o.result == "disabled-confirmed")
     typer.echo(f"confirmed {len(outcomes)} claim(s); {refuted} absence gap(s) → rejected, "
                f"{disabled} present-but-disabled gap(s) emitted.")
+    # Graduation-from-confirms: feed these verdicts into the target's graduation tally, so confirms
+    # accrue toward promoting a deterministic rule exactly as `confirm-gap` does for the discover loop.
+    from sre_kb.pipeline.confirm import record_confirm_graduation
+
+    recorded = record_confirm_graduation(Path(tgt), outcomes, run_id)
+    for cat, verdict in sorted(recorded.items()):
+        typer.echo(f"  graduation: recorded {verdict} for {cat}")
 
 
 @app.command("gap-finder")

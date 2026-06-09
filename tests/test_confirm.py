@@ -166,3 +166,58 @@ def test_presence_dispute_without_a_disable_signal_is_unconfirmed(tmp_path):
         ctx, [], _verdict("present:circuit-breaker:inventory", "dispute",
                           "resilience4j.circuitbreaker.instances.inventory.failure-rate-threshold=50"), [pf])[0]
     assert out.result == "dispute-unconfirmed" and out.gap is None
+
+
+# --- graduation-from-confirms ------------------------------------------------------------------
+
+def _disabled_outcome(tmp_path):
+    ctx, pf = _ctx_and_breaker(tmp_path)
+    return confirm.apply_confirm(
+        ctx, [], _verdict("present:circuit-breaker:inventory", "dispute",
+                          "      inventory:\n        enabled: false"), [pf])
+
+
+def test_confirmed_disable_accrues_toward_graduation(tmp_path):
+    from sre_kb.graduation import GraduationTracker
+
+    outs = _disabled_outcome(tmp_path)
+    rec = confirm.record_confirm_graduation(tmp_path, outs, run_id="r")
+    assert rec == {"disabled-resilience": "confirmation"}
+    cat = GraduationTracker.load(tmp_path).categories["disabled-resilience"]
+    assert cat.confirmed == 1 and cat.false_positives == 0
+    assert cat.anchors and cat.anchors[0].endswith(":4")  # the disabling config line
+
+
+def test_refuted_absence_records_a_false_positive(tmp_path):
+    from sre_kb.graduation import GraduationTracker
+    from sre_kb.pipeline.confirm import ConfirmOutcome
+
+    out = ConfirmOutcome("missing-timeout:x", "ResiliencyGap/x", "refuted", category="missing-timeout")
+    rec = confirm.record_confirm_graduation(tmp_path, [out], run_id="r")
+    assert rec == {"missing-timeout": "false-positive"}
+    assert GraduationTracker.load(tmp_path).categories["missing-timeout"].false_positives == 1
+
+
+def test_affirms_and_unconfirmed_disputes_carry_no_graduation_signal(tmp_path):
+    from sre_kb.pipeline.confirm import ConfirmOutcome
+
+    neutral = [
+        ConfirmOutcome("a", "ResiliencyGap/a", "affirmed", category="missing-timeout"),
+        ConfirmOutcome("b", "ResiliencyGap/b", "dispute-unconfirmed", category="missing-timeout"),
+        ConfirmOutcome("c", "ResiliencyPattern/c", "affirmed", category="disabled-resilience"),
+    ]
+    assert confirm.record_confirm_graduation(tmp_path, neutral, run_id="r") == {}
+    # nothing changed -> the tracker file is never written
+    assert not (tmp_path / ".sre" / "graduation-tracker.yaml").exists()
+
+
+def test_disabled_resilience_is_a_confirm_loop_graduation_category():
+    assert "disabled-resilience" in confirm.confirm_emitted_categories()
+
+
+def test_draft_signature_for_disabled_resilience_describes_a_proactive_collector():
+    from sre_kb.graduation import ConfirmedCategory, draft_signature
+
+    cat = ConfirmedCategory(category="disabled-resilience", confirmed=5)
+    draft = draft_signature(cat, ())
+    assert "PROACTIVE Tier-A disable collector" in draft and "enabled: false" in draft

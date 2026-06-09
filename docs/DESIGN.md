@@ -52,11 +52,12 @@ live status** (§8 the tracker, §9 the rolling reassessment); this summary is h
 §8 disagree, §8 wins.
 
 - **Engine** — deterministic `scan → scaffold → validate` for **28** `kind`s. Collectors:
-  **Java/Spring on PCF**, **.NET/Steeltoe on PCF**, and a first-slice **Python/FastAPI**
-  collector (endpoints + egress + tech stack) — same normalized facts → same KB across stacks,
-  proving repo-neutrality. Code structure is read from a **tree-sitter AST** (Java, C#, Python —
-  `parsing/code_model.py`), not line regexes — per-class scoping and receiver→field-type
-  correlation. Confidence is signal-derived and BlastRadius risk is computed from impacted
+  **Java/Spring on PCF**, **.NET/Steeltoe on PCF**, **Python/FastAPI**, **Node/Express**, and
+  **Go** — same normalized facts → same KB across stacks, proving repo-neutrality. Code structure
+  is read from a **tree-sitter AST** (Java, C#, Python, JavaScript, Go — `parsing/code_model.py`),
+  not line regexes — per-class scoping and receiver→field-type correlation. FastAPI/Express/gin
+  emit REST endpoints + egress from the AST; Node/Go also carry a config-parsed tech-stack slice
+  (`package.json`/`go.mod`). Confidence is signal-derived and BlastRadius risk is computed from impacted
   -flow breadth + containment, not type-keyed constants.
 - **Trust tiers** — every `Evidence` carries a `source_tier` (`ast` deterministic | `llm`),
   rolled up per artifact and surfaced in the validation report. Tier-B refutation/judgment
@@ -69,7 +70,8 @@ live status** (§8 the tracker, §9 the rolling reassessment); this summary is h
 - **Copilot driver** — split **authoring** vs **consumer**. Authoring: the `sre-analyst` +
   read-only `sre-target-scan` agents and the `sre-flow-analysis`, `sre-blast-radius`,
   `sre-prr-review`, `sre-estate`, `sre-criticality`, `sre-gap-finder`,
-  `sre-observability-coverage` skills that build the KB. Consumer: the `sre-oncall` agent +
+  `sre-observability-coverage`, `sre-security-posture`, `sre-generate-slos`, and
+  `sre-generate-dashboards` skills that build the KB. Consumer: the `sre-oncall` agent +
   `sre-incident-response` skill that use a *published* KB during an incident (read-only). The
   challenge loop is automatable end-to-end: the engine emits a worklist, `sre-kb
   challenge-run --oracle '<llm-cli>'` drives it through an external model on stdin (the engine
@@ -105,9 +107,9 @@ Landed as a spike: the fenced Tier-B LLM gap-finder collector (Phase 4, `collect
 against `sample-gap-finder` measured 4/4 proposal recall, 4/4 kept recall, and no false-positive
 survivors; still not proven are service-scale noise/precision, the full recurring-category
 promotion workflow, the rest of the scan/publish credential split (the no-credential scan role
-landed; scoped publish role + CI wiring remain) and supply-chain pinning, further language
-collectors (Node/Go), and Python flow/resiliency parity beyond the
-endpoint slice. See
+landed; scoped publish role + CI wiring remain), and Python/Node/Go flow + resiliency parity
+beyond the endpoint slice. Supply-chain pinning (hash-locked `requirements.lock` + the independent
+detect-secrets CI gate) and the Node/Go collectors have since landed. See
 [`HYBRID-PLAN.md`](HYBRID-PLAN.md) §8 and §9.5.
 
 ---

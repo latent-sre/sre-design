@@ -22,7 +22,7 @@ kinds:
     phase: P1
   Observability:
     schema: schemas/v1alpha1/Observability.schema.json
-    collectors: [java_spring.observability]
+    collectors: [java_spring.observability, java_spring.log_statements]
     prompt: observability
     phase: P1        # logging sub-section in P1; metrics/traces/health in P2
   Fallback:

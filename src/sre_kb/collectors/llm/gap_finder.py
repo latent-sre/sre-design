@@ -124,6 +124,23 @@ _OBSERVABILITY_GLOBS = _SOURCE_GLOBS + (
 )
 
 
+# Logging-quality categories (S2 assess-logging): the LLM judges what the deterministic log-statement
+# pass can't prove — is an ERROR actually noise (alert fatigue)? does a failure site lack
+# request/trace context? `missing-log-context` REFUTES against the engine's own `observability.logging`
+# facts (correlation context is global via the logback `%X{}` pattern, so if it's present the gap
+# doesn't hold); `noisy-error-logging` is a pure judgment call routed to the oracle. Distinct from the
+# pillar-level `missing-structured-logging` (observability-coverage) — these are statement quality, not
+# presence/absence of a pillar. Anchors live in code or logback, so they share the observability globs.
+_LOGGING_CATEGORIES = {"missing-log-context", "noisy-error-logging"}
+
+
+def _logging_context_present(fs: FactSet) -> bool:
+    """True iff the engine's logging facts already prove request/trace correlation context — a JSON
+    format or any `%X{}` correlation field — in which case `missing-log-context` is refuted."""
+    return any(f.attrs.get("format") == "json" or f.attrs.get("correlationFields")
+               for f in fs.of("observability.logging"))
+
+
 def _observability_present(fs: FactSet, category: str) -> bool:
     """True iff the engine's own facts already prove the pillar `category` claims is missing — in
     which case the gap is refuted (the LLM is wrong) and dropped."""
@@ -144,7 +161,7 @@ def gap_categories() -> set[str]:
     """Every known gap category the gap-finder can emit (refutation + confirmation + judgment +
     observability). Used by the graduation loop to validate a reviewer's `confirm-gap` verdict."""
     return (set(_REFUTING_CONCERNS) | set(_CONFIRMING_CATEGORIES) | set(_JUDGMENT_CATEGORIES)
-            | _OBSERVABILITY_CATEGORIES)
+            | _OBSERVABILITY_CATEGORIES | _LOGGING_CATEGORIES)
 
 
 def target_concerns(category: str) -> tuple[str, ...]:
@@ -375,8 +392,8 @@ def collect_from_proposals(
     res = GapResult()
     survivors: list[tuple[Outcome, Fact]] = []
     for p in proposals:
-        if p.category in _OBSERVABILITY_CATEGORIES:
-            globs = _OBSERVABILITY_GLOBS  # coverage lives in config/build files
+        if p.category in _OBSERVABILITY_CATEGORIES or p.category in _LOGGING_CATEGORIES:
+            globs = _OBSERVABILITY_GLOBS  # logging/coverage anchors live in code + config/logback
         elif p.category in _JUDGMENT_CATEGORIES:
             globs = _JUDGMENT_GLOBS  # cross-stack mechanisms (Go/Node/nginx), #42
         else:
@@ -406,6 +423,27 @@ def collect_from_proposals(
             )
             survivors.append((Outcome(p, "routed", rel, (s, e), (rel,),
                                       "observability-coverage gap — routed to human/oracle review"), fact))
+            continue
+
+        # Logging-quality gap (S2): `missing-log-context` refutes against the engine's own logging
+        # facts (global correlation context proves the gap wrong); `noisy-error-logging` is judgment
+        # with no fact to refute against. Survivors route to review (needs-review), never auto-verify.
+        if p.category in _LOGGING_CATEGORIES:
+            if p.category == "missing-log-context" and fs is not None and _logging_context_present(fs):
+                res.outcomes.append(Outcome(p, "refuted", rel, (s, e), (rel,),
+                    "the engine's facts already prove request/trace correlation context — the gap does not hold"))
+                continue
+            target = p.target or Path(rel).stem
+            fact = Fact(
+                "resiliency.gap",
+                {"category": p.category, "target": target, "severity": p.severity,
+                 "rationale": p.rationale, "rederivation": "judgment", "checked": [rel],
+                 "note": "logging-quality gap — routed to human/oracle review"},
+                ctx.evidence(rel, s, e, "llm.gap_finder", source_tier=LLM),
+                Symbol(f"{rel}:{s}-{e}", "gap"),
+            )
+            survivors.append((Outcome(p, "routed", rel, (s, e), (rel,),
+                                      "logging-quality gap — routed to human/oracle review"), fact))
             continue
 
         # Confirmation probe (§9.4): the rule firing at the pointer confirms the gap AND graduates

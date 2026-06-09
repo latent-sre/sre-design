@@ -75,12 +75,12 @@ Status legend: ✅ solid · ◐ partial · ❌ gap · (S) schema/kind exists but
 | 10 | Delivery | `DeliveryPipeline` | A | ◐ | CI/CD discovery |
 | 11 | Topology (app→deps) | `Topology` | A | ✅ | app-centric, not platform |
 | 12 | Resiliency patterns used | `ResiliencyPattern` | A | ✅✅ | flagship; 10 signatures |
-| 13 | Logging | `Observability` | A/B | ◐ | presence yes; **quality** (req/trace IDs, levels → alert fatigue) is a gap |
+| 13 | Logging | `Observability` | A/B | ✅ | S2: statements parsed (level dist, parameterization); deterministic **quality** (req/trace-ID correlation context, alert-fatigue signals) + Tier-B `sre-assess-logging` judgment |
 | 14 | Observability | `Observability` | A/B | ✅ | metrics/traces/health + coverage skill |
 | 15 | Feature flags | `FeatureFlag` (S) | A | ❌(S) | schema exists, **no detector** |
 | 16 | Built-in fallbacks | `Fallback` | A | ✅ | |
 | 17 | Flows + where a request can fail | `Flow` + `BlastRadius` | A | ✅✅ | flagship |
-| 18 | **Logging format (parse the statements)** | *(new, feeds #19)* | A | ❌ | **prerequisite for log-based alerts**; currently shallow |
+| 18 | **Logging format (parse the statements)** | `Observability` (feeds #19) | A | ✅ | S2: `java_spring.log_statements` parses framework/level/parameterization from the AST — the log-based-alert prerequisite |
 | 19 | Create alerts from code + logging | `Alert` (render) | A+B | ◐ | renders 6 backends; needs #18 to be accurate |
 | 20 | Create runbooks from deep scan | `Runbook` (render) | A+B | ◐ | renders; content drafting → skill |
 | R | **SRE rubric** (timeouts, retries+backoff, swallowing, unbounded loops/queues, no-pagination, conn-pooling, leaks, migration safety, config-vs-code, idempotency, async DLQ/poison/ordering, load-shed, saga) | `ResiliencyGap` + above | A/B | ◐ | strong on *absence-of-mechanism* (timeouts/swallowing/fallback); weak on *anti-pattern* detection (resource/op-safety) and semantic (saga/ordering) |
@@ -134,15 +134,15 @@ discover and confirm modes** (confirm judgment is domain-specific). On an untrus
 ## 7. Skills to author (maps onto the resiliency-skills catalog, per DEEP-COMPARISON R6/R7)
 
 Existing: `sre-criticality`, `sre-flow-analysis`, `sre-estate`, `sre-gap-finder`,
-`sre-observability-coverage`, `sre-blast-radius`, `sre-prr-review`, `sre-security-posture`,
-`sre-generate-slos`, `sre-generate-dashboards`, `sre-incident-response`.
+`sre-observability-coverage`, `sre-assess-logging`, `sre-blast-radius`, `sre-prr-review`,
+`sre-security-posture`, `sre-generate-slos`, `sre-generate-dashboards`, `sre-incident-response`.
 
 New (each pointer-generator, discover+confirm, read-only on targets; add to `.github/skills/pipeline.yaml`):
 
 | Skill | Covers | Priority |
 |---|---|---|
 | `map-messaging` | #8 consumer resilience: DLQ, poison-pill, ordering, idempotent-consumer | **P0** |
-| `assess-logging` | #13 + #18: log *format* parse + quality (req/trace IDs, levels) — unblocks #19 | **P0** |
+| ~~`assess-logging`~~ ✅ | #13 + #18: log *format* parse (Tier-A) + quality judgment (Tier-B) — unblocks #19 | **done** |
 | `map-api-contracts` | #7: OpenAPI/AsyncAPI ingest, undocumented endpoints, versioning | P1 |
 | `map-architecture` | #2 + #3: architecture narrative, design patterns | P1 |
 | `generate-alerts` | #19: draft alert *intent* from code+logs (engine renders dialect) | P1 |
@@ -150,8 +150,10 @@ New (each pointer-generator, discover+confirm, read-only on targets; add to `.gi
 
 ## 8. Build order (priorities)
 
-1. **Close the two P0 extraction gaps:** `map-messaging` (consumer resilience) and `assess-logging`
-   (format + quality). These are the highest-value holes for an app team on PCF, and #18 gates #19.
+1. **Close the two P0 extraction gaps:** `map-messaging` (consumer resilience) and ~~`assess-logging`
+   (format + quality)~~ ✅. These are the highest-value holes for an app team on PCF, and #18 gates
+   #19. **`assess-logging` is done** (S2): statements parsed deterministically (Tier-A) with the
+   quality assessment + Tier-B judgment skill; `map-messaging` (S3) is next.
 2. **Graduate idempotency-on-mutating-route to Tier-A.** The pieces exist (HTTP verb in endpoints +
    `idempotency` signature); make "POST/PUT or consumer handler with no idempotency guard in scope"
    a deterministic gap. Cheap, verifiable, high value.

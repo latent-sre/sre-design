@@ -44,6 +44,51 @@ def _burn_rate_summary(slo_ref: str, sli: str, budget_frac: float) -> dict:
     }
 
 
+def _logging_statements_summary(log_stmts: list, log_fws: list) -> dict:
+    """Roll the parsed log-statement facts (S2) into the Observability `logging.statements` block."""
+    by_level: dict[str, int] = {}
+    for s in log_stmts:
+        lvl = s.attrs.get("level")
+        if lvl:
+            by_level[lvl] = by_level.get(lvl, 0) + 1
+    apis = sorted({f.attrs.get("framework") for f in log_fws if f.attrs.get("framework")})
+    return {
+        "total": len(log_stmts),
+        "byLevel": by_level,
+        "loggingApis": apis,
+        "parameterized": sum(1 for s in log_stmts if s.attrs.get("parameterized")),
+    }
+
+
+def _logging_quality(fs: FactSet, log_stmts: list) -> tuple[dict, list]:
+    """Deterministic logging-quality assessment (S2): request/trace-ID correlation context (from the
+    logback `%X{}` fields) and byte-grounded alert-fatigue signals. Returns (quality, error_stmts) so
+    the caller can cite a representative error statement that backs the alert-fatigue signal."""
+    corr_fields = sorted({
+        c for f in fs.of("observability.logging") for c in (f.attrs.get("correlationFields") or [])
+    })
+    has_context = bool(corr_fields)
+    with_msg = [s for s in log_stmts if s.attrs.get("hasMessage")]
+    parameterized = [s for s in with_msg if s.attrs.get("parameterized")]
+    error_stmts = [s for s in log_stmts if s.attrs.get("level") == "error"]
+    signals: list[str] = []
+    # Errors you can't correlate to a request/trace are the classic alert-fatigue trap — a paged
+    # error with no traceId/requestId can't be triaged. Both signals are byte-grounded in the facts.
+    if error_stmts and not has_context:
+        signals.append("error-logging-without-correlation-context")
+    if len(with_msg) > len(parameterized):
+        signals.append("non-parameterized-messages")
+    quality = {
+        "correlationContext": has_context,
+        "correlationFields": corr_fields,
+        "placeholderHygiene": (
+            round(len(parameterized) / len(with_msg), 4) if with_msg else None
+        ),
+        "alertFatigueSignals": signals,
+    }
+    return quality, error_stmts
+
+
 def _configured_alert_tools() -> tuple[str, ...] | None:
     """The monitoring backends to render alert exprs for (`render.alert_tools`); None = adapter
     defaults, so an unconfigured engine keeps emitting Prometheus + Splunk as before."""
@@ -108,6 +153,8 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
     cb = fs.first("resiliency.circuitbreaker")
     fb = fs.first("resiliency.fallback")
     obs = fs.first("observability.logging")
+    log_stmts = fs.of("observability.log.statement")
+    log_fws = fs.of("observability.log.framework")
     slo = fs.first("config.slo")
     flow = fs.first("flow.flow")
     budget = fs.of("budget.finding")
@@ -160,7 +207,9 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
         )
 
     # --- Observability (logging + metrics + tracing + health) ---
-    if obs:
+    # Emit when there is a logback config (obs) OR parsed log statements (S2): a service on Spring
+    # Boot's default logging has no logback file but still has statements worth assessing.
+    if obs or log_stmts:
         actuator = fs.first("config.actuator")
         slos = fs.of("config.slo")
         has_prom = any(
@@ -172,22 +221,41 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
         hc_endpoint = (app.attrs.get("healthCheck") or {}).get("endpoint") if app else None
         if hc_endpoint:
             health.append(hc_endpoint)
-        obs_ev = [obs.evidence]
+
+        quality, error_stmts = _logging_quality(fs, log_stmts)
+        stmts_summary = _logging_statements_summary(log_stmts, log_fws)
+        # Without a logback file, name the framework from the code-detected API and mark the format
+        # as Spring Boot's default (the deterministic statements still ground level + quality).
+        default_framework = stmts_summary["loggingApis"][0] if stmts_summary["loggingApis"] else "unknown"
+        logging_spec = {
+            "framework": obs.attrs.get("framework") if obs else default_framework,
+            "format": obs.attrs.get("format") if obs else "default",
+            "pattern": obs.attrs.get("pattern") if obs else None,
+            "correlationFields": quality["correlationFields"],
+        }
+        if log_stmts:
+            logging_spec["statements"] = stmts_summary
+            logging_spec["quality"] = quality
+
+        obs_ev = [obs.evidence] if obs else []
         if actuator:
             obs_ev.append(actuator.evidence)
         if slos:
             obs_ev.append(slos[0].evidence)
+        # Ground the statement-derived signals: cite the framework import + a representative error
+        # statement (the one the alert-fatigue signal is about), falling back to any statement.
+        if log_fws:
+            obs_ev.append(log_fws[0].evidence)
+        if error_stmts:
+            obs_ev.append(error_stmts[0].evidence)
+        elif log_stmts:
+            obs_ev.append(log_stmts[0].evidence)
         docs.append(
             _doc(
                 "Observability",
                 obs_name,
                 {
-                    "logging": {
-                        "framework": obs.attrs.get("framework"),
-                        "format": obs.attrs.get("format"),
-                        "pattern": obs.attrs.get("pattern"),
-                        "correlationFields": obs.attrs.get("correlationFields", []),
-                    },
+                    "logging": logging_spec,
                     "actuatorEndpoints": (
                         [e.strip() for e in str(actuator.attrs["exposure"]).split(",")] if actuator else []
                     ),

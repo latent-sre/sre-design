@@ -948,10 +948,24 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   the DB as infra) and `RateLimiting` → the resiliency signatures (it already is one); trim
   `SecurityPosture` to app controls (authz/secret handling), dropping infra security. Sheds schema +
   render + validate weight. See `SCOPE-AND-COVERAGE.md` §2/§5.
-- **S2 — `assess-logging` skill: log *format* + *quality*. 🔲 Open (P0).** Parse the log statements
-  (framework/format/fields) and assess quality (request/trace-ID context, level discipline → alert
-  fatigue). **Prerequisite for "alerts from logging" (`Alert` log-pattern path)** — a log-based alert
-  can't be accurate over an unparsed format. Extends `Observability` (logging sub-section).
+- **S2 — `assess-logging`: log *format* + *quality*. ✅ Done (P0).** Tiered, as the engine's
+  philosophy demands. **Tier-A (deterministic):** a new `java_spring.log_statements` collector parses
+  the log statements from the AST — the logging API (slf4j/log4j2/jul/commons-logging, cited to its
+  import), each call's canonical level, and whether its message is parameterized (slf4j `{}` vs string
+  concatenation) — and the scaffolder rolls these into the `Observability` `logging` sub-section as a
+  `statements` roll-up + a deterministic `quality` block: request/trace-ID **correlation context**
+  (from the logback `%X{}` fields) and byte-grounded **alert-fatigue** signals
+  (`error-logging-without-correlation-context`, `non-parameterized-messages`). The artifact now emits
+  from parsed statements alone, so a service on Spring Boot's *default* logging (no logback file) still
+  gets a logging assessment. This is the **prerequisite for the `Alert` log-pattern path** — the log
+  format is now parsed and byte-grounded rather than unparsed. **Tier-B (judgment):** a
+  `sre-assess-logging` skill + two gap-finder categories — `noisy-error-logging` (alert-fatigue
+  judgment, routed to review) and `missing-log-context` (refuted against the engine's own
+  `observability.logging` correlation facts, mirroring R6). Complements, not duplicates,
+  observability-coverage's pillar-level `missing-structured-logging`. (`collectors/java_spring/
+  log_statements.py`, `synth/scaffold.py`, `collectors/llm/gap_finder.py`,
+  `.github/skills/sre-assess-logging/`; `tests/test_log_statements.py`, `test_logging_quality.py`,
+  `test_logging_gap.py`.)
 - **S3 — `map-messaging` skill: consumer-side async resilience. 🔲 Open (P0).** Today messaging exists
   only as *contracts* (`Interface`); there is no consumer-resilience detection. Add DLQ routing,
   poison-pill handling, ordering/partition safety, idempotent-consumer. Saga / distributed-transaction

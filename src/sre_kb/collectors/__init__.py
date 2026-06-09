@@ -23,6 +23,7 @@ from sre_kb.collectors.java_spring import (
     observability,
     resiliency,
 )
+from sre_kb.collectors.go_net import endpoints as go_endpoints
 from sre_kb.collectors.go_net import go_mod as go_mod_collector
 from sre_kb.collectors.node_express import endpoints as node_endpoints
 from sre_kb.collectors.node_express import package_json as node_package_json
@@ -50,8 +51,9 @@ _FILE_COLLECTORS: list[CollectorProtocol] = [
     # Node.js (self-gating: no package.json / no *.js -> emit nothing)
     node_package_json.collect,
     node_endpoints.collect,
-    # Go (self-gating: no go.mod -> emit nothing)
+    # Go (self-gating: no go.mod / no *.go -> emit nothing)
     go_mod_collector.collect,
+    go_endpoints.collect,
 ]
 
 # Derivers: (ctx, FactSet) -> list[Fact]

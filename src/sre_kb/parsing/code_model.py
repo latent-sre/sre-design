@@ -2,8 +2,8 @@
 query instead of line regexes — which dissolves the regex brittleness (multi-class files,
 multi-line calls/annotations, comments, receiver->field-type resolution, real try/catch).
 
-`parse(language, text)` returns a Module for "java", "csharp", "python", or "javascript". Only the
-node shapes the collectors need are extracted; the grammars carry the rest.
+`parse(language, text)` returns a Module for "java", "csharp", "python", "javascript", or "go".
+Only the node shapes the collectors need are extracted; the grammars carry the rest.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from functools import cache
 
 import tree_sitter_c_sharp as ts_cs
+import tree_sitter_go as ts_go
 import tree_sitter_java as ts_java
 import tree_sitter_javascript as ts_js
 import tree_sitter_python as ts_py
@@ -83,7 +84,7 @@ class Module:
     types: list[TypeDecl]
 
 
-_GRAMMARS = {"java": ts_java, "csharp": ts_cs, "python": ts_py, "javascript": ts_js}
+_GRAMMARS = {"java": ts_java, "csharp": ts_cs, "python": ts_py, "javascript": ts_js, "go": ts_go}
 
 
 @cache
@@ -101,7 +102,7 @@ def parse(language: str, text: str) -> Module:
     root = _parser(language).parse(src).root_node
     return {
         "java": _parse_java, "csharp": _parse_csharp, "python": _parse_python,
-        "javascript": _parse_javascript,
+        "javascript": _parse_javascript, "go": _parse_go,
     }[language](root, src)
 
 
@@ -502,6 +503,72 @@ def _parse_javascript(root: Node, src: bytes) -> Module:
             name_line=call.start_point[0] + 1,
             end=call.end_point[0] + 1,
             calls=_js_calls(handler, src),
+        ))
+    module = TypeDecl(name="module", kind="module", supertypes=[], annotations={},
+                      fields={}, methods=methods, start=1, end=root.end_point[0] + 1)
+    return Module("", [module])
+
+
+# ---------------- Go ----------------
+# Go web frameworks (gin/echo/chi/fiber) register a route as a call `router.GET("/path", handler)` —
+# same call-as-route shape as Express, synthesized into the decorator-shaped MethodDecl. A route is
+# told apart from stdlib egress (`http.Get(url)`, one URL arg) by a verb method name AND a path string
+# that starts with "/" AND a handler argument (a function literal or a handler-func identifier).
+
+_GO_VERBS = {"get", "post", "put", "delete", "patch", "head", "options"}
+# Package-level net/http client calls used as egress; matched as `http.Get(...)` etc.
+_GO_EGRESS = {"get", "post", "head", "postform"}
+
+
+def _go_str(node: Node, src: bytes) -> str:
+    return _txt(node, src).strip("`\"")
+
+
+def _go_call_rm(call: Node, src: bytes) -> tuple[str, str]:
+    fn = call.child_by_field_name("function")
+    if fn is not None and fn.type == "selector_expression":
+        op, fld = fn.child_by_field_name("operand"), fn.child_by_field_name("field")
+        return (_last_ident(op, src) if op else "", _txt(fld, src) if fld else "")
+    return ("", _last_ident(fn, src) if fn is not None else "")
+
+
+def _go_calls(node: Node | None, src: bytes) -> list[Call]:
+    out = []
+    for call in _descend(node, {"call_expression"}):
+        recv, meth = _go_call_rm(call, src)
+        out.append(Call(recv, meth, call.start_point[0] + 1, (), None))
+    return out
+
+
+def _parse_go(root: Node, src: bytes) -> Module:
+    methods: list[MethodDecl] = []
+    for call in _descend(root, {"call_expression"}):
+        fn = call.child_by_field_name("function")
+        if fn is None or fn.type != "selector_expression":
+            continue
+        fld = fn.child_by_field_name("field")
+        verb = (_txt(fld, src) if fld else "").lower()
+        if verb not in _GO_VERBS:
+            continue
+        args = call.child_by_field_name("arguments")
+        if args is None:
+            continue
+        path_node = next((c for c in args.children if c.type == "interpreted_string_literal"), None)
+        if path_node is None:
+            continue
+        path = _go_str(path_node, src)
+        handler = next((c for c in args.children if c.type in ("identifier", "func_literal")), None)
+        if not path.startswith("/") or handler is None:
+            continue  # a "/"-path string AND a handler arg -> a route, not an egress/lookup call
+        op = fn.child_by_field_name("operand")
+        recv = _last_ident(op, src) if op else ""
+        methods.append(MethodDecl(
+            name="" if handler.type == "func_literal" else _txt(handler, src),
+            annotations={f"{recv}.{verb}": {"": path}},
+            start=call.start_point[0] + 1,
+            name_line=call.start_point[0] + 1,
+            end=call.end_point[0] + 1,
+            calls=_go_calls(handler, src) if handler.type == "func_literal" else [],
         ))
     module = TypeDecl(name="module", kind="module", supertypes=[], annotations={},
                       fields={}, methods=methods, start=1, end=root.end_point[0] + 1)

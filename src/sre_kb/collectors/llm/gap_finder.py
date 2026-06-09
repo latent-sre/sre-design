@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from sre_kb.collectors.base import ScanContext
+from sre_kb.inventory_signatures import is_tracing_dependency
 from sre_kb.models.facts import Fact, FactSet, Symbol
 from sre_kb.signatures import fires
 from sre_kb.taxonomy import severity_rank
@@ -112,10 +113,11 @@ _JUDGMENT_REFUTERS = {"missing-backpressure": "backpressure", "missing-load-shed
 _OBSERVABILITY_CATEGORIES = {
     "missing-metrics", "missing-tracing", "missing-structured-logging", "missing-synthetic-monitoring",
 }
-# Dependency-name tokens that prove a pillar present (matched against `tech.dependency` facts).
+# Dependency-name tokens that prove a pillar present (matched against `tech.dependency` facts). Tracing
+# uses the shared `is_tracing_dependency` (inventory_signatures), the same check readiness keys off, so
+# the refutation and the PRR check can't drift (HYBRID-PLAN §9.7 R6).
 _OBS_DEP_TOKENS = {
     "missing-metrics": ("micrometer", "actuator", "prometheus"),
-    "missing-tracing": ("sleuth", "micrometer-tracing", "opentelemetry", "otel", "zipkin", "brave", "jaeger"),
 }
 _OBSERVABILITY_GLOBS = _SOURCE_GLOBS + (
     "pom.xml", "build.gradle", "*.gradle", "*.csproj",
@@ -169,8 +171,10 @@ def _observability_present(fs: FactSet, category: str) -> bool:
                    for f in fs.of("observability.logging"))
     if category == "missing-synthetic-monitoring":
         return False  # the engine has no synthetic-monitoring signal to refute against — always route
-    deps = [str(d.attrs.get("name", "")).lower() for d in fs.of("tech.dependency")]
-    if any(tok in name for name in deps for tok in _OBS_DEP_TOKENS.get(category, ())):
+    deps = [str(d.attrs.get("name", "")) for d in fs.of("tech.dependency")]
+    if category == "missing-tracing":
+        return any(is_tracing_dependency(name) for name in deps)
+    if any(tok in name.lower() for name in deps for tok in _OBS_DEP_TOKENS.get(category, ())):
         return True
     if category == "missing-metrics":  # actuator exposure or an SLO config also proves metrics
         return bool(fs.first("config.actuator") or fs.first("config.slo"))

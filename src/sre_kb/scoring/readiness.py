@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from sre_kb.inventory_signatures import is_tracing_dependency
 from sre_kb.models.facts import FactSet
 
 
@@ -21,12 +22,15 @@ def _has_verified(docs: list[dict], kind: str, pred=None) -> bool:
 def readiness_spec(fs: FactSet, docs: list[dict], budget_findings: list) -> dict:
     app = fs.first("pcf.app")
     kinds = [d["kind"] for d in docs]
+    # Tracing is wired iff a distributed-tracing library is a dependency — the same data-driven check
+    # the gap-finder's missing-tracing refutation uses, so the PRR check can't drift from it (R6).
+    tracing = any(is_tracing_dependency(str(d.attrs.get("name", ""))) for d in fs.of("tech.dependency"))
 
     checks = {
         "healthcheck": bool(app and (app.attrs.get("healthCheck") or {}).get("type")),
         "structured-logging": bool(fs.first("observability.logging")),
         "metrics-exposed": bool(fs.first("config.actuator")),
-        "tracing-enabled": False,  # no Sleuth/OTel detected
+        "tracing-enabled": tracing,
         "timeout-on-egress": bool(fs.first("config.timelimiter") or fs.first("config.client")),
         "circuit-breaker-on-egress": bool(fs.first("resiliency.circuitbreaker")),
         "fallback-defined": bool(fs.first("resiliency.fallback")),

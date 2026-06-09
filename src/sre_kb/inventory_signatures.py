@@ -113,6 +113,20 @@ def broker_kind(name: str) -> str | None:
     return next((s.kind for s in _BROKERS if any(h in low for h in s.hints)), None)
 
 
+# Distributed-tracing libraries — a dependency name substring proves tracing is wired. One source of
+# truth for both the gap-finder's `missing-tracing` refutation and the readiness `tracing-enabled`
+# check, so they can't drift (HYBRID-PLAN §9.7 R6).
+_TRACING_LIBS: tuple[str, ...] = (
+    "sleuth", "micrometer-tracing", "opentelemetry", "otel", "zipkin", "brave", "jaeger",
+)
+
+
+def is_tracing_dependency(name: str) -> bool:
+    """True iff a dependency name denotes a distributed-tracing library."""
+    low = name.lower()
+    return any(tok in low for tok in _TRACING_LIBS)
+
+
 def is_datastore(name: str) -> bool:
     return datastore_engine(name) is not None
 

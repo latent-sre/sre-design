@@ -236,15 +236,29 @@ def scan_tree(
     # fail-closed gate on every run. A NESTED .git (a vendored/embedded repo) is target content
     # and stays scanned — git internals are exactly where committed credentials accumulate.
     # Callers that override skip_prefixes own the whole policy.
+    candidates: list[tuple[Path, str]] = []
+    for dirpath, dirnames, filenames in root.walk():
+        rel_dir = dirpath.relative_to(root).as_posix()
+        # Prune skipped subtrees at the directory level — a root .git on a real clone holds tens
+        # of thousands of object files that would otherwise be enumerated only to be discarded.
+        dirnames[:] = [
+            d for d in dirnames
+            if (rel_d := d if rel_dir == "." else f"{rel_dir}/{d}") not in skip_prefixes
+            and not any(rel_d.startswith(pre + "/") for pre in skip_prefixes)
+        ]
+        for name in filenames:
+            rel = name if rel_dir == "." else f"{rel_dir}/{name}"
+            if any(rel == pre or rel.startswith(pre + "/") for pre in skip_prefixes):
+                continue  # first-party assets (e.g. vendored schemas) are not target-derived content
+            p = dirpath / name
+            if p.is_file() and not p.is_symlink():
+                candidates.append((p, rel))
+    candidates.sort(key=lambda pr: pr[1])  # deterministic findings order, as sorted(rglob) gave
+
     findings: list[dict] = []
     files = 0
     scanned = 0
-    for p in sorted(root.rglob("*")):
-        if not p.is_file() or p.is_symlink():
-            continue
-        rel = p.relative_to(root).as_posix()
-        if any(rel == pre or rel.startswith(pre + "/") for pre in skip_prefixes):
-            continue  # first-party assets (e.g. vendored schemas) are not target-derived content
+    for p, rel in candidates:
         files += 1
         if files > max_files:
             raise SecretScanBudgetError(f"scan budget exceeded: more than {max_files} files under {root}")

@@ -63,7 +63,9 @@ def _framework_fact(ctx: ScanContext, rel: str) -> Fact | None:
         line = raw.strip()
         if not line.startswith("import "):
             continue
-        imported = line[len("import "):].lstrip("static ").rstrip(";").strip()
+        # removeprefix, NOT lstrip: lstrip("static ") strips a character SET — an import whose
+        # package starts with any of {s,t,a,i,c} (e.g. `import software...`) would be mangled.
+        imported = line.removeprefix("import ").removeprefix("static ").removesuffix(";").strip()
         for prefix, framework in _IMPORT_FRAMEWORKS:
             if imported.startswith(prefix):
                 return Fact(

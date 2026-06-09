@@ -28,7 +28,9 @@ MANIFEST_REL = ".sre/manifest.yaml"
 
 def content_hash(path: Path) -> str:
     """Stable content hash of a file's bytes — the keystone of divergence detection."""
-    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    with path.open("rb") as fh:
+        # file_digest streams in chunks — read_bytes() pulled the whole file into memory.
+        return "sha256:" + hashlib.file_digest(fh, "sha256").hexdigest()
 
 
 def load_manifest(root: Path) -> dict[str, str]:

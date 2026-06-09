@@ -75,3 +75,17 @@ def test_camelcase_log_suffixed_receivers_are_loggers(tmp_path):
     ctx = ScanContext(root=tmp_path, repo="file://x")
     stmts = [f for f in log_statements.collect(ctx) if f.type == "observability.log.statement"]
     assert sorted(f.attrs["level"] for f in stmts) == ["error", "warn"]  # no catalog.error
+
+
+def test_static_import_still_identifies_the_framework(tmp_path):
+    """`import static org.slf4j...` must resolve to slf4j: the prefix is stripped with
+    removeprefix, not lstrip (which strips a character set and mangles packages starting
+    with any of {s,t,a,i,c})."""
+    (tmp_path / "C.java").write_text(
+        "package x;\nimport static org.slf4j.LoggerFactory.getLogger;\n"
+        'class C { void m() { log.info("ok"); } }\n',
+        encoding="utf-8",
+    )
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    fw = [f for f in log_statements.collect(ctx) if f.type == "observability.log.framework"]
+    assert fw and fw[0].attrs["framework"] == "slf4j"

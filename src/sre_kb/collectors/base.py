@@ -6,6 +6,7 @@ recomputes it the same way, so a citation that doesn't match the bytes can't pas
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -63,15 +64,20 @@ class ScanContext:
         if patterns in self._files:
             return self._files[patterns]  # memoized: every collector re-globs the same patterns
         out: list[Path] = []
-        for pattern in patterns:
-            for p in sorted(self.root.rglob(pattern)):
+        for dirpath, dirnames, filenames in self.root.walk():
+            # Prune skip-dirs in place: .git/node_modules/… are never descended into, instead
+            # of being enumerated wholesale (per pattern!) and filtered per-path afterwards.
+            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+            for name in filenames:
+                if not any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns):
+                    continue
+                p = dirpath / name
                 if p.is_symlink() or not p.is_file():
                     continue  # no symlink-follow (safe-by-default)
-                if any(part in _SKIP_DIRS for part in p.relative_to(self.root).parts):
-                    continue
                 if p.stat().st_size > _MAX_FILE_BYTES:
                     continue  # resource budget (safe-by-default)
                 out.append(p)
+        out.sort()
         self._files[patterns] = out
         return out
 

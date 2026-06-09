@@ -7,6 +7,7 @@ a per-service checkpoint lets an interrupted run resume by service instead of re
 
 from __future__ import annotations
 
+import fnmatch
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -51,11 +52,13 @@ def discover_services(root: Path) -> list[Service]:
     manifest.yaml), named from the manifest and rooted at its directory. A repo with no manifest is a
     single service rooted at `root`. Stable order, de-duplicated by name; skip-dirs are ignored."""
     root = Path(root)
+    manifests: list[Path] = []
+    for dirpath, dirnames, filenames in root.walk():
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]  # pruned, never descended
+        manifests += (dirpath / n for n in filenames if fnmatch.fnmatchcase(n, "manifest.y*ml"))
     found: list[Service] = []
     seen: set[str] = set()
-    for manifest in sorted(root.rglob("manifest.y*ml")):
-        if any(part in _SKIP_DIRS for part in manifest.relative_to(root).parts):
-            continue
+    for manifest in sorted(manifests):
         for svc in _manifest_services(manifest):
             if svc.name not in seen:
                 seen.add(svc.name)

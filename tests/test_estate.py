@@ -49,14 +49,18 @@ def test_unshared_resources_are_not_cotenancy(docs):
     assert ("BlastRadius", "billing-kafka-cotenancy") not in docs
 
 
-def test_duplicate_target_basenames_are_rejected(tmp_path):
-    """Evidence is keyed by `file://<basename>`: two targets named `api` would silently share one
-    key and the first service's provenance would verify against the second service's files."""
+def test_duplicate_target_basenames_scan_with_distinct_identities(tmp_path):
+    """Repo identity is the full file URI, so two targets both named `api` no longer collide:
+    each service's provenance verifies against its own root, and the same-named services stay
+    distinct nodes in the estate (the second disambiguated by its parent dir)."""
     for team in ("team-a", "team-b"):
-        (tmp_path / team / "api").mkdir(parents=True)
-    with pytest.raises(ValueError, match="duplicate estate target basename"):
-        run_estate([str(tmp_path / "team-a" / "api"), str(tmp_path / "team-b" / "api")],
+        d = tmp_path / team / "api"
+        d.mkdir(parents=True)
+        (d / "manifest.yml").write_text("applications:\n- name: api\n", encoding="utf-8")
+    r = run_estate([str(tmp_path / "team-a" / "api"), str(tmp_path / "team-b" / "api")],
                    work_root=str(tmp_path / "w"), run_id="dup")
+    assert sorted(r.services) == ["api", "team-b-api"]
+    assert r.by_status.get("verified", 0) >= 1  # cross-repo provenance verifies, not downgraded
 
 
 def test_same_target_listed_twice_is_idempotent(tmp_path_factory):

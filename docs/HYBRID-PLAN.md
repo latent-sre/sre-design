@@ -1037,12 +1037,14 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   **per-area (kind) precision/recall, per-detector coverage, and an overall roll-up**. Precision is
   scoped to labeled kinds (a labeled kind is exhaustive; an unlabeled kind is out of scope, never a
   false positive) so partial labeling is honest. `sre-kb eval --target <fixture>` prints the scorecard
-  and flags missed/unexpected artifacts; `--report` emits the JSON. **Seven fixtures are labeled and
-  score 1.0/1.0** — `sample-spring-pcf` (18 areas, 8 detectors) and `sample-messaging`, joined by
-  `sample-dotnet-steeltoe` (the second supported language / the dotnet_steeltoe collectors), `sample-jobs`
-  (#9 ScheduledJob), `sample-feature-flags` (#15), `sample-logging` (#13/#18), and `sample-api` (#7
-  contracts) — so the scorecard now spans both stacks and the jobs/flags/logging/contract areas. A CI
-  guard (`test_every_labeled_fixture_scores_clean`, parametrized over every labeled fixture) re-scores
+  and flags missed/unexpected artifacts; `--report` emits the JSON. **Twelve fixtures are labeled and
+  score 1.0/1.0** — `sample-spring-pcf` (18 areas, 8 detectors), `sample-messaging`,
+  `sample-dotnet-steeltoe` (the .NET/Steeltoe stack), `sample-multiflow` + `sample-billing-pcf` (Java),
+  `sample-jobs` (#9), `sample-feature-flags` (#15), `sample-logging` (#13/#18), `sample-api` (#7), and
+  the polyglot `sample-fastapi` / `sample-node-express` / `sample-go-gin` (Python / Node / Go endpoint
+  + tech-stack detection) — so the scorecard now spans **both AST stacks and all three polyglot
+  endpoint collectors**, plus the jobs/flags/logging/contract areas. A CI guard
+  (`test_every_labeled_fixture_scores_clean`, parametrized over every labeled fixture) re-scores
   each run, so a regression that drops or fabricates an artifact shows up as recall/precision < 1 —
   accuracy is now a number, not a vibe, the gate to maturity stage 2. Tier-B/semantic rows will score
   structurally lower (they land `needs-review`); the per-area `verified` count surfaces that.

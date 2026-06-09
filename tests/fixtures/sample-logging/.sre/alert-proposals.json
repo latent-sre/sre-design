@@ -1,0 +1,8 @@
+{"proposals": [
+  {"anchor": "log.error(\"invalid amount for account \" + account);", "severity": "high",
+   "rationale": "a charge failure surfaces only as this error log — page on it until a metric exists"},
+  {"anchor": "log.info(\"charging account={} amount={}\", account, amountCents);", "severity": "medium",
+   "rationale": "claims an info trace is alert-worthy — it is not"},
+  {"anchor": "log.error(\"database connection lost\");", "severity": "high",
+   "rationale": "anchor does not appear verbatim in the source"}
+]}

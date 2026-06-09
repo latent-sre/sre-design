@@ -43,7 +43,17 @@ def test_run_surfaces_grounded_gap_finder_results(gap_result):
         "notifications-api-unguarded-critical-dependency",
         "ledger-repository-swallowed-failure",
         "emit-daily-reconciliation-undocumented-job",
+        "payments-api-fallback-masks-failure",
     }, sorted(gaps)
+
+
+def test_novel_gap_rides_the_open_discovery_channel_end_to_end(gap_result):
+    docs = _load(gap_result.root)
+    gap = docs[("ResiliencyGap", "payments-api-fallback-masks-failure")]
+    assert gap["status"] == "needs-review"
+    assert gap["spec"]["category"] == "novel"
+    assert gap["spec"]["proposedCategory"] == "fallback-masks-failure"
+    assert gap["spec"]["sourceTier"] == "llm"
 
 
 def test_refutation_gap_is_tier_b_and_needs_review(gap_result):

@@ -57,8 +57,10 @@ def test_recall_surfaces_checked_in_gap_proposals():
         ("unguarded-critical-dependency", "notifications-api"): "confirmed",
         ("swallowed-failure", "ledgerRepository"): "confirmed",
         ("undocumented-job", "emitDailyReconciliation"): "confirmed",
+        # the planted out-of-taxonomy gap rides the open-discovery channel
+        ("fallback-masks-failure", "payments-api"): "routed",
     }
-    assert len(res.facts) == 4
+    assert len(res.facts) == 5
 
 
 def test_refutes_timeout_control_and_drops_unlocatable_anchor():
@@ -96,7 +98,7 @@ def test_surfaced_gap_is_byte_grounded_and_tier_llm():
 def test_refutation_gaps_stay_needs_review_while_confirmation_gaps_verify():
     run = run_gap_finder(str(FIXTURE), service="checkout")
 
-    assert run.by_status == {"needs-review": 2, "verified": 2}
+    assert run.by_status == {"needs-review": 3, "verified": 2}  # +1: the routed novel gap
     doc = next(d for d in run.docs if d["metadata"]["name"] == "payments-api-missing-timeout")
     assert doc["kind"] == "ResiliencyGap"
     assert doc["status"] == "needs-review"

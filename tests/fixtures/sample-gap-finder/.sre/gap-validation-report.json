@@ -1,12 +1,12 @@
 {
-  "target": "tests\\fixtures\\sample-gap-finder",
-  "proposalsPath": "tests\\fixtures\\sample-gap-finder\\.sre\\gap-proposals.json",
-  "truthPath": "tests\\fixtures\\sample-gap-finder\\.sre\\gap-truth.json",
+  "target": "tests/fixtures/sample-gap-finder",
+  "proposalsPath": "tests/fixtures/sample-gap-finder/.sre/gap-proposals.json",
+  "truthPath": "tests/fixtures/sample-gap-finder/.sre/gap-truth.json",
   "counts": {
-    "expected": 4,
-    "proposed": 4,
-    "grounded": 4,
-    "kept": 4,
+    "expected": 5,
+    "proposed": 5,
+    "grounded": 5,
+    "kept": 5,
     "confirmed": 4,
     "missedExpected": 0,
     "falsePositiveProposals": 0,
@@ -20,6 +20,10 @@
     "groundedRate": 1.0
   },
   "expected": [
+    {
+      "category": "fallback-masks-failure",
+      "target": "payments-api"
+    },
     {
       "category": "missing-timeout",
       "target": "payments-api"
@@ -53,7 +57,7 @@
   "controlsProposed": [],
   "controlsKept": [],
   "byStatus": {
-    "needs-review": 2,
+    "needs-review": 3,
     "verified": 2
   },
   "outcomes": [
@@ -104,6 +108,18 @@
         20
       ],
       "note": "no refuting signature ['circuit-breaker', 'fallback', 'timeout'] fires in 2 checked location(s)"
+    },
+    {
+      "category": "fallback-masks-failure",
+      "target": "payments-api",
+      "severity": "medium",
+      "result": "routed",
+      "path": "src/main/java/com/acme/checkout/client/PaymentsClient.java",
+      "lines": [
+        30,
+        30
+      ],
+      "note": "novel discovery ('fallback-masks-failure') \u2014 routed to human review"
     }
   ]
 }

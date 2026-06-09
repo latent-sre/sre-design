@@ -27,6 +27,7 @@ def test_truth_file_loads_expected_and_controls() -> None:
         ("swallowed-failure", "ledgerrepository"),
         ("undocumented-job", "emitdailyreconciliation"),
         ("unguarded-critical-dependency", "notifications-api"),
+        ("fallback-masks-failure", "payments-api"),  # the planted out-of-taxonomy (novel) gap
     }
     assert ("missing-timeout", "shipping-api") in truth.controls
     assert ("missing-timeout", "refunds-api") in truth.controls

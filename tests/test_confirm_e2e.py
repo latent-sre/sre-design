@@ -109,3 +109,29 @@ def test_disabled_affirm_emits_no_gap(tmp_path):
     regate_run(layout, str(DISABLED_CB),
                {"verdicts": [{"claimId": "present:circuit-breaker:inventory", "verdict": "affirm"}]})
     assert "ResiliencyGap/inventory-disabled-resilience" not in _kb(layout)
+
+
+def test_confirm_apply_cli_records_graduation_from_confirms(tmp_path):
+    """End-to-end graduation-from-confirms: `confirm-apply` on a confirmed disable writes the
+    disabled-resilience confirmation into the (copied) target's graduation tracker."""
+    import shutil
+
+    from typer.testing import CliRunner
+
+    from sre_kb.cli import app
+    from sre_kb.graduation import GraduationTracker
+
+    target = tmp_path / "svc"
+    shutil.copytree(DISABLED_CB, target)               # a writable copy — never the committed fixture
+    work = tmp_path / "w"
+    run_pipeline(str(target), work_root=str(work), run_id="g", to_stage="validate")
+    verdicts = work / "g" / "confirm" / "verdicts.json"
+    verdicts.write_text(json.dumps({"verdicts": [
+        {"claimId": "present:circuit-breaker:inventory", "verdict": "dispute",
+         "anchor": "      inventory:\n        enabled: false"}]}), encoding="utf-8")
+    res = CliRunner().invoke(app, ["confirm-apply", "--run", "g", "--work-root", str(work),
+                                   "--target", str(target), "--verdicts", str(verdicts)])
+    assert res.exit_code == 0, res.output
+    assert "graduation: recorded confirmation for disabled-resilience" in res.output
+    cat = GraduationTracker.load(target).categories["disabled-resilience"]
+    assert cat.confirmed == 1 and cat.false_positives == 0

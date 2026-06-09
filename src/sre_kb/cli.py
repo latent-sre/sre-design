@@ -464,18 +464,21 @@ def challenge_run(
         "If unset, the loop stays deferred (no verdicts written) — same as offline.",
     ),
     timeout: float = typer.Option(120.0, "--timeout", help="Per-claim oracle timeout (seconds)."),
+    cache_dir: Path = typer.Option(None, "--cache-dir", help="Prompt-hash response cache dir (reproducibility)."),
     work_root: str = typer.Option(".work", "--work-root"),
 ) -> None:
-    """Drive the challenge worklist through an external LLM oracle and write verdicts.
+    """Drive the challenge worklist through a programmatic LLM provider and write verdicts.
 
-    The engine embeds no model — it execs the operator-configured `--oracle` command (the
-    Copilot/Claude CLI), exactly the LLM seam the design reserves. With no oracle the loop
-    defers to a human. Verdicts only ever downgrade via `challenge-apply`; an oracle can
-    never raise confidence. Then run `sre-kb challenge-apply --run <id>`.
+    The provider is built through the `LLMProvider` seam (`llm/provider.py`). The engine embeds no
+    model — the default is the model-free Copilot file exchange; `--oracle` selects the subprocess
+    provider (the Copilot/Claude CLI), and `--cache-dir` wraps it in a prompt-hash cache for
+    reproducibility. With no oracle the loop defers to a human. Verdicts only ever downgrade via
+    `challenge-apply`; a provider can never raise confidence. Then run `sre-kb challenge-apply`.
     """
     import json
 
-    from sre_kb.pipeline.challenge_run import SubprocessOracle, run_worklist
+    from sre_kb.llm.provider import make_provider
+    from sre_kb.pipeline.challenge_run import run_worklist
     from sre_kb.workspace import RunLayout
 
     layout = RunLayout(Path(work_root), run_id)
@@ -492,7 +495,9 @@ def challenge_run(
         raise typer.Exit(code=0)
 
     worklist = json.loads(wpath.read_text())
-    client = SubprocessOracle(oracle, timeout=timeout)
+    cfg = {"llm": {"provider": "subprocess", "command": oracle, "timeout": timeout,
+                   **({"cache_dir": str(cache_dir)} if cache_dir else {})}}
+    client = make_provider(cfg)
     result = run_worklist(worklist, client, oracle_id=client.id)
     vpath = layout.root / "challenge" / "verdicts.json"
     vpath.write_text(json.dumps(result, indent=2), encoding="utf-8")

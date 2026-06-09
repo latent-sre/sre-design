@@ -178,3 +178,23 @@ def test_tier_conflict_silent_on_agreement_or_single_tier() -> None:
 
 def test_report_has_no_tier_conflicts_on_ast_only(report: dict) -> None:
     assert report["tierConflicts"] == []   # no Tier-B producer yet -> nothing to conflict
+
+
+def test_tier_conflict_fires_on_the_real_gap_finder_fact_shape() -> None:
+    """The Phase-4 gap-finder emits `resiliency.gap` (category attrs), not the pre-Phase-4
+    `gap.<concern>` shape — the detector was dead against every real run until it read it."""
+    from sre_kb.reporting.findings import detect_tier_conflicts
+
+    facts = [
+        _fact("resiliency.circuitbreaker", {"targetSymbol": "payments-api"}, "ast"),
+        _fact("resiliency.gap",
+              {"category": "unguarded-critical-dependency", "target": "payments-api",
+               "severity": "high", "rederivation": "confirmed"}, "llm"),
+    ]
+    conflicts = detect_tier_conflicts(facts)
+    assert len(conflicts) == 1
+    assert conflicts[0]["concern"] == "circuit-breaker"
+    assert conflicts[0]["astPresent"] and not conflicts[0]["llmPresent"]
+    # a non-overlapping category (missing-timeout has no Tier-A presence fact) stays silent
+    quiet = [_fact("resiliency.gap", {"category": "missing-timeout", "target": "x"}, "llm")]
+    assert detect_tier_conflicts(quiet) == []

@@ -450,6 +450,7 @@ status-authority note at the top):
 | N4 | central `taxonomy.yaml` + severity-vocab reconciliation | ✅ | #37 |
 | N5 | inventory signatures · load-shed/backpressure probes · findings narrative | ✅ | #38–41 |
 | #7 Tier-B | `map-api-contracts` — baseline-spec breaking-change diff + version-policy (Tier-A) + semantic-break skill re-grounding (Tier-B) | ✅ | |
+| #19 Tier-B | `generate-alerts` — log-pattern alert drafter, grounded on the parsed log-statement facts | ✅ | |
 | infra | full scan/publish credential split (§9.3 #5) | 🟡 scan role done; publish role + CI open | gate before live publish |
 
 The per-phase detail below remains the authoritative narrative for each ✅.
@@ -1046,6 +1047,19 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   is the documented follow-up. (`collectors/common/openapi.py`, `synth/inventory.py`,
   `schemas/v1alpha1/Interface.schema.json`, `pipeline/contract.py`, `cli.py`,
   `.github/skills/map-api-contracts/`; `tests/test_openapi.py`, `tests/test_map_contracts.py`.)
+- **S8 — `generate-alerts` Tier-B drafter (coverage #19). ✅ Done.** The first drafting skill with a
+  real ingest path, not just a `SKILL.md`. The engine already parses every log statement
+  (`observability.log.statement`, S2) and deterministically alerts the one it can prove — a
+  swallowed-publish failure. *Which other* error/warn log lines warrant paging is an alert-fatigue
+  judgment, so the `generate-alerts` skill proposes them and `pipeline/alerts_draft.py` re-grounds each
+  on the same non-circular contract the gap-finder uses: **locate** the cited log line verbatim,
+  **confirm** a parsed log-statement sits there and **refute** any `info`/`debug`/`trace` line by level
+  (you don't page on a debug log), then the **engine** — never the LLM — derives the search query from
+  the byte-grounded message literal and renders it through the existing per-backend `LogPatternIntent`
+  adapters. Survivors scaffold as `needs-review`, `source_tier=llm` `Alert` artifacts (schema-valid,
+  hash-checked citation), never auto-verified. Exposed via `sre-kb generate-alerts` (report-first, like
+  the gap-finder spike). `generate-runbooks` is the sibling next item. (`pipeline/alerts_draft.py`,
+  `cli.py`, `.github/skills/generate-alerts/`; `tests/test_generate_alerts.py`.)
 
 #### Decision — LLM transport (2026-06-09)
 

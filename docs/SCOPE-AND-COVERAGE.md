@@ -211,5 +211,6 @@ This conversation added:
 5. The **rubric-as-spec / eval-harness** framing (§9) and the **over-engineering verdict** as a prune,
    not just additive backlog.
 
-These should be folded into HYBRID-PLAN's §9.7 backlog and DESIGN.md's kind catalog rather than living
-only here.
+These are now folded into the authoritative docs: **HYBRID-PLAN §9.7 (S1–S5)** as open backlog items,
+and **DESIGN.md**'s kind catalog as the scope-boundary + prune note. This doc remains the detailed
+coverage matrix + eval recipe they reference.

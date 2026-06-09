@@ -272,6 +272,17 @@ absorbs design patterns · `Deployment` absorbs Infrastructure + capacity (incl.
 + messaging contracts · `Observability` unifies logging + metrics + traces + health.
 That trims the catalog from 22 kinds to ~19 — less schema/collector/validator surface.
 
+**Scope boundary — application team, not platform infrastructure (2026-06-09).** We own the
+*application's* behavior and its contract with PCF (manifest, env vars, service bindings, routes,
+health checks, scaling), **not** the platform beneath it. Kinds added to the schema after this catalog
+that are platform-infra concerns should be pruned/folded: drop `NetworkTopology` and `DrBackup`; fold
+`DataStore` → `Dependency` and `RateLimiting` → the resiliency signatures; trim `SecurityPosture` to
+app-level controls. Two extraction gaps follow from the same scope and are **P0**: consumer-side
+**messaging resilience** (DLQ / poison-pill / ordering / idempotent-consumer — today `Interface`
+covers only contracts) and **logging format + quality** (the prerequisite for log-based `Alert`s). See
+`SCOPE-AND-COVERAGE.md` (scope + coverage contract) and HYBRID-PLAN §9.7 (S1–S5) for the full matrix
+and build order.
+
 **New derived analyses & projections (reuse facts we already extract):**
 - **`ReadinessScore` (kind)** — PRR checks + KB-coverage roll-up; P1 emits the coverage
   summary into `REVIEW.md`, P2 fills the full scorecard.

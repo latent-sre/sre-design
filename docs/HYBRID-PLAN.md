@@ -936,3 +936,39 @@ reviews. Completion is tracked in the §8 table; the rationale lives here.
 - **Infra — full scan/publish credential split** (§9.3 #5): the no-credential scan role **landed**
   (read-only `sre-target-scan` agent); the scoped publish role + CI wiring remain. Becomes a real
   safety bug the moment we publish live.
+
+#### Scope-sharpening deltas (2026-06-09, from `SCOPE-AND-COVERAGE.md`)
+
+The product scope was sharpened with the user: **we are an application team on PCF — we do not own
+platform infrastructure.** That lens turns "are we over-engineering?" into a concrete prune, and
+surfaces two P0 extraction gaps. These supersede nothing above; they are new open work.
+
+- **S1 — Kind prune (app-team scope). 🔲 Open.** Drop the infra-shaped kinds an app team doesn't own:
+  remove `NetworkTopology` and `DrBackup`; fold `DataStore` → `Dependency` ("app binds Postgres", not
+  the DB as infra) and `RateLimiting` → the resiliency signatures (it already is one); trim
+  `SecurityPosture` to app controls (authz/secret handling), dropping infra security. Sheds schema +
+  render + validate weight. See `SCOPE-AND-COVERAGE.md` §2/§5.
+- **S2 — `assess-logging` skill: log *format* + *quality*. 🔲 Open (P0).** Parse the log statements
+  (framework/format/fields) and assess quality (request/trace-ID context, level discipline → alert
+  fatigue). **Prerequisite for "alerts from logging" (`Alert` log-pattern path)** — a log-based alert
+  can't be accurate over an unparsed format. Extends `Observability` (logging sub-section).
+- **S3 — `map-messaging` skill: consumer-side async resilience. 🔲 Open (P0).** Today messaging exists
+  only as *contracts* (`Interface`); there is no consumer-resilience detection. Add DLQ routing,
+  poison-pill handling, ordering/partition safety, idempotent-consumer. Saga / distributed-transaction
+  compensation stays **permanently Tier-B judgment** (no deterministic ground truth). Biggest gap for
+  a PCF app team on Kafka/Rabbit/SQS.
+- **S4 — Confirm loop in the LLM gate. 🔲 Open.** Today the LLM only *discovers* (gap-finder). Add a
+  *confirm* exchange (a file beside `gap-proposals.json`) where the engine hands a skill its own
+  present/absent boundary calls and the skill disputes/affirms them **with anchors** the engine
+  re-grounds — catching false-positive gaps (a real timeout the regex missed) and false-negative
+  "present" claims (a mechanism present but disabled). Recurring confirms feed graduation. Start with
+  absence-claims (false positives erode reviewer trust fastest). Engine stays model-free; the LLM
+  becomes a second challenger under the existing grounding contract. **Quick win en route:** graduate
+  *idempotency-on-mutating-route* to Tier-A — the pieces exist (HTTP verb in endpoints + `idempotency`
+  signature), so "POST/PUT or consumer handler with no idempotency guard in scope" is a deterministic,
+  verifiable gap.
+- **S5 — Eval harness (rubric-as-spec). 🔲 Open.** Generalize `copilot-gap-validate`'s precision/recall
+  from gaps-only to **all extraction**: run over labeled `tests/fixtures/sample-*` repos and emit a
+  per-area / per-detector precision/recall/coverage scorecard. This is the gate to maturity stage 2
+  ("once we're extremely accurate"): accuracy becomes a number, not a vibe. Tier-B/semantic rows will
+  score structurally lower — expected, not a bug. Recipe in `SCOPE-AND-COVERAGE.md` §9.

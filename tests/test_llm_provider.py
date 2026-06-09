@@ -63,6 +63,26 @@ def test_prompt_hash_cache_replays_without_recalling(tmp_path):
     assert any(p.suffix == ".txt" for p in tmp_path.iterdir())
 
 
+def test_transient_failure_is_not_cached(tmp_path):
+    """SubprocessProvider returns "" on timeout/exec error (parsed as `indeterminate`). Caching
+    that would turn one transient oracle failure into a permanent verdict for the prompt."""
+
+    class _FlakyProvider:
+        id = "flaky"
+        interactive = False
+        calls = 0
+
+        def complete(self, prompt: str) -> str:
+            self.calls += 1
+            return "" if self.calls == 1 else "supported"
+
+    cached = CachingProvider(_FlakyProvider(), tmp_path)
+    assert cached.complete("p") == ""           # the failure is returned…
+    assert cached.complete("p") == "supported"  # …but the retry reaches the oracle
+    assert cached.complete("p") == "supported"  # and the good response IS cached
+    assert cached.inner.calls == 2
+
+
 def test_make_provider_wraps_in_cache_when_configured(tmp_path):
     p = make_provider({"llm": {"provider": "subprocess", "command": "cat",
                                "cache_dir": str(tmp_path)}})

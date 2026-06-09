@@ -49,19 +49,26 @@ A programmatic, approved endpoint removes the ceiling without changing the engin
 
 ## Architecture — bounded, reversible, trust-preserving
 
-A thin `LLMProvider` seam (mirroring the existing SCM-neutral `Forge` seam and pluggable collectors):
+A thin `LLMProvider` seam (mirroring the existing SCM-neutral `Forge` seam and pluggable collectors).
+**The seam groundwork is built** (`src/sre_kb/llm/provider.py`) — only the Vertex impl is gated on
+this approval:
 
-- **Default impl is unchanged:** `CopilotFileProvider` (today's IDE file exchange). No provider
+- **Default impl is unchanged and shipped:** `CopilotFileProvider` (today's IDE file exchange) — it is
+  **model-free** (`complete()` raises so the engine defers to the manual worklist loop). No provider
   configured ⇒ the engine behaves exactly as now.
-- **New impl:** `VertexProvider` consumes the **same** `scan-worklist.json` tasks and the same
-  `SKILL.md` prompts, calling Vertex instead of waiting for a human. Swapping transport changes
-  nothing else.
+- **Subprocess impl shipped:** `SubprocessProvider` execs an operator-configured CLI (the existing
+  `--oracle` seam, now built through `make_provider`).
+- **New impl (this ask):** `VertexProvider` — a **deferred slot already in the seam** (`complete()`
+  raises with a pointer to this doc until approved). It will consume the **same** `scan-worklist.json`
+  tasks and the same `SKILL.md` prompts, calling Vertex instead of waiting for a human. Swapping
+  transport changes nothing else.
 - **The trust boundary does not move:** the LLM remains a **pointer-generator** — it cites verbatim
   bytes; the engine re-grounds every output deterministically and gates it. An automated call cannot
   assert a verdict the engine trusts.
-- **Reproducibility is preserved:** pin model + version, temperature 0, and **cache responses by
-  prompt-hash** (the engine already hashes everything). CI replays the cache; only an explicit refresh
-  hits the model — so the engine stays deterministic and testable.
+- **Reproducibility is preserved and built:** `CachingProvider` already wraps any provider with a
+  **prompt-hash response cache** (sha256(prompt) → response on disk). With model pinned + temperature
+  0, CI replays the cache; only an explicit refresh (delete the cache) hits the model — so the engine
+  stays deterministic and testable.
 
 ## Benefits
 

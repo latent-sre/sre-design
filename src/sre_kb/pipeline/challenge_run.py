@@ -19,38 +19,14 @@ data — an injection attempt it must ignore. An empty/garbled/negating reply pa
 
 from __future__ import annotations
 
-import shlex
-import subprocess
 from typing import Callable
 
+from sre_kb.llm.provider import SubprocessProvider
 from sre_kb.validation.challenge import parse_verdict_reply
 
-
-class SubprocessOracle:
-    """An oracle that shells out to an operator-configured command — the concrete
-    `LLMChallenger` client seam. The prompt is fed on STDIN (never argv) so untrusted target
-    code in the pack can't break out into the command line; the verdict is read from STDOUT."""
-
-    def __init__(self, cmd: str | list[str], *, timeout: float = 120.0):
-        self.argv = shlex.split(cmd) if isinstance(cmd, str) else list(cmd)
-        if not self.argv:
-            raise ValueError("empty oracle command")
-        self.timeout = timeout
-        self.id = f"subprocess:{self.argv[0].rsplit('/', 1)[-1]}"
-
-    def __call__(self, prompt: str) -> str:
-        try:
-            proc = subprocess.run(
-                self.argv,
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            return ""  # parse_verdict_reply -> indeterminate (deferred), never a false pass
-        return proc.stdout
+# The subprocess oracle is now one impl of the unified `LLMProvider` seam (`llm/provider.py`); kept
+# here as a back-compat alias so existing callers (`cli.challenge_run`, tests) are unchanged.
+SubprocessOracle = SubprocessProvider
 
 
 def run_worklist(worklist: dict, oracle: Callable[[str], str], *, oracle_id: str = "oracle") -> dict:

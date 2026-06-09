@@ -1037,6 +1037,11 @@ constraint is governance, not automation.
   exchange as the default impl and adds a programmatic impl when an endpoint is approved. The first
   candidate is **Google Vertex/Gemini in-tenant** — we have access but must clear a business case,
   drafted in `docs/VERTEX-LLM-PROVIDER-CASE.md`. The seam preserves the pointer-generator trust
-  boundary and keeps the engine reproducible via prompt-hash response caching. **Deferred** until the
-  Vertex case is approved; the worklist + skills are the forward-compatible seam, manually driven for
-  now. Unlocks S4 (confirm loop at scale) and S5 (eval harness in CI).
+  boundary and keeps the engine reproducible via prompt-hash response caching.
+- **Seam groundwork ✅ built** (`src/sre_kb/llm/provider.py`): the `LLMProvider` protocol +
+  `CopilotFileProvider` (the **model-free default** — `complete()` raises so the engine defers to the
+  worklist), `SubprocessProvider` (the existing `--oracle` seam, now built via `make_provider`),
+  `CachingProvider` (the prompt-hash response cache), and a deferred `VertexProvider` slot (raises with
+  a pointer to the case doc until approved). The default keeps the engine model-free; only the Vertex
+  *impl* is gated on the business case. Unlocks S4 (confirm loop at scale) and S5 (eval harness in CI)
+  the moment an endpoint is approved.

@@ -69,7 +69,7 @@ Status legend: ✅ solid · ◐ partial · ❌ gap · (S) schema/kind exists but
 | 4 | Infrastructure (= app's PCF descriptor) | `Deployment` + `pcf.app`/`pcf.service` | A | ✅ | env/bindings/routes/health/scale extracted |
 | 5 | Deployment | `Deployment` | A | ✅ | PCF manifest |
 | 6 | Dependencies | `Dependency` | A | ✅ | |
-| 7 | API contracts | `Interface` | A/B | ◐ | deterministic endpoints; OpenAPI/AsyncAPI ingest + versioning gaps → skill |
+| 7 | API contracts | `Interface` | A/B | ✅ | deterministic endpoints **+ OpenAPI/AsyncAPI ingest + contract drift** (`common.openapi`: documented vs undocumented vs spec-only); versioning/breaking-change judgment → Tier-B follow-up |
 | 8 | **Messaging** | `Messaging` + `Interface` | A/B | ✅ | S3: `Messaging` kind + `java_spring.messaging` consumer-resilience (DLQ/retry/idempotent-consumer, Tier-A) + Tier-A gaps; ordering/poison-pill/saga → Tier-B `map-messaging` |
 | 9 | Jobs | `ScheduledJob` | A | ✅ | idempotent?/dedupeKey fields exist |
 | 10 | Delivery | `DeliveryPipeline` | A | ◐ | CI/CD discovery |
@@ -145,7 +145,7 @@ New (each pointer-generator, discover+confirm, read-only on targets; add to `.gi
 |---|---|---|
 | ~~`map-messaging`~~ ✅ | #8 consumer resilience: DLQ + idempotent-consumer (Tier-A); ordering/poison-pill/saga (Tier-B) | **done** |
 | ~~`assess-logging`~~ ✅ | #13 + #18: log *format* parse (Tier-A) + quality judgment (Tier-B) — unblocks #19 | **done** |
-| `map-api-contracts` | #7: OpenAPI/AsyncAPI ingest, undocumented endpoints, versioning | P1 |
+| `map-api-contracts` | #7: ~~OpenAPI/AsyncAPI ingest, undocumented endpoints~~ ✅ (deterministic, `common.openapi`); **versioning/breaking-change** judgment remains Tier-B | P1 |
 | `map-architecture` | #2 + #3: architecture narrative, design patterns | P1 |
 | `generate-alerts` | #19: draft alert *intent* from code+logs (engine renders dialect) | P1 |
 | `generate-runbooks` | #20: draft runbook content from deep scan | P1 |

@@ -117,7 +117,10 @@ model). The gate has two loops:
   dispute (the false-negative "present-but-disabled" direction) can only *add* a byte-proven Tier-A
   `disabled-resilience` gap — the engine offers each active mechanism (a named circuit breaker), and a
   dispute confirms only when a deterministic `enabled: false` disable signal fires for that instance.
-  Graduation-from-confirms remains the open follow-up.
+  **Graduation-from-confirms ✅ done:** `confirm-apply` now feeds its verdicts into the same graduation
+  tally `confirm-gap` drives — a confirmed disable accrues toward graduating a *proactive* Tier-A
+  disable collector (the natural promotion of this category), a refuted absence records a false positive
+  that blocks graduation and flags an over-firing probe.
 
 ```
 run 1: engine emits {present, absent} with evidence

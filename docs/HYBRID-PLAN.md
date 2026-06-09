@@ -452,7 +452,8 @@ status-authority note at the top):
 | #7 Tier-B | `map-api-contracts` — baseline-spec breaking-change diff + version-policy (Tier-A) + semantic-break skill re-grounding (Tier-B) | ✅ | |
 | #19 Tier-B | `generate-alerts` — log-pattern alert drafter, grounded on the parsed log-statement facts | ✅ | |
 | #20 Tier-B | `generate-runbooks` — runbook-content drafter, closed-world grounded on the run's artifacts | ✅ | |
-| S4b | confirm-loop present-but-disabled direction (presence boundary calls → byte-proven `disabled-resilience` gap) | ✅ | graduation-from-confirms still open |
+| S4b | confirm-loop present-but-disabled direction (presence boundary calls → byte-proven `disabled-resilience` gap) | ✅ | |
+| S4c | graduation-from-confirms (confirm-apply verdicts feed the graduation tally) | ✅ | proactive disable collector still open |
 | infra | full scan/publish credential split (§9.3 #5) | 🟡 scan role done; publish role + CI open | gate before live publish |
 
 The per-phase detail below remains the authoritative narrative for each ✅.
@@ -1019,10 +1020,16 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   breaker the presence signature alone would miss. Non-circular and monotonic: an absence dispute can
   only drop a false-positive gap, a presence dispute can only add a byte-proven disabled gap; neither
   can fabricate. (`pipeline/confirm.py`, `pipeline/orchestrator.py`, `ResiliencyGap` schema,
-  `tests/fixtures/sample-disabled-cb`, `tests/test_confirm*.py`.) **Graduation-from-confirms** (feeding
-  confirm verdicts into the §7.9 graduation tracker) and the proactive Tier-A disable collector (a
-  config scan that catches `enabled: false` without the LLM pointing first — the natural graduation of
-  this category) remain the open follow-ups.
+  `tests/fixtures/sample-disabled-cb`, `tests/test_confirm*.py`.)
+  **Graduation-from-confirms ✅ done (S4c):** `confirm-apply` now feeds its verdicts into the same
+  graduation tally `confirm-gap` drives (`record_confirm_graduation` → `.sre/graduation-tracker.yaml`),
+  so confirms accrue automatically. A confirmed disable records a `disabled-resilience` confirmation
+  (its draft sketches a *proactive* Tier-A disable collector — scan the resolved config for
+  `enabled: false` scoped to a known instance, no LLM pointing first); a refuted absence records a
+  false positive that blocks graduation and flags an over-firing probe. `regate_run` stays pure (it
+  never writes the tracker), so a plain re-gate doesn't touch the target; the CLI does the recording.
+  That proactive disable collector is the one remaining follow-up for this category.
+  (`pipeline/confirm.py`, `graduation/state.py`, `cli.py`; `tests/test_confirm*.py`.)
 - **S5 — Eval harness (rubric-as-spec). ✅ Done.** `eval/scorecard.py` generalizes
   `copilot-gap-validate`'s precision/recall from gaps-only to **all extraction**: it runs the
   deterministic pipeline over a labeled fixture (`<fixture>/.sre/eval-truth.json`, the §4 coverage

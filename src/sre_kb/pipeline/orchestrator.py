@@ -20,7 +20,7 @@ from sre_kb.collectors.common import idempotency
 from sre_kb.collectors.java_spring import messaging, resiliency_params
 from sre_kb.collectors.llm import gap_finder
 from sre_kb.config import load_config
-from sre_kb.pipeline.confirm import build_confirm_worklist
+from sre_kb.pipeline.confirm import _PRESENCE_CONCERNS, build_confirm_worklist
 from sre_kb.pipeline.gap_finder import scaffold_gap
 from sre_kb.reporting.findings import detect_tier_conflicts
 from sre_kb.scoring.readiness import readiness_spec
@@ -228,9 +228,11 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         cdir.mkdir(parents=True, exist_ok=True)
         (cdir / "worklist.json").write_text(json.dumps(worklist, indent=2), encoding="utf-8")
 
-    # Confirm loop (S4): hand the skill the engine's own Tier-A absence claims to affirm/dispute.
-    # Verdicts re-gate via `sre-kb confirm-apply` — a dispute can only drop a false-positive gap.
-    confirm_worklist = build_confirm_worklist(run_id, gap_facts)
+    # Confirm loop (S4): hand the skill the engine's own Tier-A boundary calls to affirm/dispute —
+    # absence gaps ("present here") and present mechanisms ("disabled here"). Verdicts re-gate via
+    # `sre-kb confirm-apply`: an absence dispute drops a false-positive gap; a presence dispute that
+    # re-derives a disable emits a new Tier-A disabled-resilience gap.
+    confirm_worklist = build_confirm_worklist(run_id, gap_facts, fs.of(*_PRESENCE_CONCERNS))
     if confirm_worklist["items"]:
         fdir = layout.root / "confirm"
         fdir.mkdir(parents=True, exist_ok=True)

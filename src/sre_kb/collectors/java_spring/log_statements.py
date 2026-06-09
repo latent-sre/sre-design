@@ -48,8 +48,10 @@ _IMPORT_FRAMEWORKS = (
 
 
 def _is_log_call(receiver: str, method: str) -> bool:
+    # No endswith("log") clause: it would misfire on `catalog`/`backlog`/`dialog` — the exact
+    # false positive the code_model receiver test was designed to avoid.
     r, m = receiver.lower(), method.lower()
-    return m in _LEVEL_METHODS and (r in _LOG_RECEIVERS or r.endswith("log") or r.endswith("logger"))
+    return m in _LEVEL_METHODS and (r in _LOG_RECEIVERS or r.endswith("logger"))
 
 
 def _framework_fact(ctx: ScanContext, rel: str) -> Fact | None:

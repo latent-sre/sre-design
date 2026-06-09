@@ -41,6 +41,19 @@ def test_statements_cite_their_own_call_line():
     assert all(f.evidence.source_tier == "ast" for f in stmts)  # Tier-A, byte-grounded
 
 
+def test_log_suffixed_non_logger_receiver_is_not_a_statement(tmp_path):
+    # `catalog`/`backlog`/`dialog` end with "log" but are not loggers — the endswith("log")
+    # receiver test misfired on exactly these and polluted the level roll-up.
+    (tmp_path / "C.java").write_text(
+        "package x;\nimport org.slf4j.Logger;\n"
+        'class C { void m() { catalog.error("lookup-miss"); log.info("ok"); } }\n',
+        encoding="utf-8",
+    )
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    stmts = [f for f in log_statements.collect(ctx) if f.type == "observability.log.statement"]
+    assert [f.attrs["level"] for f in stmts] == ["info"]  # log.info only, no catalog.error
+
+
 def test_no_logging_api_means_no_statements(tmp_path):
     (tmp_path / "Plain.java").write_text(
         "package x;\npublic class Plain { void m() { System.out.println(\"hi\"); } }\n",

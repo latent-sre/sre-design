@@ -664,6 +664,42 @@ def map_contracts_cmd(
         typer.echo(f"  report -> {report}")
 
 
+@app.command("generate-alerts")
+def generate_alerts_cmd(
+    target: str = typer.Option(..., "--target", help="Local path of the target repo."),
+    proposals: Path = typer.Option(
+        None, "--proposals",
+        help="Alert-worthiness proposals JSON (default: <target>/.sre/alert-proposals.json)."
+    ),
+    service: str = typer.Option(None, "--service", help="Service name (default: target dir name)."),
+    report: Path = typer.Option(None, "--report", help="Write the re-grounding report JSON here."),
+) -> None:
+    """Tier-B generate-alerts (coverage #19): ingest the skill's alert-worthiness proposals and
+    re-ground each — locate the cited log line, confirm a parsed log statement at error/warn level
+    (refuting info/debug), derive the search query from the byte-grounded message, and render a
+    needs-review log-pattern Alert. Nothing proposed can auto-verify; the engine never calls a model.
+    """
+    from sre_kb.pipeline.alerts_draft import run_generate_alerts
+
+    result = run_generate_alerts(target, proposals_path=proposals, service=service)
+    kept, dropped = result.kept(), result.dropped()
+    typer.echo(
+        f"generate-alerts: {len(result.outcomes)} proposal(s) -> {len(kept)} drafted "
+        f"(needs-review), {len(dropped)} dropped"
+    )
+    for o in result.outcomes:
+        where = f" @ {o.path}:{o.line}" if o.line else ""
+        typer.echo(f"  [{o.result:<12}]{where}  — {o.note}")
+    if report is not None:
+        payload = [
+            {"result": o.result, "path": o.path, "line": o.line,
+             "severity": o.proposal.severity, "rationale": o.proposal.rationale, "note": o.note}
+            for o in result.outcomes
+        ]
+        report.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        typer.echo(f"  report -> {report}")
+
+
 @app.command("copilot-gap-validate")
 def copilot_gap_validate_cmd(
     target: str = typer.Option(..., "--target", help="Local path of the target repo."),

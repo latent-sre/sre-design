@@ -126,6 +126,23 @@ merge.
 """
 
 
+def _generated_editor_settings() -> str:
+    """yaml-language-server mapping (VS Code YAML extension): every KB artifact validates inline
+    against the repo's OWN vendored schemas while a reviewer reads it — the review loop gets
+    schema validation for free, pinned to the exact schema version the artifacts were written
+    against (not whatever the engine ships today)."""
+    import json
+
+    from sre_kb.registry import kinds, schema_for
+
+    mapping = {
+        f".sre/{schema_for(kind)}": f"catalog/*/kb/**/{kind}/*.yaml"
+        for kind in sorted(kinds())
+        if schema_for(kind)
+    }
+    return json.dumps({"yaml.schemas": mapping}, indent=2, sort_keys=True) + "\n"
+
+
 def _stage_repo_root_hardening(pr_root: Path, publish_cfg: dict | None = None) -> None:
     """Stage repo-control files at the *published repo root*. GitHub honors workflows, CODEOWNERS,
     and the PR template only at the root (or root ``.github/``), never under ``catalog/<service>/`` —
@@ -146,6 +163,7 @@ def _stage_repo_root_hardening(pr_root: Path, publish_cfg: dict | None = None) -
     _write_file(pr_root / ".github" / "workflows" / "validate-sre-kb.yml",
                 _generated_validate_workflow(pip_args))
     _write_file(pr_root / ".github" / "pull_request_template.md", _generated_pr_template())
+    _write_file(pr_root / ".vscode" / "settings.json", _generated_editor_settings())
 
 
 def _stage_pr_tree(stage: Path, layout: RunLayout, proj: Path, service: str, docs: list[dict], report: dict | None) -> None:

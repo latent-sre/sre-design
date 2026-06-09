@@ -445,14 +445,15 @@ _JS_HTTP_VERBS = {"get", "post", "put", "delete", "patch", "options", "head"}
 _JS_FUNCS = {"arrow_function", "function_expression", "function_declaration"}
 
 
+def _js_str(s: Node, src: bytes) -> str:
+    frag = next((c for c in s.children if c.type == "string_fragment"), None)
+    return _txt(frag, src) if frag else _txt(s, src).strip("\"'`")
+
+
 def _js_str_args(args: Node | None, src: bytes) -> tuple[str, ...]:
     if args is None:
         return ()
-    out = []
-    for s in _descend(args, {"string"}):
-        frag = next((c for c in s.children if c.type == "string_fragment"), None)
-        out.append(_txt(frag, src) if frag else _txt(s, src).strip("\"'`"))
-    return tuple(out)
+    return tuple(_js_str(s, src) for s in _descend(args, {"string"}))
 
 
 def _js_call_rm(call: Node, src: bytes) -> tuple[str, str]:
@@ -514,15 +515,18 @@ def _parse_javascript(root: Node, src: bytes) -> Module:
         args = call.child_by_field_name("arguments")
         if args is None:
             continue
-        strs = _js_str_args(args, src)
+        # The path must be a direct string argument BEFORE the handler — descending into the
+        # handler body would take some string inside it as the route path when the real first
+        # argument is a template literal or a variable (both are skip-cases, not routes).
+        path_node = next((c for c in args.children if c.type == "string"), None)
         handler = next((c for c in args.children if c.type in _JS_FUNCS), None)
-        if not strs or handler is None:
+        if path_node is None or handler is None or path_node.start_byte > handler.start_byte:
             continue  # a path string AND a handler function -> a route, not an egress call
         obj = fn.child_by_field_name("object")
         recv = _last_ident(obj, src) if obj else ""
         methods.append(MethodDecl(
             name=_js_handler_name(handler, src),
-            annotations={f"{recv}.{verb}": {"": strs[0]}},
+            annotations={f"{recv}.{verb}": {"": _js_str(path_node, src)}},
             start=call.start_point[0] + 1,
             name_line=call.start_point[0] + 1,
             end=call.end_point[0] + 1,
@@ -546,6 +550,13 @@ _GO_EGRESS = {"get", "post", "head", "postform"}
 
 def _go_str(node: Node, src: bytes) -> str:
     return _txt(node, src).strip("`\"")
+
+
+def _go_str_args(args: Node | None, src: bytes) -> tuple[str, ...]:
+    if args is None:
+        return ()
+    return tuple(_go_str(c, src) for c in args.children
+                 if c.type in ("interpreted_string_literal", "raw_string_literal"))
 
 
 def _go_call_rm(call: Node, src: bytes) -> tuple[str, str]:
@@ -587,7 +598,9 @@ def _go_calls(node: Node | None, src: bytes, stop_nested: bool = False) -> list[
     out = []
     for call in walk:
         recv, meth = _go_call_rm(call, src)
-        out.append(Call(recv, meth, call.start_point[0] + 1, (), _go_enclosing_swallow(call, src)))
+        out.append(Call(recv, meth, call.start_point[0] + 1,
+                        _go_str_args(call.child_by_field_name("arguments"), src),
+                        _go_enclosing_swallow(call, src)))
     return out
 
 

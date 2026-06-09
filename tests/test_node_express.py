@@ -73,6 +73,15 @@ def test_parser_synthesizes_express_routes_as_decorated_methods():
     assert [(c.receiver, c.method) for c in route.calls if c.receiver == "axios"] == [("axios", "get")]
 
 
+def test_non_string_first_arg_is_not_a_route():
+    # A template-literal or variable path is a documented skip-case. Before the fix, a string
+    # inside the handler BODY was taken as the route path ("ok" / "created" here).
+    m = parse("javascript",
+              "app.get(`/users/${id}`, (req, res) => res.send('ok'));\n"
+              "app.post(routePath, (req, res) => { logger.info('created'); });")
+    assert m.types[0].methods == []
+
+
 def test_express_routes_and_egress_extracted_with_provenance():
     fs, _ = _facts()
     eps = {(f.attrs["method"], f.attrs["path"]) for f in fs.of("rest.endpoint")}

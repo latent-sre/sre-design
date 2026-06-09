@@ -20,6 +20,7 @@ from sre_kb.collectors.common import idempotency
 from sre_kb.collectors.java_spring import messaging, resiliency_params
 from sre_kb.collectors.llm import gap_finder
 from sre_kb.config import load_config
+from sre_kb.pipeline.confirm import build_confirm_worklist
 from sre_kb.pipeline.gap_finder import scaffold_gap
 from sre_kb.reporting.findings import detect_tier_conflicts
 from sre_kb.scoring.readiness import readiness_spec
@@ -227,6 +228,15 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         cdir.mkdir(parents=True, exist_ok=True)
         (cdir / "worklist.json").write_text(json.dumps(worklist, indent=2), encoding="utf-8")
 
+    # Confirm loop (S4): hand the skill the engine's own Tier-A absence claims to affirm/dispute.
+    # Verdicts re-gate via `sre-kb confirm-apply` — a dispute can only drop a false-positive gap.
+    confirm_worklist = build_confirm_worklist(run_id, gap_facts)
+    if confirm_worklist["items"]:
+        fdir = layout.root / "confirm"
+        fdir.mkdir(parents=True, exist_ok=True)
+        (fdir / "boundary-calls.json").write_text(
+            json.dumps(confirm_worklist, indent=2), encoding="utf-8")
+
     # Unified LLM scan worklist: one manifest of every discover/confirm task Copilot should run for
     # this run — the single front door for the manual loop. The engine still never calls a model.
     app = fs.first("pcf.app")
@@ -237,6 +247,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         target=str(target_path),
         context_packs=sum(1 for d in docs if d.get("evidence")),
         challenge_items=len(worklist["items"]),
+        confirm_boundaries=len(confirm_worklist["items"]),
     )
     (layout.root / "scan-worklist.json").write_text(
         json.dumps(scan_worklist, indent=2), encoding="utf-8"

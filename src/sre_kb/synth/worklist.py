@@ -33,12 +33,15 @@ def build_scan_worklist(
     target: str,
     context_packs: int,
     challenge_items: int,
+    confirm_boundaries: int = 0,
 ) -> dict:
     """Build the unified worklist for a validated run.
 
     `context_packs` is how many per-artifact context packs the run wrote (the discover inputs);
-    `challenge_items` is how many judgment-call claims need adjudication (the confirm inputs). A task
-    is included only when it has work, so the manifest is the exact to-do list — no empty steps.
+    `challenge_items` is how many judgment-call claims need adjudication (the confirm-of-judgment
+    inputs); `confirm_boundaries` is how many Tier-A absence claims the engine wants affirmed/disputed
+    (the S4 confirm loop). A task is included only when it has work, so the manifest is the exact
+    to-do list — no empty steps.
     """
     tasks: list[dict] = []
     if context_packs:
@@ -65,6 +68,20 @@ def build_scan_worklist(
                 "writeTo": "challenge/verdicts.json",  # relative to the run root
                 "writeToBase": "run",
                 "ingest": f"sre-kb challenge-apply --run {run_id}",
+            }
+        )
+    if confirm_boundaries:
+        tasks.append(
+            {
+                "id": "confirm-boundaries",
+                "mode": "confirm",
+                "title": f"Affirm or dispute {confirm_boundaries} engine absence-claim(s) with anchors",
+                "skill": "boundary confirm (the run's confirm worklist — affirm, or dispute with a "
+                         "verbatim anchor the engine re-grounds)",
+                "reads": ["confirm/boundary-calls.json"],  # relative to the run root
+                "writeTo": "confirm/verdicts.json",  # relative to the run root
+                "writeToBase": "run",
+                "ingest": f"sre-kb confirm-apply --run {run_id}",
             }
         )
     return {

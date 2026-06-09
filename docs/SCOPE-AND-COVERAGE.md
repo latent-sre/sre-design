@@ -81,7 +81,7 @@ Status legend: ✅ solid · ◐ partial · ❌ gap · (S) schema/kind exists but
 | 16 | Built-in fallbacks | `Fallback` | A | ✅ | |
 | 17 | Flows + where a request can fail | `Flow` + `BlastRadius` | A | ✅✅ | flagship |
 | 18 | **Logging format (parse the statements)** | `Observability` (feeds #19) | A | ✅ | S2: `java_spring.log_statements` parses framework/level/parameterization from the AST — the log-based-alert prerequisite |
-| 19 | Create alerts from code + logging | `Alert` (render) | A+B | ◐ | renders 6 backends; needs #18 to be accurate |
+| 19 | Create alerts from code + logging | `Alert` (render) | A+B | ✅ | renders 6 backends; deterministic burn-rate + swallowed-publish log alerts (Tier-A) **+ `generate-alerts` Tier-B drafter** — error/warn log lines a human reviews, grounded against #18's log-statement facts |
 | 20 | Create runbooks from deep scan | `Runbook` (render) | A+B | ◐ | renders; content drafting → skill |
 | R | **SRE rubric** (timeouts, retries+backoff, swallowing, unbounded loops/queues, no-pagination, conn-pooling, leaks, migration safety, config-vs-code, idempotency, async DLQ/poison/ordering, load-shed, saga) | `ResiliencyGap` + above | A/B | ◐ | strong on *absence-of-mechanism* (timeouts/swallowing/fallback); weak on *anti-pattern* detection (resource/op-safety) and semantic (saga/ordering) |
 
@@ -147,7 +147,7 @@ New (each pointer-generator, discover+confirm, read-only on targets; add to `.gi
 | ~~`assess-logging`~~ ✅ | #13 + #18: log *format* parse (Tier-A) + quality judgment (Tier-B) — unblocks #19 | **done** |
 | ~~`map-api-contracts`~~ ✅ | #7: ~~OpenAPI/AsyncAPI ingest, undocumented endpoints~~ ✅ (deterministic, `common.openapi`); ~~**versioning/breaking-change** judgment~~ ✅ — baseline-spec diff + version-policy are Tier-A (`common.openapi`), the semantic-break half is the `map-api-contracts` skill re-grounded by `pipeline.contract` | **done** |
 | `map-architecture` | #2 + #3: architecture narrative, design patterns | P1 |
-| `generate-alerts` | #19: draft alert *intent* from code+logs (engine renders dialect) | P1 |
+| ~~`generate-alerts`~~ ✅ | #19: draft which error/warn log lines warrant an alert (alert-fatigue judgment); the engine grounds the line against its log-statement facts, refutes info/debug by level, generates the query, and drafts a needs-review log-pattern Alert (`pipeline.alerts_draft`, `sre-kb generate-alerts`) | **done** |
 | `generate-runbooks` | #20: draft runbook content from deep scan | P1 |
 
 ## 8. Build order (priorities)
@@ -164,7 +164,8 @@ New (each pointer-generator, discover+confirm, read-only on targets; add to `.gi
    claims, dropping false positives. Started with absence-claims as planned.
 4. **Stand up the eval harness** (§9) so accuracy is a number, not a vibe — the gate to stage 2. **(S5,
    next.)**
-5. **Then** drafting skills (`generate-alerts`/`-runbooks`) and the prune (§5).
+5. **Then** drafting skills — ~~`generate-alerts`~~ ✅ (log-pattern drafter, grounded on the #18
+   log-statement facts) and `generate-runbooks` (next) — and the prune (§5, done).
 6. Defer publish/agent surfaces until accuracy clears the bar.
 
 ## 9. How accuracy is measured (the rubric is the spec)

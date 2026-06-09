@@ -1,0 +1,43 @@
+apiVersion: sre.kb/v1alpha1
+kind: Messaging
+metadata:
+  name: messaging
+  service: order-service
+  labels: {}
+  annotations: {}
+spec:
+  consumers:
+  - channel: order.created
+    broker: kafka
+    handler: com.acme.order.consume.OrderConsumer#onOrderCreated
+    resilience:
+      deadLetter: true
+      deadLetterMechanism: retryable-topic
+      retry: true
+      idempotentConsumer: true
+  - channel: order.shipped
+    broker: kafka
+    handler: com.acme.order.consume.ShippingConsumer#onShipped
+    resilience:
+      deadLetter: false
+      deadLetterMechanism: null
+      retry: false
+      idempotentConsumer: false
+evidence:
+- repo: file://sample-messaging
+  commit: '0000000000000000000000000000000000000000'
+  path: src/main/java/com/acme/order/consume/OrderConsumer.java
+  lines:
+    start: 12
+    end: 13
+  excerptHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  detector: java_spring.messaging
+  source_tier: ast
+confidence: 0.9
+status: verified
+provenanceMode: deterministic
+crossRefs: []
+generatedBy:
+  tool: sre-kb
+  driver: engine
+  toolVersion: 0.0.1

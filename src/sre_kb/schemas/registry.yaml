@@ -68,6 +68,14 @@ kinds:
   Deployment:       { schema: schemas/v1alpha1/Deployment.schema.json,       phase: P2 }
   Dependency:       { schema: schemas/v1alpha1/Dependency.schema.json,       phase: P2 }
   Interface:        { schema: schemas/v1alpha1/Interface.schema.json,        phase: P2 }
+  # Consumer-side async-resilience posture (HYBRID-PLAN S3). Interface carries the messaging
+  # *contract*; Messaging carries each consumer's DLQ/retry/idempotency mechanisms (Tier-A). The
+  # judgment calls (ordering/partition, poison-pill, saga) route to the map-messaging skill (Tier-B).
+  Messaging:
+    schema: schemas/v1alpha1/Messaging.schema.json
+    collectors: [java_spring.messaging]
+    prompt: messaging
+    phase: P2
   ScheduledJob:     { schema: schemas/v1alpha1/ScheduledJob.schema.json,     phase: P2 }
   DeliveryPipeline: { schema: schemas/v1alpha1/DeliveryPipeline.schema.json, phase: P2 }
   Topology:         { schema: schemas/v1alpha1/Topology.schema.json,         phase: P2 }

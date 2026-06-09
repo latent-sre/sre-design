@@ -152,6 +152,17 @@ _SIGNATURES: dict[str, Signature] = {
                 r"\blimit_(?:req|conn)\b",       # nginx / envoy load-shedding directives
             ),
         ),
+        Signature(
+            "dead-letter",  # a poison-pill route off the main partition: a DLQ/DLT a bad message lands in
+            annotations=("@RetryableTopic", "@DltHandler"),  # Spring Kafka auto-retry + DLT
+            patterns=_p(
+                r"@RetryableTopic\b", r"@DltHandler\b",                # Spring Kafka
+                r"\bDeadLetterPublishingRecoverer\b",                 # Spring Kafka error handler -> DLT
+                r"\bx-dead-letter-(?:exchange|routing-key)\b",        # RabbitMQ queue args
+                r"\b(?:enable[-_]?dlq|auto[-_]?bind[-_]?dlq|dlq[-_]?name)\b",  # Spring Cloud Stream binder config
+                r"\bSendToDlq\b", r"\bredrive[-_]?policy\b",          # Stream / SQS redrive
+            ),
+        ),
     )
 }
 

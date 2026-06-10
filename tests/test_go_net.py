@@ -48,7 +48,7 @@ def test_direct_requires_extracted_indirect_skipped_with_provenance():
 
 def test_single_line_require_form_is_parsed():
     lines = ["module x\n", "go 1.22\n", "require github.com/go-chi/chi/v5 v5.0.11\n"]
-    assert go_mod._direct_requires(lines) == [("github.com/go-chi/chi/v5", 3)]
+    assert go_mod._direct_requires(lines) == [("github.com/go-chi/chi/v5", "v5.0.11", 3)]
 
 
 def test_self_gating_on_a_non_go_repo():
@@ -135,3 +135,19 @@ def test_go_service_yields_a_validated_tech_stack(tmp_path):
     from sre_kb.validation import validate_kb_tree
     bad = [x for x in validate_kb_tree(r.root / "kb") if not x.ok]
     assert not bad, [(x.path, x.errors) for x in bad]
+
+
+def test_go_mod_dependency_versions_captured(tmp_path):
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.collectors.go_net import go_mod
+
+    (tmp_path / "go.mod").write_text(
+        "module acme/orders\n\nrequire (\n"
+        "\tgithub.com/gin-gonic/gin v1.9.1\n"
+        "\tgithub.com/lib/pq v1.10.0 // indirect\n)\n",
+        encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    deps = {f.attrs["name"]: f.attrs for f in go_mod.collect(ctx)
+            if f.type == "tech.dependency"}
+    assert deps == {"github.com/gin-gonic/gin":
+                    {"name": "github.com/gin-gonic/gin", "version": "v1.9.1"}}

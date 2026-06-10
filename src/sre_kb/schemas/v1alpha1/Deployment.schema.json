@@ -21,7 +21,10 @@
         "stack": { "type": ["string", "null"] },
         "buildpacks": { "type": "array" },
         "healthCheck": { "type": "object" },
-        "profiles": { "type": ["string", "array", "null"] }
+        "profiles": { "type": ["string", "array", "null"] },
+        "processes": { "type": "array" },
+        "sidecars": { "type": "array" },
+        "environment": { "type": "string" }
       }
     }
   }

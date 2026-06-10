@@ -255,6 +255,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     # should run — the single front door for the manual loop, and exactly what `worklist-run` drives
     # through a programmatic provider. The engine still embeds no model.
     from sre_kb.collectors.common.openapi import current_specs
+    from sre_kb.pipeline.diagram_narration import diagram_docs
     from sre_kb.reporting import collect_findings
     from sre_kb.synth.draft_prompts import _uncovered_alerts
 
@@ -274,6 +275,8 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
                                     for d in docs if d.get("kind") == "Architecture"),
         contract_specs=len(current_specs(ctx)),
         findings=len(collect_findings(docs)),
+        pcf_apps=len(fs.of("pcf.app")),
+        diagrams=len(diagram_docs(docs)),
     )
     (layout.root / "scan-worklist.json").write_text(
         json.dumps(scan_worklist, indent=2), encoding="utf-8"

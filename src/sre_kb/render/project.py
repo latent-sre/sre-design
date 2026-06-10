@@ -11,9 +11,12 @@ from sre_kb.render.catalog import catalog_info
 from sre_kb.render.copilot import copilot_instructions, runbook_markdown
 from sre_kb.render.diagrams import (
     TOPOLOGY_LEGEND,
+    architecture_caption,
     diagram_markdown,
+    mermaid_architecture,
     mermaid_sequence,
     mermaid_topology,
+    topology_overlays,
 )
 from sre_kb.registry import renderer_for
 from sre_kb.workspace import RunLayout
@@ -34,36 +37,52 @@ def service_name(docs: list[dict]) -> str:
     return "service"
 
 
-def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict]) -> None:
+def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
+    from sre_kb.util import slug
+
     name = doc["metadata"]["name"]
-    src = mermaid_sequence(doc)
+    # Configured HTTP clients are known downstreams: name them in the sequence diagram
+    # instead of collapsing every egress into the generic `Downstream` participant.
+    known = {slug(d["spec"]["name"]): d["spec"]["name"] for d in docs
+             if d.get("kind") == "Dependency" and (d.get("spec") or {}).get("type") == "http"}
+    src = mermaid_sequence(doc, known_targets=known)
     (proj / "diagrams" / f"{name}.mmd").write_text(src, encoding="utf-8")
     (proj / "diagrams" / f"{name}.md").write_text(
         diagram_markdown(f"{name} — flow", src), encoding="utf-8"
     )
 
 
-def _render_runbook(doc: dict, proj: Path, flows: dict[str, dict]) -> None:
+def _render_runbook(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
     related = flows.get(doc["spec"].get("relatedFlow"))
     (proj / "runbooks" / f"{doc['metadata']['name']}.md").write_text(
         runbook_markdown(doc, related), encoding="utf-8"
     )
 
 
-def _render_topology(doc: dict, proj: Path, flows: dict[str, dict]) -> None:
+def _render_topology(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
     name = doc["metadata"]["name"]
-    src = mermaid_topology(doc)
+    tiers, lossy = topology_overlays(doc, docs)
+    src = mermaid_topology(doc, tiers=tiers, lossy=lossy)
     (proj / "diagrams" / f"{name}-topology.mmd").write_text(src, encoding="utf-8")
     (proj / "diagrams" / f"{name}-topology.md").write_text(
         diagram_markdown(f"{name} — topology", src, TOPOLOGY_LEGEND), encoding="utf-8"
     )
 
 
+def _render_architecture(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
+    name = doc["metadata"]["name"]
+    src = mermaid_architecture(doc)
+    (proj / "diagrams" / f"{name}-architecture.mmd").write_text(src, encoding="utf-8")
+    (proj / "diagrams" / f"{name}-architecture.md").write_text(
+        diagram_markdown(f"{name} — architecture", src, architecture_caption(doc)),
+        encoding="utf-8")
+
+
 # Per-kind projection renderers, keyed by the registry's `renderer` field. Adding a projecting kind =
 # declare `renderer: <name>` in the registry + add a handler here; test_registry_governance keeps the
 # two in lock-step. Whole-KB projections (copilot-instructions, catalog-info) are not per-kind.
 _PROJECTION_RENDERERS = {"diagram": _render_diagram, "runbook": _render_runbook,
-                         "topology": _render_topology}
+                         "topology": _render_topology, "architecture": _render_architecture}
 
 
 def render_projections(layout: RunLayout, docs: list[dict] | None = None) -> Path:
@@ -88,5 +107,5 @@ def render_projections(layout: RunLayout, docs: list[dict] | None = None) -> Pat
     for d in docs:
         handler = _PROJECTION_RENDERERS.get(renderer_for(d.get("kind")))
         if handler:
-            handler(d, proj, flows)
+            handler(d, proj, flows, docs)
     return proj

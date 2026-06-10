@@ -227,3 +227,44 @@ def test_one_corrupt_record_does_not_wipe_sibling_tallies(tmp_path):
     reloaded = GraduationTracker.load(tmp_path)
     assert reloaded.categories["missing-timeout"].confirmed == 6
     assert reloaded.categories["undocumented-job"].confirmed == 2
+
+
+# --- §3.3 flywheel trigger: readiness announces itself --------------------------------------------
+def test_cli_confirm_gap_announces_when_threshold_is_crossed(tmp_path):
+    for i in range(4):
+        r = runner.invoke(app, ["confirm-gap", "missing-timeout", "--target", str(tmp_path),
+                                "--anchor", f"Foo.java:{i}"])
+        assert "time to graduate" not in r.stdout  # below threshold: tally only
+    r = runner.invoke(app, ["confirm-gap", "missing-timeout", "--target", str(tmp_path),
+                            "--anchor", "Foo.java:5"])
+    assert r.exit_code == 0
+    assert "time to graduate: 'missing-timeout'" in r.stdout
+    assert "graduation-candidates" in r.stdout
+
+
+def test_cli_confirm_gap_false_positive_never_announces(tmp_path):
+    t = GraduationTracker()
+    for i in range(5):
+        t.confirm("missing-timeout", anchor=f"Foo.java:{i}")
+    t.save(tmp_path)
+    r = runner.invoke(app, ["confirm-gap", "missing-timeout", "--target", str(tmp_path),
+                            "--false-positive"])
+    assert "time to graduate" not in r.stdout  # a false positive blocks graduation
+
+
+def test_graduation_findings_surface_ready_categories(tmp_path):
+    from sre_kb.reporting import graduation_findings
+
+    assert graduation_findings(tmp_path, 5) == []  # no tracker -> no findings
+    t = GraduationTracker()
+    for i in range(5):
+        t.confirm("missing-timeout", anchor=f"Foo.java:{i}")
+    t.confirm("missing-fallback")  # below threshold: absent from the findings
+    t.save(tmp_path)
+    found = graduation_findings(tmp_path, 5)
+    assert len(found) == 1
+    f = found[0]
+    assert f["type"] == "graduation-ready" and f["severity"] == "info"
+    assert "missing-timeout" in f["title"]
+    assert f["artifact"] == "GraduationTracker/missing-timeout"
+    assert f["evidence"] == ".sre/graduation-tracker.yaml"

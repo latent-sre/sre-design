@@ -9,6 +9,8 @@ from sre_kb.models.facts import Fact, Symbol
 from sre_kb.util import fqn, swallow_level
 
 _HTTP = {"[HttpGet]": "GET", "[HttpPost]": "POST", "[HttpPut]": "PUT", "[HttpDelete]": "DELETE", "[HttpPatch]": "PATCH"}
+_AUTHZ = ("[Authorize]",)  # the C# counterpart of @PreAuthorize/@Secured/@RolesAllowed
+_SAVE_METHODS = ("SaveChanges", "SaveChangesAsync")
 
 
 def collect(ctx: ScanContext) -> list[Fact]:
@@ -38,6 +40,19 @@ def collect(ctx: ScanContext) -> list[Fact]:
                         Symbol(handler, "method"),
                     ))
 
+            # Authz parity with the Java collector: [Authorize] on the controller or a method
+            # is the same byte-grounded signal SecurityPosture rolls up.
+            for owner, anns, line in [(tfqn, t.annotations, t.start)] + [
+                (fqn(ns, t.name, m.name), m.annotations, m.start) for m in t.methods
+            ]:
+                ann = next((a for a in _AUTHZ if a in anns), None)
+                if ann:
+                    facts.append(Fact(
+                        "security.authz", {"annotation": ann, "target": owner},
+                        ctx.evidence(rel, line, line, "dotnet_steeltoe.annotations"),
+                        Symbol(owner, "annotation"),
+                    ))
+
             if t.kind == "class" and any("DbContext" in s for s in t.supertypes):
                 facts.append(Fact(
                     "db.repository", {"name": t.name},
@@ -65,10 +80,27 @@ def collect(ctx: ScanContext) -> list[Fact]:
                                 ctx.evidence(rel, sw.start, sw.end, "dotnet_steeltoe.annotations"),
                                 Symbol(tfqn, "class"),
                             ))
+                    if (c.method in _SAVE_METHODS and c.swallow
+                            and ("DbContext" in rtype or "context" in c.receiver.lower())):
+                        # An EF Core save in a logged-and-swallowed catch: the write is lost
+                        # silently — parity with the Java repository-save signal.
+                        sw = c.swallow
+                        facts.append(Fact(
+                            "swallowed.db.failure",
+                            {"repository": rtype or c.receiver, "level": swallow_level(sw.log_method),
+                             "message": sw.message, "class": tfqn},
+                            ctx.evidence(rel, sw.start, sw.end, "dotnet_steeltoe.annotations"),
+                            Symbol(tfqn, "class"),
+                        ))
                     if "HttpClient" in rtype or "httpclient" in c.receiver.lower():
                         if c.method.endswith("Async"):
+                            attrs = {"class": tfqn}
+                            url = next((a for a in c.str_args
+                                        if a.startswith(("http://", "https://", "/"))), None)
+                            if url:
+                                attrs["url"] = url
                             facts.append(Fact(
-                                "http.egress", {"class": tfqn},
+                                "http.egress", attrs,
                                 ctx.evidence(rel, c.line, c.line, "dotnet_steeltoe.annotations"),
                                 Symbol(tfqn, "class"),
                             ))

@@ -46,9 +46,14 @@ def collect(ctx: ScanContext) -> list[Fact]:
                         ))
                 for c in m.calls:
                     if c.method.lower() in _EGRESS_METHODS and c.receiver.lower() in _EGRESS_RECEIVERS:
+                        attrs = {"class": f"{rel}#{handler}", "client": c.receiver}
+                        url = next((a for a in c.str_args
+                                    if a.startswith(("http://", "https://", "/"))), None)
+                        if url:
+                            attrs["url"] = url
                         facts.append(Fact(
                             "http.egress",
-                            {"class": f"{rel}#{handler}", "client": c.receiver},
+                            attrs,
                             ctx.evidence(rel, c.line, c.line, "go_net.endpoints"),
                             Symbol(handler, "method"),
                         ))

@@ -50,6 +50,8 @@ class AutopilotResult:
     proposed_patterns: int = 0
     contract_routed: int = 0
     narrative_note: str | None = None
+    pcf_review_routed: int = 0
+    narrations_applied: int = 0
 
 
 def _apply_cycle(layout: RunLayout, target: Path, outcome: CycleOutcome, *, record: bool) -> None:
@@ -80,6 +82,10 @@ def _ingest_drafts(layout: RunLayout, target: Path, result: AutopilotResult) -> 
     engine half and land the survivors. Every drafter self-gates on a missing/malformed file, so a
     deferred task simply contributes nothing."""
     from sre_kb.pipeline import alerts_draft, architecture, contract, runbooks_draft
+    from sre_kb.pipeline.diagram_narration import apply_narrations
+    from sre_kb.pipeline.diagram_narration import PROPOSALS_REL as NARRATIONS_REL
+    from sre_kb.pipeline.pcf_review import PROPOSALS_REL as PCF_REVIEW_REL
+    from sre_kb.pipeline.pcf_review import run_pcf_review
     from sre_kb.render import load_kb
     from sre_kb.render.project import service_name
     from sre_kb.reporting import collect_findings, render_narrative, validate_narrative
@@ -109,6 +115,16 @@ def _ingest_drafts(layout: RunLayout, target: Path, result: AutopilotResult) -> 
             [{"target": o.proposal.target, "result": o.result, "path": o.path,
               "lines": list(o.lines) if o.lines else None, "note": o.note}
              for o in reviewed.outcomes], indent=2), encoding="utf-8")
+    if (target / PCF_REVIEW_REL).exists():
+        result.pcf_review_routed = len(run_pcf_review(str(target)).kept())
+    if (target / NARRATIONS_REL).exists():
+        from sre_kb.render import render_projections
+
+        # Narrations decorate rendered diagram markdown; autopilot cycles stop at validate,
+        # so render the final run's projections (deterministic, idempotent) before applying.
+        render_projections(layout, docs)
+        result.narrations_applied = len(
+            apply_narrations(layout, docs, target / NARRATIONS_REL).applied())
     npath = target / NARRATIVE_REL
     if npath.exists():
         found = collect_findings(docs)

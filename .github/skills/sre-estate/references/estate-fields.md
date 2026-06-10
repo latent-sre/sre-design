@@ -16,20 +16,42 @@ node with more than one attached service.
 ```yaml
 kind: Topology
 spec:
-  nodes: [ { type: service|datastore|broker|topic|resource|external, name: orders-postgres }, ... ]
+  nodes: [ { type: service|frontend|datastore|broker|topic|resource|library|external, name: orders-postgres }, ... ]
   edges: [ { from: order-service, to: orders-postgres, relation: binds }, ... ]
-  # relation: binds | calls | publishes | consumes
+  # relation: binds | calls | publishes | consumes | uses-library
   pcfSpaces: []
 ```
 
-Two joins make the edges real, not just declared:
+Four joins make the edges real, not just declared:
 
 - **`calls` edges resolve across repos** — a `clients.*.base-url` whose hostname matches
   another scanned service's PCF route becomes a `service -> service` edge; an unmatched
   hostname stays an `external` node (call out the naming gap, don't invent the edge).
+  *Ambiguous* targets — an IP-literal baseUrl, or a hostname/client key that resembles a
+  scanned service without matching its routes — are never guessed: each becomes a
+  `possible-call-edge` advisory finding plus an item in the run's
+  `confirm/edge-calls.json` worklist for human/LLM confirmation.
 - **`topic` nodes join producers to consumers** — a channel one repo publishes and another
   consumes appears once, with `publishes`/`consumes` edges on each side. "Who consumes
   `order.created`?" is read straight off the graph.
+- **`library` nodes join shared internal code** — dependencies matching the configured
+  `estate.internal_namespaces` globs (e.g. `com.acme*`, `@acme/*`) become `uses-library`
+  edges, so "which repos does a change to this library blast into?" reads off the graph.
+  When two services pin different versions, the estate report carries a
+  `library-version-skew` finding.
+- **`calls` edges are contract-backed when the provider ships a spec** — a resolved
+  edge to a service with ingested OpenAPI endpoints carries `contract: openapi`, and a
+  provider whose baseline diff shows *breaking* changes raises an
+  `api-breaking-change-blast` finding naming every scanned consumer.
+
+## Confirming ambiguous edges
+
+An estate run writes `confirm/edge-calls.json` when a baseUrl is ambiguous (an IP literal, or a
+hostname/client key that resembles a scanned service without matching its routes). Each item
+carries a self-contained `prompt`: answer `affirm` (genuinely external) or `dispute` followed by
+the scanned service it actually targets, citing the evidence line. Verdicts are advisory — the
+engine never draws the edge from a verdict alone; a confirmed alias is a naming gap to fix in the
+target's config/routes, after which the next estate run resolves the edge deterministically.
 
 ## Cross-service `BlastRadius`
 

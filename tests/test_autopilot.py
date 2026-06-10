@@ -53,6 +53,16 @@ class StubProvider:
                 {"pattern": "event-notification", "anchor": _PUBLISH_LINE,
                  "rationale": "publishes a domain event after the write"},
             ]})
+        if "deployment-review context" in prompt:
+            return json.dumps({"proposals": [
+                {"check": "missing-disk-quota", "app": "order-service", "severity": "low",
+                 "rationale": "no disk_quota declared for an app that writes local spill files"},
+            ]})
+        if "Diagram-narration context" in prompt:
+            return json.dumps({"narrations": [
+                {"diagram": "create-order", "text": "Shows the create-order flow."},
+                {"diagram": "no-such-drawing", "text": "must be dropped"},
+            ]})
         if "allowedRefs" in prompt:  # the narrative brief
             return "Risk is concentrated in the publish path; review the uncovered burn-rate alert."
         if "Affirm" in prompt:
@@ -84,6 +94,16 @@ def test_autopilot_converges_and_folds_every_channel_in(tmp_path):
     assert result.drafted_runbooks == 1
     assert (layout.kb / "needs-review" / "Runbook" / "create-order-latency-burn-rate.yaml").exists()
     assert result.proposed_patterns == 1
+    # the PCF review proposal was folded in and REFUTED by the manifest bytes — the fixture
+    # declares disk_quota: 1G, so the claim dies at the engine's re-derivation gate
+    assert result.pcf_review_routed == 0
+    import json as _json
+    review = _json.loads((target / ".sre" / "pcf-review.json").read_text())
+    assert review["findings"] == []
+    # the valid narration decorated the rendered diagram; the bogus name was dropped
+    assert result.narrations_applied == 1
+    flow_md = (layout.root / "projections" / "diagrams" / "create-order.md").read_text()
+    assert "Narration (LLM, advisory)" in flow_md
     assert list((layout.kb / "needs-review").rglob("Architecture/*proposed-patterns*.yaml"))
     assert not list((layout.kb / "verified").rglob("Runbook/create-order-latency-burn-rate.yaml"))
     # the narrative was grounded and rendered into the run's reports

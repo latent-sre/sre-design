@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,8 +12,19 @@ import yaml
 from sre_kb.collectors import scan
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.config import load_config
-from sre_kb.estate.topology import build_estate
-from sre_kb.render.diagrams import TOPOLOGY_LEGEND, diagram_markdown, mermaid_topology
+from sre_kb.estate.topology import (
+    ambiguous_call_edges,
+    build_estate,
+    contract_change_blast,
+    library_version_skew,
+)
+from sre_kb.render.diagrams import (
+    TOPOLOGY_LEGEND,
+    diagram_markdown,
+    mermaid_topology,
+    topology_overlays,
+)
+from sre_kb.tiers import AST
 from sre_kb.util import slug
 from sre_kb.validation.gating import final_status
 from sre_kb.validation.provenance import verify_evidence_roots
@@ -29,15 +41,19 @@ class EstateResult:
     docs: int
     by_status: dict
     report_path: Path | None = None
+    findings: list[dict] | None = None
 
 
 def _dump(path: Path, doc: dict) -> None:
     path.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
-def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | None = None) -> EstateResult:
+def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | None = None,
+               internal_namespaces: list[str] | None = None) -> EstateResult:
     cfg = load_config()
     gate = cfg.get("gating", {})
+    if internal_namespaces is None:
+        internal_namespaces = (cfg.get("estate") or {}).get("internal_namespaces") or []
     run_id = run_id or "estate-" + time.strftime("%Y%m%d-%H%M%S")
     layout = RunLayout(Path(work_root), run_id)
     layout.ensure()
@@ -62,7 +78,30 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
         services.append({"service": name, "ctx": ctx, "fs": fs})
         roots[ctx.repo] = root
 
-    docs = build_estate(services)
+    docs = build_estate(services, tuple(internal_namespaces))
+    topo_edges = next((d["spec"]["edges"] for d in docs if d["kind"] == "Topology"), [])
+    findings = (library_version_skew(services, tuple(internal_namespaces))
+                + contract_change_blast(services, topo_edges))
+    # §3.2/§5.6: ambiguous baseUrls (IP literals, alias-suspect hostnames) are never guessed
+    # into edges — they become confirm-worklist items plus advisory findings.
+    ambiguous = ambiguous_call_edges(services)
+    if ambiguous:
+        confirm_dir = layout.root / "confirm"
+        confirm_dir.mkdir(parents=True, exist_ok=True)
+        (confirm_dir / "edge-calls.json").write_text(
+            json.dumps({"schema": "sre-kb/estate-edge-confirm/v1", "runId": run_id,
+                        "items": ambiguous}, indent=2), encoding="utf-8")
+        findings += [{
+            "type": "possible-call-edge",
+            "severity": "info",
+            "from": a["from"],
+            "client": a["client"],
+            "baseUrl": a["baseUrl"],
+            "candidate": a["candidate"],
+            "detail": (f"{a['from']}'s client '{a['client']}' targets {a['baseUrl']} "
+                       f"({a['reason']}); the edge was not guessed — confirm it via "
+                       "confirm/edge-calls.json."),
+        } for a in ambiguous]
     layout.reset_kb()  # re-run under the same run-id must not leak stale estate artifacts
     by_status: dict[str, int] = {}
     records = []
@@ -91,7 +130,16 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
     if topo:
         diagrams = layout.root / "projections" / "diagrams"
         diagrams.mkdir(parents=True, exist_ok=True)
-        src = mermaid_topology(topo)
+        # Data-loss styling joins from the co-tenancy BlastRadius docs; tier coloring from each
+        # service's declared criticality — authoritative (Tier-A) declarations only, mirroring
+        # the severity-floor rule (an LLM-proposed tier stays advisory, never amplified).
+        _, lossy = topology_overlays(topo, docs)
+        tiers = {
+            s["service"]: decl.attrs.get("tier")
+            for s in services
+            if (decl := s["fs"].first("criticality.declared")) and decl.evidence.source_tier == AST
+        }
+        src = mermaid_topology(topo, tiers=tiers, lossy=lossy)
         (diagrams / "topology.mmd").write_text(src, encoding="utf-8")
         (diagrams / "topology.md").write_text(
             diagram_markdown("estate — topology", src, TOPOLOGY_LEGEND), encoding="utf-8")
@@ -99,5 +147,5 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
     svc_names = [s["service"] for s in services]
     report_path = layout.reports / "estate_report.json"
     write_report(report_path, {"run_id": run_id, "services": svc_names, "docs": len(docs),
-                               "by_status": by_status, "records": records})
-    return EstateResult(run_id, layout.root, svc_names, len(docs), by_status, report_path)
+                               "by_status": by_status, "records": records, "findings": findings})
+    return EstateResult(run_id, layout.root, svc_names, len(docs), by_status, report_path, findings)

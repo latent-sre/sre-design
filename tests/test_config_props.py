@@ -43,3 +43,25 @@ def test_timelimiter_instances_cite_distinct_lines(tmp_path):
     lines = _YML.splitlines()
     assert "2s" in lines[order_ln - 1]                 # orderClient cites its own 2s line
     assert "5s" in lines[payment_ln - 1]               # paymentClient cites its own 5s line
+
+
+def test_config_import_emits_external_source_facts(tmp_path):
+    """spring.config.import entries (with/without optional:) and the legacy
+    spring.cloud.config.uri all surface as config.source facts citing their lines."""
+    (tmp_path / "application.yml").write_text(
+        "spring:\n"
+        "  config:\n"
+        "    import:\n"
+        "    - optional:configserver:http://config.internal:8888\n"
+        "    - vault://secret/orders\n"
+        "  cloud:\n"
+        "    config:\n"
+        "      uri: http://legacy-config:8888\n",
+        encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    srcs = [f for f in config_props.collect(ctx) if f.type == "config.source"]
+    by_kind = {(f.attrs["kind"], f.attrs["uri"]): f.attrs for f in srcs}
+    assert by_kind[("configserver", "http://config.internal:8888")]["optional"] is True
+    assert ("vault", "//secret/orders") in by_kind
+    assert by_kind[("configserver", "http://legacy-config:8888")]["optional"] is False
+    assert all(f.evidence.path == "application.yml" for f in srcs)

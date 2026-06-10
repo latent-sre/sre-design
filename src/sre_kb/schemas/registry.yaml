@@ -64,7 +64,10 @@ kinds:
 
   # --- P2 breadth ---
   TechStack:        { schema: schemas/v1alpha1/TechStack.schema.json,        phase: P2 }
-  Architecture:     { schema: schemas/v1alpha1/Architecture.schema.json,     phase: P2 }
+  Architecture:
+    schema: schemas/v1alpha1/Architecture.schema.json
+    phase: P2
+    renderer: architecture   # -> projections/diagrams/<name>-architecture.mmd (C4-ish context)
   Deployment:       { schema: schemas/v1alpha1/Deployment.schema.json,       phase: P2 }
   Dependency:       { schema: schemas/v1alpha1/Dependency.schema.json,       phase: P2 }
   # Built from detected endpoints/channels; common.openapi ingests an existing OpenAPI/AsyncAPI spec

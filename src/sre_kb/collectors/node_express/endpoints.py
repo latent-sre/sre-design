@@ -51,9 +51,14 @@ def collect(ctx: ScanContext) -> list[Fact]:
                     is_client = meth in _EGRESS_METHODS and recv in _EGRESS_RECEIVERS
                     is_fetch = not c.receiver and meth == "fetch"
                     if is_client or is_fetch:
+                        attrs = {"class": f"{rel}#{handler}", "client": c.receiver or "fetch"}
+                        url = next((a for a in c.str_args
+                                    if a.startswith(("http://", "https://", "/"))), None)
+                        if url:
+                            attrs["url"] = url
                         facts.append(Fact(
                             "http.egress",
-                            {"class": f"{rel}#{handler}", "client": c.receiver or "fetch"},
+                            attrs,
                             ctx.evidence(rel, c.line, c.line, "node_express.endpoints"),
                             Symbol(handler, "method"),
                         ))

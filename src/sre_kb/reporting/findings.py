@@ -124,6 +124,35 @@ def detect_tier_conflicts(facts: list) -> list[dict]:
     return conflicts
 
 
+# --- §3.3 graduation flywheel: the stats trigger -------------------------------------
+#
+# The tracker tallies reviewer confirmations and graduation-draft turns a promotion-ready
+# category into a signature sketch — but nothing *announced* readiness; a maintainer had to
+# remember to run `graduation-candidates`. This finding closes that gap: crossing the
+# threshold surfaces automatically wherever findings are read, and the AI surface shrinks by
+# one category when it's acted on.
+
+def graduation_findings(target_root, threshold: int) -> list[dict]:
+    """One `graduation-ready` finding per promotion-ready category in the target repo's
+    graduation tracker (confirmed >= threshold, zero false positives, not yet promoted)."""
+    from pathlib import Path
+
+    from sre_kb.graduation import TRACKER_REL, GraduationTracker
+
+    return [{
+        "type": "graduation-ready",
+        "severity": "info",
+        "title": f"gap category '{cat.category}' is ready to graduate to Tier-A",
+        "detail": (f"{cat.confirmed} reviewer confirmation(s), zero false positives — run "
+                   "`sre-kb graduation-candidates` for the deterministic signature sketch and "
+                   "merge it by hand; the LLM stops being asked about this category."),
+        "impactedFlows": [],
+        "artifact": f"GraduationTracker/{cat.category}",
+        "evidence": TRACKER_REL,
+        "tier": "ast",
+    } for cat in GraduationTracker.load(Path(target_root)).candidates(threshold)]
+
+
 def _counts(docs: list[dict]) -> dict[str, int]:
     by: dict[str, int] = {}
     for d in docs:

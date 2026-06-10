@@ -124,3 +124,215 @@ def test_same_target_listed_twice_is_idempotent(tmp_path_factory):
     work = tmp_path_factory.mktemp("dup2")
     r = run_estate([str(ORDER), str(ORDER), str(BILLING)], work_root=str(work), run_id="idem")
     assert sorted(r.services) == ["billing-service", "order-service"]
+
+
+def _lib_repo(root: Path, name: str, version: str) -> None:
+    root.mkdir(parents=True)
+    (root / "manifest.yml").write_text(
+        f"applications:\n- name: {name}\n", encoding="utf-8")
+    (root / "pom.xml").write_text(
+        "<project>\n<dependencies>\n<dependency>\n"
+        "<groupId>com.acme</groupId>\n<artifactId>acme-models</artifactId>\n"
+        f"<version>{version}</version>\n</dependency>\n</dependencies>\n</project>\n",
+        encoding="utf-8")
+
+
+def test_internal_library_joins_services_and_flags_version_skew(tmp_path):
+    """Allowlisted internal dependencies become library nodes with uses-library edges; two
+    services pinning different versions of the same library raise a version-skew finding."""
+    _lib_repo(tmp_path / "a", "svc-a", "1.0.0")
+    _lib_repo(tmp_path / "b", "svc-b", "2.0.0")
+    r = run_estate([str(tmp_path / "a"), str(tmp_path / "b")],
+                   work_root=str(tmp_path / "w"), run_id="libs",
+                   internal_namespaces=["com.acme*"])
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    nodes = {n["name"]: n["type"] for n in topo["spec"]["nodes"]}
+    assert nodes["acme-models"] == "library"
+    edges = topo["spec"]["edges"]
+    assert {"from": "svc-a", "to": "acme-models", "relation": "uses-library"} in edges
+    assert {"from": "svc-b", "to": "acme-models", "relation": "uses-library"} in edges
+    skew = [f for f in (r.findings or []) if f["type"] == "library-version-skew"]
+    assert len(skew) == 1
+    assert skew[0]["versions"] == {"svc-a": "1.0.0", "svc-b": "2.0.0"}
+    # The finding also lands in the written estate report (the reviewer-facing record).
+    import json
+    report = json.loads(r.report_path.read_text())
+    assert report["findings"] == skew
+
+
+def test_no_allowlist_means_no_library_lineage(tmp_path):
+    """Default (empty allowlist): dependency facts never become graph nodes — third-party
+    libraries would drown the topology."""
+    _lib_repo(tmp_path / "a", "svc-a", "1.0.0")
+    _lib_repo(tmp_path / "b", "svc-b", "2.0.0")
+    r = run_estate([str(tmp_path / "a"), str(tmp_path / "b")],
+                   work_root=str(tmp_path / "w"), run_id="nolibs")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    assert all(n["type"] != "library" for n in topo["spec"]["nodes"])
+    assert not r.findings
+
+
+def test_same_version_everywhere_is_lineage_without_skew(tmp_path):
+    _lib_repo(tmp_path / "a", "svc-a", "1.0.0")
+    _lib_repo(tmp_path / "b", "svc-b", "1.0.0")
+    r = run_estate([str(tmp_path / "a"), str(tmp_path / "b")],
+                   work_root=str(tmp_path / "w"), run_id="same",
+                   internal_namespaces=["com.acme*"])
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    assert any(n["type"] == "library" for n in topo["spec"]["nodes"])
+    assert not r.findings
+
+
+def test_spa_connects_to_its_backend_with_zero_declaration(tmp_path):
+    """§5.4: a React repo declaring its API via vite proxy resolves to a real
+    frontend -> service edge through the same route<->baseUrl join, and the SPA's node
+    renders as `frontend`."""
+    spa = tmp_path / "shop-ui"
+    spa.mkdir()
+    (spa / "package.json").write_text(
+        '{"name": "shop-ui", "dependencies": {"react": "^18.0.0"}}', encoding="utf-8")
+    (spa / "vite.config.ts").write_text(
+        "export default { server: { proxy: {"
+        " '/api': { target: 'http://orders.apps.internal' } } } }\n",
+        encoding="utf-8")
+    api = tmp_path / "orders"
+    api.mkdir()
+    (api / "manifest.yml").write_text(
+        "applications:\n- name: orders\n  routes:\n  - route: orders.apps.internal\n",
+        encoding="utf-8")
+    r = run_estate([str(spa), str(api)], work_root=str(tmp_path / "w"), run_id="spa")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    nodes = {n["name"]: n["type"] for n in topo["spec"]["nodes"]}
+    assert nodes["shop-ui"] == "frontend"
+    assert {"from": "shop-ui", "to": "orders", "relation": "calls"} in topo["spec"]["edges"]
+
+
+def test_breaking_contract_change_blasts_into_scanned_consumers(tmp_path):
+    """§5.5: a provider with a spec gets contract-backed calls edges, and its breaking
+    baseline-diff changes become an estate finding naming the impacted consumers."""
+    provider = tmp_path / "orders"
+    (provider / ".sre" / "api-baseline").mkdir(parents=True)
+    (provider / "manifest.yml").write_text(
+        "applications:\n- name: orders\n  routes:\n  - route: orders.apps.internal\n",
+        encoding="utf-8")
+    (provider / "openapi.yaml").write_text(
+        "openapi: 3.0.0\ninfo: {title: orders, version: 2.0.0}\npaths:\n"
+        "  /orders:\n    get: {operationId: list}\n",
+        encoding="utf-8")
+    (provider / ".sre" / "api-baseline" / "openapi.yaml").write_text(
+        "openapi: 3.0.0\ninfo: {title: orders, version: 1.0.0}\npaths:\n"
+        "  /orders:\n    get: {operationId: list}\n"
+        "  /orders/{id}:\n    delete: {operationId: remove}\n",  # removed -> breaking
+        encoding="utf-8")
+    consumer = tmp_path / "shop"
+    (consumer / "src/main/resources").mkdir(parents=True)
+    (consumer / "manifest.yml").write_text(
+        "applications:\n- name: shop\n", encoding="utf-8")
+    (consumer / "src/main/resources/application.yml").write_text(
+        "clients:\n  orders:\n    base-url: orders.apps.internal\n    timeout: 2s\n",
+        encoding="utf-8")
+    r = run_estate([str(provider), str(consumer)], work_root=str(tmp_path / "w"), run_id="api")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    assert {"from": "shop", "to": "orders", "relation": "calls",
+            "contract": "openapi"} in topo["spec"]["edges"]
+    blast = [f for f in (r.findings or []) if f["type"] == "api-breaking-change-blast"]
+    assert len(blast) == 1
+    assert blast[0]["provider"] == "orders"
+    assert blast[0]["impactedServices"] == ["shop"]
+    assert blast[0]["changes"] == ["operation-removed DELETE /orders/{}"]  # normPath ref
+
+
+def test_breaking_change_with_no_scanned_consumer_is_not_an_estate_finding(tmp_path):
+    """No resolved consumer -> the breaking change stays the provider's single-repo concern
+    (the Interface contract block), not estate noise."""
+    provider = tmp_path / "orders"
+    (provider / ".sre" / "api-baseline").mkdir(parents=True)
+    (provider / "manifest.yml").write_text("applications:\n- name: orders\n", encoding="utf-8")
+    (provider / "openapi.yaml").write_text(
+        "openapi: 3.0.0\ninfo: {title: o, version: 2.0.0}\npaths:\n  /a:\n    get: {}\n",
+        encoding="utf-8")
+    (provider / ".sre" / "api-baseline" / "openapi.yaml").write_text(
+        "openapi: 3.0.0\ninfo: {title: o, version: 1.0.0}\npaths:\n"
+        "  /a:\n    get: {}\n  /b:\n    get: {}\n",
+        encoding="utf-8")
+    lone = tmp_path / "lone"
+    lone.mkdir()
+    (lone / "manifest.yml").write_text("applications:\n- name: lone\n", encoding="utf-8")
+    r = run_estate([str(provider), str(lone)], work_root=str(tmp_path / "w"), run_id="noc")
+    assert [f for f in (r.findings or []) if f["type"] == "api-breaking-change-blast"] == []
+
+
+def test_cotenancy_impact_folds_transitive_callers(tmp_path):
+    """§5.7: a gateway that calls order-service degrades when the shared postgres fails —
+    impactedServices includes the A->B->C reach, with the indirect subset labeled."""
+    gw = tmp_path / "gateway"
+    (gw / "src/main/resources").mkdir(parents=True)
+    (gw / "manifest.yml").write_text("applications:\n- name: gateway\n", encoding="utf-8")
+    (gw / "src/main/resources/application.yml").write_text(
+        "clients:\n  orders:\n    base-url: order-service.apps.internal\n    timeout: 2s\n",
+        encoding="utf-8")
+    r = run_estate([str(gw), str(ORDER), str(BILLING)],
+                   work_root=str(tmp_path / "w"), run_id="trans")
+    co = next(yaml.safe_load(p.read_text())
+              for p in (r.root / "kb").rglob("orders-postgres-cotenancy.yaml"))
+    assert set(co["spec"]["impactedServices"]) == {"order-service", "billing-service", "gateway"}
+    assert co["spec"]["indirectServices"] == ["gateway"]
+    assert set(co["spec"]["coTenancy"][0]["sharedBy"]) == {"order-service", "billing-service"}
+
+
+def test_ambiguous_base_urls_become_confirm_items_not_edges(tmp_path):
+    """§3.2/§5.6: an IP-literal baseUrl and an alias-suspect hostname are never guessed into
+    edges — each becomes a confirm-worklist item plus an advisory finding."""
+    caller = tmp_path / "caller"
+    (caller / "src/main/resources").mkdir(parents=True)
+    (caller / "manifest.yml").write_text("applications:\n- name: caller\n", encoding="utf-8")
+    (caller / "src/main/resources/application.yml").write_text(
+        "clients:\n"
+        "  legacy:\n    base-url: http://10.0.3.7:8080\n    timeout: 2s\n"          # ip-literal
+        "  orders:\n    base-url: orders.internal.acme\n    timeout: 2s\n"          # alias-suspect
+        "  stripe:\n    base-url: api.stripe.com\n    timeout: 2s\n",               # plain external
+        encoding="utf-8")
+    orders = tmp_path / "orders"
+    orders.mkdir()
+    (orders / "manifest.yml").write_text(  # no route matching orders.internal.acme
+        "applications:\n- name: orders\n  routes:\n  - route: orders.apps.internal\n",
+        encoding="utf-8")
+    r = run_estate([str(caller), str(orders)], work_root=str(tmp_path / "w"), run_id="amb")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    # no guessed caller->orders edge: both ambiguous clients stay external nodes
+    assert {"from": "caller", "to": "orders", "relation": "calls"} not in topo["spec"]["edges"]
+    import json
+    items = json.loads((r.root / "confirm" / "edge-calls.json").read_text())["items"]
+    by_reason = {i["reason"]: i for i in items}
+    assert by_reason["ip-literal"]["client"] == "legacy" and by_reason["ip-literal"]["candidate"] is None
+    assert by_reason["alias-suspect"]["candidate"] == "orders"
+    assert len(items) == 2  # the plain external hostname is NOT ambiguous
+    possible = [f for f in (r.findings or []) if f["type"] == "possible-call-edge"]
+    assert {f["client"] for f in possible} == {"legacy", "orders"}
+
+
+def test_estate_groups_by_org_space_when_snapshots_exist(tmp_path):
+    """§4.3 + §2.4: cf-env snapshots populate estate pcfSpaces and the topology drawing
+    clusters services by org/space instead of one cluster per service."""
+    import json
+    for name, space in (("orders", "prod"), ("billing", "prod"), ("reports", "dev")):
+        d = tmp_path / name
+        (d / ".sre").mkdir(parents=True)
+        (d / "manifest.yml").write_text(
+            f"applications:\n- name: {name}\n  services:\n  - shared-postgres\n",
+            encoding="utf-8")
+        (d / ".sre" / "cf-env.json").write_text(json.dumps(
+            {"organization": "acme", "space": space, "services": []}), encoding="utf-8")
+    r = run_estate([str(tmp_path / n) for n in ("orders", "billing", "reports")],
+                   work_root=str(tmp_path / "w"), run_id="spaces")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    assert topo["spec"]["pcfSpaces"] == [
+        {"organization": "acme", "space": "dev", "services": ["reports"]},
+        {"organization": "acme", "space": "prod", "services": ["billing", "orders"]},
+    ]
+    mmd = (r.root / "projections" / "diagrams" / "topology.mmd").read_text()
+    assert 'subgraph sg_acme_prod["acme/prod"]' in mmd
+    assert 'subgraph sg_acme_dev["acme/dev"]' in mmd
+    # the postgres shared across spaces still lands in the co-tenant cluster
+    shared = mmd.split('["shared co-tenant"]')[1].split("end")[0]
+    assert "n_shared_postgres" in shared

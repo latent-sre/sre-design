@@ -18,6 +18,11 @@ _PARENT_BOOT = re.compile(
     re.S,
 )
 _ARTIFACT = re.compile(r"<artifactId>\s*([^<\s]+)\s*</artifactId>")
+# In canonical pom order the groupId directly precedes the artifactId and the version directly
+# follows it; both are optional context captured around each _ARTIFACT match (never required,
+# so the emitted dependency set is unchanged).
+_GROUP_BEFORE = re.compile(r"<groupId>\s*([^<\s]+)\s*</groupId>\s*\Z", re.S)
+_VERSION_AFTER = re.compile(r"\s*<version>\s*([^<\s]+)\s*</version>", re.S)
 
 
 def collect(ctx: ScanContext) -> list[Fact]:
@@ -47,10 +52,17 @@ def collect(ctx: ScanContext) -> list[Fact]:
             # whitespace inside the tag, and the old `find_line(name)` fallback could land on a
             # <groupId>/comment line that merely contains the name.
             ln = text.count("\n", 0, art.start()) + 1
+            attrs: dict = {"name": name}
+            gm = _GROUP_BEFORE.search(text, max(0, art.start() - 200), art.start())
+            if gm:
+                attrs["group"] = gm.group(1)
+            vm = _VERSION_AFTER.match(text, art.end(), art.end() + 200)
+            if vm:
+                attrs["version"] = vm.group(1)
             facts.append(
                 Fact(
                     "tech.dependency",
-                    {"name": name},
+                    attrs,
                     ctx.evidence(rel, ln, ln, "java_spring.build"),
                     Symbol(name, "dependency"),
                 )

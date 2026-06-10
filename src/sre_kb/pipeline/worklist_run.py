@@ -227,6 +227,43 @@ def _run_narrative(layout: RunLayout, provider, target: Path) -> dict:
             "note": f"{len(text.splitlines())} line(s) of narrative"}
 
 
+def _run_pcf_review(layout: RunLayout, provider, target: Path) -> dict:
+    """Ask which manifest settings deserve operator attention; the ingest
+    (`sre-kb pcf-review`) re-derives every accepted check from the manifest bytes."""
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.pipeline.confirm import load_facts_of
+    from sre_kb.pipeline.pcf_review import PROPOSALS_REL
+    from sre_kb.synth.draft_prompts import build_pcf_review_prompt
+
+    ctx = ScanContext(root=target, repo=f"file://{target.name}")
+    apps = load_facts_of(layout.facts / "facts.jsonl", "pcf.app")
+    data = extract_json_object(provider(build_pcf_review_prompt(ctx, apps)))
+    if data is None:
+        return {"task": "review-pcf", "status": "deferred",
+                "note": "unparseable reply — task left to the manual loop"}
+    return _write_proposals(target, PROPOSALS_REL, "review-pcf", data)
+
+
+def _run_narrate_diagrams(layout: RunLayout, provider, target: Path) -> dict:
+    """Ask for advisory captions over the run's diagram-bearing artifacts; the ingest
+    (`sre-kb narrate-diagrams`) drops anything that doesn't name a rendered diagram and
+    renders survivors clearly labeled advisory."""
+    from sre_kb.pipeline.diagram_narration import PROPOSALS_REL, diagram_docs
+    from sre_kb.render import load_kb
+    from sre_kb.synth.draft_prompts import build_narration_prompt
+
+    data = extract_json_object(provider(build_narration_prompt(diagram_docs(load_kb(layout.root)))))
+    if data is None:
+        return {"task": "narrate-diagrams", "status": "deferred",
+                "note": "unparseable reply — task left to the manual loop"}
+    out = target / PROPOSALS_REL
+    out.parent.mkdir(parents=True, exist_ok=True)
+    doc = data if isinstance(data, dict) else {"narrations": data}
+    out.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+    return {"task": "narrate-diagrams", "status": "written", "output": str(out),
+            "note": f"{len(doc.get('narrations') or [])} narration(s)"}
+
+
 def run_scan_worklist(layout: RunLayout, worklist: dict, provider, *, target: Path) -> list[dict]:
     """Execute every task in the scan worklist through `provider`, returning one summary dict per
     task (`status`: written | deferred). An interactive provider (the model-free Copilot file
@@ -242,6 +279,8 @@ def run_scan_worklist(layout: RunLayout, worklist: dict, provider, *, target: Pa
                "draft-runbooks": lambda: _run_draft_runbooks(layout, provider, target),
                "map-architecture": lambda: _run_map_architecture(layout, provider, target),
                "map-contracts": lambda: _run_map_contracts(layout, provider, target),
+               "review-pcf": lambda: _run_pcf_review(layout, provider, target),
+               "narrate-diagrams": lambda: _run_narrate_diagrams(layout, provider, target),
                "findings-narrative": lambda: _run_narrative(layout, provider, target)}
     summaries = []
     for task in worklist.get("tasks", []):

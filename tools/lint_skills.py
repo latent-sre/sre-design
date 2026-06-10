@@ -12,9 +12,14 @@ Rules (small on purpose — the schemas/engine do the heavy lifting):
     command-capable authoring skills from drifting into an undeclared tool surface.
   * a `version`, if present, lives under `metadata` (`metadata: {version: ...}`), never
     as a top-level key, matching docs/DESIGN.md and the GitHub Agent Skills shape,
-  * every skill appears exactly once in skills/pipeline.yaml, and vice versa.
+  * every skill appears exactly once in skills/pipeline.yaml, and vice versa,
+  * every bundled copy of a `_shared/` reference (provenance rules, challenge protocol)
+    is byte-identical to the canonical file. Skills stay self-contained folders, so the
+    shared rules are *copied* into each skill; the canonical copy lives in `_shared/` and
+    `--sync` propagates an edit to every bundling skill instead of a human doing it ~10x.
 
-stdlib only; exits non-zero on any problem so CI/tests block.
+stdlib only; exits non-zero on any problem so CI/tests block. `--sync` rewrites the
+bundled copies from `_shared/` and exits 0.
 """
 
 from __future__ import annotations
@@ -92,6 +97,38 @@ def _lint_tools(name: str, raw: str | None) -> list[str]:
     return []
 
 
+def _shared_copies() -> dict[pathlib.Path, pathlib.Path]:
+    """bundled copy -> canonical `_shared/` file, for every shared reference a skill bundles."""
+    shared = SKILLS / "_shared"
+    out: dict[pathlib.Path, pathlib.Path] = {}
+    if not shared.is_dir():
+        return out
+    for canonical in sorted(shared.glob("*.md")):
+        for copy in sorted(SKILLS.glob(f"*/references/{canonical.name}")):
+            if copy.parts[-3] not in _RESERVED:
+                out[copy] = canonical
+    return out
+
+
+def _lint_shared() -> list[str]:
+    return [
+        f"{copy.relative_to(SKILLS)}: drifted from _shared/{canonical.name} -- "
+        f"edit the canonical file and run `python tools/lint_skills.py --sync`"
+        for copy, canonical in _shared_copies().items()
+        if copy.read_bytes() != canonical.read_bytes()
+    ]
+
+
+def sync_shared() -> list[str]:
+    """Rewrite every bundled copy from its canonical `_shared/` file; returns the paths updated."""
+    updated: list[str] = []
+    for copy, canonical in _shared_copies().items():
+        if copy.read_bytes() != canonical.read_bytes():
+            copy.write_bytes(canonical.read_bytes())
+            updated.append(str(copy.relative_to(SKILLS)))
+    return updated
+
+
 def lint() -> list[str]:
     problems: list[str] = []
     if not SKILLS.is_dir():
@@ -125,10 +162,16 @@ def lint() -> list[str]:
             problems.append(f"{missing}: in skills/ but not in pipeline.yaml")
         for extra in sorted(pipeline - names):
             problems.append(f"{extra}: in pipeline.yaml but no skill dir")
+    problems.extend(_lint_shared())
     return problems
 
 
 def main() -> int:
+    if "--sync" in sys.argv[1:]:
+        updated = sync_shared()
+        print(f"lint-skills: synced {len(updated)} shared reference cop{'y' if len(updated) == 1 else 'ies'}"
+              + ("".join(f"\n  {u}" for u in updated)))
+        return 0
     problems = lint()
     if problems:
         print(f"lint-skills: {len(problems)} problem(s):", file=sys.stderr)

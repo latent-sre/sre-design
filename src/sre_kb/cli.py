@@ -126,6 +126,8 @@ def validate_kb(
         typer.echo(f"[{mark}] {r.path} ({r.kind or '?'})")
         for err in r.errors:
             typer.echo(f"         - {err}")
+        for warning in r.warnings:
+            typer.echo(f"         ~ deprecation: {warning}")
     typer.echo(f"\n{len(results)} artifact(s), {len(failures)} failed.")
     raise typer.Exit(code=1 if failures else 0)
 
@@ -210,6 +212,17 @@ def confirm_gap(
         f"recorded {verdict} for {category}: "
         f"{cat.confirmed} confirmation(s), {cat.false_positives} false-positive(s)"
     )
+    # §3.3 flywheel trigger: crossing the threshold announces itself — a maintainer should not
+    # have to remember to poll graduation-candidates for the moment a category becomes ready.
+    from sre_kb.config import load_config
+
+    threshold = int((load_config().get("graduation") or {}).get("confirmation_threshold", 5))
+    if not false_positive and cat.is_candidate(threshold):
+        typer.echo(
+            f"time to graduate: '{category}' has {cat.confirmed} confirmation(s) with zero "
+            f"false positives — run `sre-kb graduation-candidates --target {target}` for the "
+            "deterministic signature sketch"
+        )
 
 
 @app.command("graduation-candidates")
@@ -391,18 +404,27 @@ def findings(
     run_id: str = typer.Option(..., "--run"),
     fmt: str = typer.Option("text", "--format", help="text | json | md"),
     work_root: str = typer.Option(".work", "--work-root"),
+    target: Path = typer.Option(
+        None, "--target",
+        help="Target repo whose .sre/ graduation tracker to check: promotion-ready gap "
+        "categories surface as graduation-ready findings (§3.3 flywheel trigger).",
+    ),
 ) -> None:
     """Print a ranked SRE risk digest (data-loss, uncontained critical deps) for a run."""
     import json
 
+    from sre_kb.config import load_config
     from sre_kb.render import load_kb
     from sre_kb.render.project import service_name
-    from sre_kb.reporting import collect_findings, render_md, render_text
+    from sre_kb.reporting import collect_findings, graduation_findings, render_md, render_text
     from sre_kb.workspace import RunLayout
 
     layout = RunLayout(Path(work_root), run_id)
     docs = load_kb(layout.root)
     found = collect_findings(docs)
+    if target is not None:
+        threshold = int((load_config().get("graduation") or {}).get("confirmation_threshold", 5))
+        found += graduation_findings(target, threshold)
     service = service_name(docs)
     if fmt == "json":
         typer.echo(json.dumps({"service": service, "runId": run_id, "findings": found}, indent=2))
@@ -793,6 +815,20 @@ def confirm_apply_cmd(
     recorded = record_confirm_graduation(Path(tgt), outcomes, run_id)
     for cat, verdict in sorted(recorded.items()):
         typer.echo(f"  graduation: recorded {verdict} for {cat}")
+    if recorded:
+        # §3.3 flywheel trigger, same as confirm-gap: a category these verdicts just made
+        # promotion-ready announces itself instead of waiting to be polled.
+        from sre_kb.config import load_config
+        from sre_kb.graduation import GraduationTracker
+
+        threshold = int((load_config().get("graduation") or {}).get("confirmation_threshold", 5))
+        tracker = GraduationTracker.load(Path(tgt))
+        for cat in tracker.candidates(threshold):
+            if recorded.get(cat.category) == "confirmation":
+                typer.echo(
+                    f"  time to graduate: '{cat.category}' has {cat.confirmed} confirmation(s) "
+                    f"with zero false positives — run `sre-kb graduation-candidates --target {tgt}`"
+                )
 
 
 @app.command("gap-finder")
@@ -1099,6 +1135,8 @@ def estate(
     typer.echo(f"estate {r.run_id}: {len(r.services)} services {r.services}, {r.docs} artifact(s)")
     for status, n in sorted(r.by_status.items()):
         typer.echo(f"  {status}: {n}")
+    for f in r.findings or []:
+        typer.echo(f"  [{f['severity'].upper()}] {f['type']}: {f['detail']}")
     typer.echo(f"  output: {r.root}")
 
 
@@ -1152,6 +1190,47 @@ def diff(
     typer.echo(f"  changelog: {changelog}")
     if fail_on_drift and drifted:
         raise typer.Exit(code=1)
+
+
+@app.command("pcf-review")
+def pcf_review_cmd(
+    target: str = typer.Option(..., "--target", help="Local path of the target repo."),
+) -> None:
+    """Tier-B PCF deployment review (§3.2): ingest the review-pcf proposals and re-derive each
+    accepted check deterministically from the manifest bytes — a claim the manifest disproves is
+    refuted regardless of the rationale. Survivors land as advisory findings in
+    <target>/.sre/pcf-review.json; the engine never calls a model."""
+    from sre_kb.pipeline.pcf_review import REVIEW_REL, run_pcf_review
+
+    result = run_pcf_review(target)
+    kept = result.kept()
+    for o in result.outcomes:
+        typer.echo(f"  {o.proposal.check} / {o.proposal.app}: {o.result}  ({o.note})")
+    typer.echo(f"pcf-review: {len(result.outcomes)} proposal(s) -> {len(kept)} routed, "
+               f"{len(result.outcomes) - len(kept)} dropped")
+    if kept:
+        typer.echo(f"  findings: {Path(target) / REVIEW_REL}")
+
+
+@app.command("narrate-diagrams")
+def narrate_diagrams_cmd(
+    run_id: str = typer.Option(..., "--run"),
+    target: str = typer.Option(..., "--target", help="Target repo holding .sre/diagram-narrations.json."),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Tier-B diagram narration (§3.2/§2.6): apply the narrate-diagrams captions to the run's
+    rendered diagram markdown — only names this run actually rendered, sanitized to one plain
+    paragraph, and always labeled advisory."""
+    from sre_kb.pipeline.diagram_narration import PROPOSALS_REL, apply_narrations
+    from sre_kb.render import load_kb
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    result = apply_narrations(layout, load_kb(layout.root), Path(target) / PROPOSALS_REL)
+    for o in result.outcomes:
+        typer.echo(f"  {o.diagram}: {o.result}  ({o.note})")
+    applied = result.applied()
+    typer.echo(f"narrate-diagrams: {len(result.outcomes)} narration(s) -> {len(applied)} applied")
 
 
 def main() -> None:

@@ -17,7 +17,11 @@
         "source": { "type": "string" },
         "baseUrl": { "type": ["string", "null"] },
         "engine": { "type": ["string", "null"], "description": "Datastore/broker engine (e.g. postgres, kafka) — folded in from the former DataStore kind (S1: app binds X, not the infra)." },
-        "criticality": { "type": "string" }
+        "criticality": { "type": "string" },
+        "plan": { "type": ["string", "null"], "description": "Service plan from the cf-env snapshot (.sre/cf-env.json), when one is checked in." },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "managed": { "type": "boolean", "description": "Broker-managed service vs user-provided, from the cf-env snapshot." },
+        "snapshot": { "type": "object", "description": "Freshness marker for snapshot-derived fields (capturedAt) — snapshot facts drift from live platform state; sre-kb diff catches that." }
       }
     }
   }

@@ -1,6 +1,11 @@
 """Reporting: turn the validated KB into a ranked, actionable SRE risk digest."""
 
-from sre_kb.reporting.findings import collect_findings, render_md, render_text
+from sre_kb.reporting.findings import (
+    collect_findings,
+    graduation_findings,
+    render_md,
+    render_text,
+)
 from sre_kb.reporting.narrative import (
     NARRATIVE_REL,
     NarrativeCheck,
@@ -15,6 +20,7 @@ __all__ = [
     "NarrativeCheck",
     "allowed_refs",
     "collect_findings",
+    "graduation_findings",
     "narrative_brief",
     "render_md",
     "render_narrative",

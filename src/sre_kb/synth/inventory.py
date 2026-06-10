@@ -114,10 +114,11 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "patterns": patterns, "styleTags": ["layered"],
         }, arch_ev, "verified", confidence(Signal.DERIVED), service))  # composed from components
 
-    # --- Deployment (infra + capacity) ---
-    if app:
-        a = app.attrs
-        docs.append(emit("Deployment", service, {
+    # --- Deployment (infra + capacity; one per manifest, so env variants keep their own contract) ---
+    for app_f in fs.of("pcf.app"):
+        a = app_f.attrs
+        env_name = a.get("environment")
+        dep_spec = {
             "hosting": "PCF",
             "instances": a.get("instances"),
             "memory": a.get("memory"),
@@ -128,23 +129,46 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "buildpacks": a.get("buildpacks", []),
             "healthCheck": a.get("healthCheck", {}),
             "profiles": (a.get("env") or {}).get("SPRING_PROFILES_ACTIVE"),
-        }, [app.evidence], "verified", confidence(Signal.DIRECT), service))
+            "processes": a.get("processes", []),
+            "sidecars": a.get("sidecars", []),
+        }
+        if env_name:
+            dep_spec["environment"] = env_name
+        docs.append(emit("Deployment", f"{service}-{env_name}" if env_name else service, dep_spec,
+                         [app_f.evidence], "verified", confidence(Signal.DIRECT), service))
 
     # --- Dependency (runtime service deps: bindings + downstream HTTP) ---
     # S1: a datastore/broker binding folds into Dependency (app binds X), carrying its `engine` — the
     # former DataStore kind's infra fields (backup/RPO/RTO) are platform-DR concerns an app team
     # doesn't own (SCOPE §5).
+    # A cf-env snapshot (§4.3) upgrades bindings from bare names to typed, planned services:
+    # the broker-reported `label` classifies what name heuristics can't, and plan/tags/managed
+    # ride along with the snapshot's freshness marker.
+    instances = {f.attrs["name"]: f for f in fs.of("pcf.service-instance")}
     for sb in fs.of("pcf.service-binding"):
         name = sb.attrs["name"]
-        dtype = "datastore" if is_datastore(name) else "broker" if is_broker(name) else "service-binding"
-        docs.append(emit("Dependency", name, {
+        inst = instances.get(name)
+        label = inst.attrs.get("label") if inst else None
+        classify = f"{label or ''} {name}"
+        dtype = ("datastore" if is_datastore(classify)
+                 else "broker" if is_broker(classify) else "service-binding")
+        dep_spec = {
             "name": name,
             "type": dtype,
             "source": "pcf-service-binding",
-            "engine": datastore_engine(name) if dtype == "datastore" else (
-                broker_kind(name) if dtype == "broker" else None),
+            "engine": datastore_engine(classify) if dtype == "datastore" else (
+                broker_kind(classify) if dtype == "broker" else None),
             "criticality": "critical",
-        }, [sb.evidence], "verified", confidence(Signal.DIRECT), service))
+        }
+        dep_ev = [sb.evidence]
+        if inst:
+            dep_spec.update({"plan": inst.attrs.get("plan"), "tags": inst.attrs.get("tags") or [],
+                             "managed": inst.attrs.get("managed")})
+            if inst.attrs.get("capturedAt"):
+                dep_spec["snapshot"] = {"capturedAt": inst.attrs["capturedAt"]}
+            dep_ev.append(inst.evidence)
+        docs.append(emit("Dependency", name, dep_spec, dep_ev,
+                         "verified", confidence(Signal.DIRECT), service))
     for c in fs.of("config.client"):
         cname = c.attrs.get("client", "downstream")
         docs.append(emit("Dependency", f"{cname}-http", {
@@ -236,7 +260,8 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
     pubs = fs.of("message.egress")
     cons = fs.of("message.consumer")
     if bindings or clients or pubs or cons:
-        topo_nodes: list[dict] = [{"type": "service", "name": service}]
+        own_type = "frontend" if fs.first("tech.frontend") else "service"
+        topo_nodes: list[dict] = [{"type": own_type, "name": service}]
         topo_edges: list[dict] = []
         seen_nodes = {service}
         for sb in bindings:
@@ -267,19 +292,29 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
                 if edge not in topo_edges:
                     topo_edges.append(edge)
         topo_ev = [(bindings or clients or pubs or cons)[0].evidence]
+        # §4.3: the cf-env snapshot's org/space finally populates pcfSpaces.
+        space = fs.first("pcf.space")
+        pcf_spaces = ([{"organization": space.attrs.get("organization"),
+                        "space": space.attrs.get("space"), "services": [service]}]
+                      if space else [])
+        if space:
+            topo_ev.append(space.evidence)
         docs.append(emit("Topology", service, {
             "nodes": topo_nodes,
             "edges": topo_edges,
-            "pcfSpaces": [],
+            "pcfSpaces": pcf_spaces,
         }, topo_ev, "verified", confidence(Signal.DIRECT), service))
 
     # --- ConfigManagement ---
     config_facts = fs.of("config.slo", "config.client", "config.timelimiter", "config.actuator")
-    if config_facts:
+    config_sources = fs.of("config.source")
+    if config_facts or config_sources:
         profiles = (app.attrs.get("env") or {}).get("SPRING_PROFILES_ACTIVE") if app else None
-        # Sources are the files the config facts actually cite, plus the manifest env block
-        # when one exists — not a hardcoded list.
-        sources = sorted({f.evidence.path for f in config_facts})
+        # Sources are the files the config facts actually cite, plus the external sources the
+        # config declares (config-server/vault imports), plus the manifest env block when one
+        # exists — not a hardcoded list.
+        sources = sorted({f.evidence.path for f in config_facts + config_sources})
+        sources += sorted({f"{f.attrs['kind']}:{f.attrs['uri']}" for f in config_sources})
         if app and app.attrs.get("env"):
             sources.append("pcf-manifest-env")
         docs.append(emit("ConfigManagement", service, {
@@ -287,7 +322,8 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "profiles": [profiles] if profiles else [],
             "refreshScope": bool(fs.first("config.refreshscope")),
             "properties": [f.attrs for f in config_facts],
-        }, [config_facts[0].evidence], "verified", confidence(Signal.DIRECT), service))
+        }, [(config_facts + config_sources)[0].evidence], "verified",
+            confidence(Signal.DIRECT), service))
 
     # --- DeliveryPipeline (one per checked-in CI workflow; only what the file states) ---
     for wf in fs.of("pipeline.workflow"):

@@ -136,6 +136,7 @@ Engine-computed failure impact for one node (dependency/broker/datastore): the f
 | `node.name` | string | yes |  |
 | `impactedFlows` | array of string | yes |  |
 | `impactedServices` | array of string |  |  |
+| `indirectServices` | array of string |  | The subset of impactedServices reached transitively (bounded-depth walk of resolved calls edges against their direction), not by binding the node directly. |
 | `containment` | array |  |  |
 | `coTenancy` | array |  |  |
 | `stateful` | object |  |  |
@@ -224,6 +225,9 @@ The app's deployment contract with the platform (PCF manifest): instances, memor
 | `buildpacks` | array |  |  |
 | `healthCheck` | object |  |  |
 | `profiles` | string or array or null |  |  |
+| `processes` | array |  |  |
+| `sidecars` | array |  |  |
+| `environment` | string |  |  |
 
 ## Dependency
 
@@ -237,6 +241,10 @@ One external dependency of the service (HTTP API, datastore, broker), with where
 | `baseUrl` | string or null |  |  |
 | `engine` | string or null |  | Datastore/broker engine (e.g. postgres, kafka) — folded in from the former DataStore kind (S1: app binds X, not the infra). |
 | `criticality` | string |  |  |
+| `plan` | string or null |  | Service plan from the cf-env snapshot (.sre/cf-env.json), when one is checked in. |
+| `tags` | array of string |  |  |
+| `managed` | boolean |  | Broker-managed service vs user-provided, from the cf-env snapshot. |
+| `snapshot` | object |  | Freshness marker for snapshot-derived fields (capturedAt) — snapshot facts drift from live platform state; sre-kb diff catches that. |
 
 ## Interface
 

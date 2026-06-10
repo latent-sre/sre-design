@@ -27,10 +27,12 @@ phases:
     - sre-blast-radius
     - sre-prr-review
     - sre-security-posture
+    - sre-pcf-review
   generate:
     - sre-generate-slos
     - sre-generate-dashboards
     - generate-alerts
     - generate-runbooks
+    - sre-narrate-diagrams
   consume:
     - sre-incident-response

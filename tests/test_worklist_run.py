@@ -96,6 +96,11 @@ def _automated_oracle(prompt: str) -> str:
         ]})
     if "-draft context" in prompt or "Contract-review context" in prompt:
         return '{"proposals": []}'  # alert/runbook/architecture drafts + contract review
+    if "deployment-review context" in prompt:
+        return '{"proposals": []}'  # the stub finds nothing review-worthy
+    if "Diagram-narration context" in prompt:
+        return json.dumps({"narrations": [
+            {"diagram": "create-order", "text": "Shows the order flow."}]})
     if "allowedRefs" in prompt:  # the narrative brief is a JSON document
         return "No significant risks beyond the digest."
     if "Affirm" in prompt or "affirm" in prompt:
@@ -135,6 +140,11 @@ def test_runner_writes_every_output_where_the_manual_loop_would(tmp_path):
     if "findings-narrative" in by_task:
         text = (target / ".sre" / "findings-narrative.md").read_text()
         assert "No significant risks" in text
+    if "review-pcf" in by_task:
+        assert json.loads((target / ".sre" / "pcf-review-proposals.json").read_text()) == {"proposals": []}
+    if "narrate-diagrams" in by_task:
+        narrations = json.loads((target / ".sre" / "diagram-narrations.json").read_text())
+        assert narrations["narrations"][0]["diagram"] == "create-order"
 
 
 def test_runner_defers_discover_on_unparseable_reply_never_fabricates(tmp_path):

@@ -236,3 +236,21 @@ def test_deployment_env_variant_gets_its_own_artifact(tmp_path):
     deps = {d["metadata"]["name"]: d["spec"] for d in docs_ if d["kind"] == "Deployment"}
     assert deps["orders"]["instances"] == 1 and "environment" not in deps["orders"]
     assert deps["orders-prod"]["instances"] == 6 and deps["orders-prod"]["environment"] == "prod"
+
+
+def test_configmanagement_includes_declared_external_sources(tmp_path):
+    """A config-server import lands in ConfigManagement.sources alongside the citing file."""
+    from sre_kb.collectors import scan
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.synth.inventory import inventory_docs
+
+    res = tmp_path / "src" / "main" / "resources"
+    res.mkdir(parents=True)
+    (res / "application.yml").write_text(
+        "spring:\n  config:\n    import: configserver:http://config.internal:8888\n",
+        encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    docs_ = inventory_docs(scan(ctx), ctx, "orders")
+    cm = next(d["spec"] for d in docs_ if d["kind"] == "ConfigManagement")
+    assert "configserver:http://config.internal:8888" in cm["sources"]
+    assert "src/main/resources/application.yml" in cm["sources"]

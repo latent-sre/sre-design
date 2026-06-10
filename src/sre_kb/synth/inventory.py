@@ -282,11 +282,14 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
 
     # --- ConfigManagement ---
     config_facts = fs.of("config.slo", "config.client", "config.timelimiter", "config.actuator")
-    if config_facts:
+    config_sources = fs.of("config.source")
+    if config_facts or config_sources:
         profiles = (app.attrs.get("env") or {}).get("SPRING_PROFILES_ACTIVE") if app else None
-        # Sources are the files the config facts actually cite, plus the manifest env block
-        # when one exists — not a hardcoded list.
-        sources = sorted({f.evidence.path for f in config_facts})
+        # Sources are the files the config facts actually cite, plus the external sources the
+        # config declares (config-server/vault imports), plus the manifest env block when one
+        # exists — not a hardcoded list.
+        sources = sorted({f.evidence.path for f in config_facts + config_sources})
+        sources += sorted({f"{f.attrs['kind']}:{f.attrs['uri']}" for f in config_sources})
         if app and app.attrs.get("env"):
             sources.append("pcf-manifest-env")
         docs.append(emit("ConfigManagement", service, {
@@ -294,7 +297,8 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "profiles": [profiles] if profiles else [],
             "refreshScope": bool(fs.first("config.refreshscope")),
             "properties": [f.attrs for f in config_facts],
-        }, [config_facts[0].evidence], "verified", confidence(Signal.DIRECT), service))
+        }, [(config_facts + config_sources)[0].evidence], "verified",
+            confidence(Signal.DIRECT), service))
 
     # --- DeliveryPipeline (one per checked-in CI workflow; only what the file states) ---
     for wf in fs.of("pipeline.workflow"):

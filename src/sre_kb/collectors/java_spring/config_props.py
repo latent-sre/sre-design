@@ -75,4 +75,33 @@ def collect(ctx: ScanContext) -> list[Fact]:
                     ctx.evidence(rel, ln, ln, "java_spring.config_props"),
                 )
             )
+
+        # External config sources: `spring.config.import` entries (configserver:/vault:/file:,
+        # optionally `optional:`-prefixed) and the legacy `spring.cloud.config.uri`. These declare
+        # where config actually comes from at runtime — a sources list built only from the files
+        # the other facts cite can't see them.
+        imp = dig(data, "spring", "config", "import")
+        for entry in imp if isinstance(imp, list) else [imp] if isinstance(imp, str) else []:
+            if not isinstance(entry, str) or ":" not in entry:
+                continue
+            optional = entry.startswith("optional:")
+            kind, _, uri = entry.removeprefix("optional:").partition(":")
+            ln = find_line(lines, entry) or find_line(lines, "import") or 1
+            facts.append(
+                Fact(
+                    "config.source",
+                    {"kind": kind, "uri": uri, "optional": optional},
+                    ctx.evidence(rel, ln, ln, "java_spring.config_props"),
+                )
+            )
+        legacy_uri = dig(data, "spring", "cloud", "config", "uri")
+        if isinstance(legacy_uri, str):
+            ln = find_line(lines, legacy_uri) or find_line(lines, "uri") or 1
+            facts.append(
+                Fact(
+                    "config.source",
+                    {"kind": "configserver", "uri": legacy_uri, "optional": False},
+                    ctx.evidence(rel, ln, ln, "java_spring.config_props"),
+                )
+            )
     return facts

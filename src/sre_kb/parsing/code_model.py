@@ -113,12 +113,19 @@ def _txt(n: Node, src: bytes) -> str:
 
 
 def _descend(n: Node | None, types: set[str]):
+    # Iterative pre-order walk (explicit stack, not recursion): a hostile target file with a deeply
+    # nested expression would blow Python's recursion limit, and `ScanContext.module()` doesn't guard
+    # the parse — so a `RecursionError` here aborts the whole scan, violating the "a hostile file must
+    # skip the collector, never abort the scan" invariant. Children are pushed reversed so they pop in
+    # source order, preserving the original recursive yield order.
     if n is None:
         return
-    if n.type in types:
-        yield n
-    for c in n.children:
-        yield from _descend(c, types)
+    stack = [n]
+    while stack:
+        node = stack.pop()
+        if node.type in types:
+            yield node
+        stack.extend(reversed(node.children))
 
 
 _NESTED_TRY = {"try_statement"}
@@ -128,15 +135,18 @@ def _descend_outside(n: Node | None, types: set[str], stop: set[str]):
     """Like `_descend`, but never recurse into a subtree whose root type is in `stop`. Used so a
     nested try/catch's throw or log statement isn't attributed to the *enclosing* catch — judging an
     outer catch's rethrow/log on an inner catch's statements both missed real swallows and
-    mis-cited others (#M6)."""
+    mis-cited others (#M6).
+
+    Iterative (explicit stack) for the same reason as `_descend`: recursion over a deeply nested
+    hostile file must not abort the scan."""
     if n is None:
         return
-    if n.type in types:
-        yield n
-    for c in n.children:
-        if c.type in stop:
-            continue
-        yield from _descend_outside(c, types, stop)
+    stack = [n]
+    while stack:
+        node = stack.pop()
+        if node.type in types:
+            yield node
+        stack.extend(c for c in reversed(node.children) if c.type not in stop)
 
 
 def _last_ident(node: Node, src: bytes) -> str:
@@ -146,8 +156,18 @@ def _last_ident(node: Node, src: bytes) -> str:
     return _txt(ids[-1], src) if ids else ""
 
 
+def _unquote_literal(text: str) -> str:
+    """Strip surrounding quotes and a leading C#-style verbatim/interpolation prefix (`@`/`$`), but
+    NOT characters that legitimately sit *inside* the value. A both-ends ``strip("\"'@$")`` mangled
+    literals whose content starts/ends with ``$`` — e.g. a Spring placeholder Kafka topic
+    ``"${topic.name}"`` was captured as ``{topic.name}``, corrupting the channel in every
+    egress/swallow fact and its de-dupe key."""
+    text = re.sub(r"^[@$]+", "", text)  # C# @"...", $"...", $@"..." prefixes
+    return text.strip("\"'")
+
+
 def _str_args(args: Node | None, src: bytes) -> tuple[str, ...]:
-    return tuple(_txt(s, src).strip("\"'@$") for s in _descend(args, _STR_KINDS)) if args else ()
+    return tuple(_unquote_literal(_txt(s, src)) for s in _descend(args, _STR_KINDS)) if args else ()
 
 
 def _call_rm(inv: Node, src: bytes) -> tuple[str, str]:

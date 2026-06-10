@@ -58,6 +58,29 @@ def test_java_extracts_string_args_for_topic_resolution():
     assert "orders.created" in c.methods[0].calls[0].str_args
 
 
+def test_string_arg_keeps_leading_placeholder_dollar():
+    # A both-ends strip("\"'@$") mangled a Spring placeholder topic "${topic.name}" into
+    # "{topic.name}", corrupting the egress channel name and its de-dup key. The $ must survive.
+    c = parse("java", 'class C { void go() { producer.send("${topic.name}", x); } }').types[0]
+    assert "${topic.name}" in c.methods[0].calls[0].str_args
+
+
+def test_csharp_interpolated_string_prefix_is_dropped_but_inner_dollar_kept():
+    # C# $"..." / @"..." prefixes are stripped; a $ inside the value is not.
+    c = parse("csharp", 'class C { void Go() { p.Send($"orders.${x}", e); } }').types[0]
+    assert "orders.${x}" in c.methods[0].calls[0].str_args
+
+
+def test_deeply_nested_expression_does_not_abort_the_scan():
+    # A hostile target file with a deeply nested expression once raised RecursionError out of the
+    # recursive _descend walk, aborting the whole scan. The iterative walk must parse it without
+    # blowing the recursion limit. (Depth chosen well above sys.getrecursionlimit().)
+    depth = 5000
+    src = "function f() { return " + "(" * depth + "1" + ")" * depth + "; }"
+    m = parse("javascript", src)
+    assert m is not None
+
+
 def test_csharp_class_fields_and_calls():
     src = """
 namespace N;

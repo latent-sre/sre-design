@@ -267,9 +267,9 @@ yet), `ReadinessScore.evidence: []` (a roll-up, not a source fact), `crossRefs: 
 the Flow→Alert→Runbook→BlastRadius chain, and `metadata.labels`/`annotations` (free envelope
 slots — candidates for run id / criticality tier / org-space once §4.3 lands).
 
-Still open from the audit: `Topology.pcfSpaces` (waits on §4.3's org/space source), non-GitHub
-CI systems for `DeliveryPipeline`, and .NET parity for the new lossy-save, authz, and
-refresh-scope signals.
+Still open from the audit: `Topology.pcfSpaces` (waits on §4.3's org/space source) and .NET
+parity for the new lossy-save, authz, and refresh-scope signals. **Decided:** CI is GitHub
+Actions only, so `common.delivery_pipeline`'s GitHub-only scope is the design, not a gap.
 
 The through-line: every increment keeps the engine's core contract — deterministic facts with
 byte provenance, LLM as pointer-generator behind the seam, downgrade-only gating — and most of

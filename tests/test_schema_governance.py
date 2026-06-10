@@ -3,6 +3,7 @@ classification, and the `unverifiedAgainstLive` flag for offline-uncheckable cla
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import yaml
@@ -12,6 +13,18 @@ from sre_kb.pipeline import run as run_pipeline
 from sre_kb.validation import validate_doc
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
+
+
+def test_schema_reference_doc_is_current() -> None:
+    """docs/SCHEMA-REFERENCE.md is generated from the schemas (the single human-readable field
+    guide skills link instead of restating shapes); a schema change without `make schema-ref`
+    fails here, the same regenerate-and-diff gate as the lockfile."""
+    gen_path = Path(__file__).resolve().parents[1] / "tools" / "gen_schema_ref.py"
+    spec = importlib.util.spec_from_file_location("gen_schema_ref", gen_path)
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    assert gen.OUTPUT.read_text(encoding="utf-8") == gen.generate(), \
+        "docs/SCHEMA-REFERENCE.md is stale — run `make schema-ref`"
 
 
 def _flow(spec_extra: dict | None = None) -> dict:

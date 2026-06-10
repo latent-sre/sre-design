@@ -1,4 +1,4 @@
-.PHONY: install test cov lint fmt clean offline-wheel lock
+.PHONY: install test cov lint fmt clean offline-wheel lock schema-ref
 
 install:
 	python -m pip install -e ".[dev]"
@@ -18,6 +18,9 @@ fmt:
 lock:
 	python -m pip install -q pip-tools
 	pip-compile --generate-hashes --output-file=requirements.lock pyproject.toml
+
+schema-ref:
+	python tools/gen_schema_ref.py
 
 offline-wheel:
 	./scripts/build-offline.sh

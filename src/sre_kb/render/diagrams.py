@@ -224,6 +224,52 @@ def mermaid_topology(topology: dict, tiers: dict[str, str] | None = None,
     return "\n".join(out)
 
 
+# C4-ish context view (§2.5): the layer order requests flow through when present. Only what
+# the artifact states is drawn — components clustered by their detected layer, plus the one
+# edge type the component types themselves assert (web components handle client requests).
+_LAYER_ORDER = ("web", "client", "persistence", "messaging")
+
+
+def mermaid_architecture(arch: dict) -> str:
+    """A context diagram from an Architecture artifact: the service as a boundary subgraph,
+    components clustered per layer, and Client -> web-component edges (the only edges the
+    artifact's component types assert; inter-component calls are not invented)."""
+    spec = arch.get("spec", {})
+    service = (arch.get("metadata") or {}).get("service", "service")
+
+    def nid(name: str) -> str:
+        return "c_" + re.sub(r"[^A-Za-z0-9]", "_", name)
+
+    comps = [c for c in spec.get("components", []) if c.get("name") and c.get("type")]
+    out = ["graph TB", '  client(["Client"])',
+           f'  subgraph boundary["{_mm(service)}"]']
+    by_layer: dict[str, list[dict]] = {}
+    for c in comps:
+        by_layer.setdefault(c["type"], []).append(c)
+    layers = ([layer for layer in _LAYER_ORDER if layer in by_layer]
+              + sorted(set(by_layer) - set(_LAYER_ORDER)))
+    for layer in layers:
+        out.append(f'    subgraph layer_{re.sub(r"[^A-Za-z0-9]", "_", layer)}["{_mm(layer)}"]')
+        for c in by_layer[layer]:
+            out.append(f'      {nid(c["name"])}["{_mm(c["name"])}"]')
+        out.append("    end")
+    out.append("  end")
+    for c in by_layer.get("web", []):
+        out.append(f"  client --> {nid(c['name'])}")
+    return "\n".join(out)
+
+
+def architecture_caption(arch: dict) -> str | None:
+    """The legend line for the markdown wrapper: the artifact's detected patterns/style tags."""
+    spec = arch.get("spec", {})
+    parts = []
+    if spec.get("patterns"):
+        parts.append("Patterns: " + ", ".join(_mm(p) for p in spec["patterns"]) + ".")
+    if spec.get("styleTags"):
+        parts.append("Style: " + ", ".join(_mm(t) for t in spec["styleTags"]) + ".")
+    return " ".join(parts) or None
+
+
 def diagram_markdown(title: str, mermaid_src: str, legend: str | None = None) -> str:
     """A GitHub-renderable wrapper: the same Mermaid source in a fenced block, so the diagram
     draws inline in PRs and the published KB without tooling. The title is sanitized like any

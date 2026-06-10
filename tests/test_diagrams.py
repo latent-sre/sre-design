@@ -219,3 +219,43 @@ def test_subgraph_titles_are_sanitized():
     out = mermaid_topology(topo)
     assert "subgraph" in out and '"]' not in out.replace('"]\n', "")  # label can't close early
     assert "evil" in out  # kept as inert text
+
+
+def test_architecture_context_groups_components_by_layer():
+    """§2.5: the Architecture artifact renders as a C4-ish context view — the service as a
+    boundary, components clustered per detected layer, and only the edges the component
+    types assert (Client -> web handlers); inter-component calls are never invented."""
+    from sre_kb.render.diagrams import architecture_caption, mermaid_architecture
+
+    arch = {
+        "metadata": {"service": "order-service", "name": "order-service"},
+        "spec": {
+            "components": [
+                {"name": "OrderController", "type": "web", "symbol": "c.OrderController"},
+                {"name": "InventoryClient", "type": "client", "symbol": "c.InventoryClient"},
+                {"name": "OrderRepository", "type": "persistence", "symbol": "c.OrderRepository"},
+            ],
+            "layers": ["client", "persistence", "web"],
+            "patterns": ["circuit-breaker", "repository"],
+            "styleTags": ["layered"],
+        },
+    }
+    out = mermaid_architecture(arch)
+    assert 'subgraph boundary["order-service"]' in out
+    assert 'subgraph layer_web["web"]' in out and 'subgraph layer_persistence' in out
+    assert "client --> c_OrderController" in out
+    assert "c_InventoryClient -->" not in out  # no invented inter-component edges
+    assert out.index("layer_web") < out.index("layer_client")  # request-flow layer order
+    caption = architecture_caption(arch)
+    assert "circuit-breaker" in caption and "layered" in caption
+
+
+def test_architecture_sanitizes_untrusted_component_names():
+    """Component names come from scanned class names — breakout characters are defanged."""
+    from sre_kb.render.diagrams import mermaid_architecture
+
+    arch = {"metadata": {"service": "svc"}, "spec": {"components": [
+        {"name": 'Evil"]; classDef pwn fill:#000', "type": "web", "symbol": "x"}]}}
+    out = mermaid_architecture(arch)
+    assert ";" not in out and '"];' not in out  # cannot close the label and start a directive
+    assert "pwn" in out                          # kept as inert label text, just defanged

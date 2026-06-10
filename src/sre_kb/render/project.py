@@ -11,7 +11,9 @@ from sre_kb.render.catalog import catalog_info
 from sre_kb.render.copilot import copilot_instructions, runbook_markdown
 from sre_kb.render.diagrams import (
     TOPOLOGY_LEGEND,
+    architecture_caption,
     diagram_markdown,
+    mermaid_architecture,
     mermaid_sequence,
     mermaid_topology,
     topology_overlays,
@@ -67,11 +69,20 @@ def _render_topology(doc: dict, proj: Path, flows: dict[str, dict], docs: list[d
     )
 
 
+def _render_architecture(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
+    name = doc["metadata"]["name"]
+    src = mermaid_architecture(doc)
+    (proj / "diagrams" / f"{name}-architecture.mmd").write_text(src, encoding="utf-8")
+    (proj / "diagrams" / f"{name}-architecture.md").write_text(
+        diagram_markdown(f"{name} — architecture", src, architecture_caption(doc)),
+        encoding="utf-8")
+
+
 # Per-kind projection renderers, keyed by the registry's `renderer` field. Adding a projecting kind =
 # declare `renderer: <name>` in the registry + add a handler here; test_registry_governance keeps the
 # two in lock-step. Whole-KB projections (copilot-instructions, catalog-info) are not per-kind.
 _PROJECTION_RENDERERS = {"diagram": _render_diagram, "runbook": _render_runbook,
-                         "topology": _render_topology}
+                         "topology": _render_topology, "architecture": _render_architecture}
 
 
 def render_projections(layout: RunLayout, docs: list[dict] | None = None) -> Path:

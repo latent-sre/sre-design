@@ -78,6 +78,8 @@ def test_client_base_url_resolves_to_a_scanned_services_route(tmp_path):
     topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
     assert {"from": "caller", "to": "callee", "relation": "calls"} in topo["spec"]["edges"]
     assert all(n["name"] != "callee" or n["type"] == "service" for n in topo["spec"]["nodes"])
+    topo_md = (r.root / "projections" / "diagrams" / "topology.md").read_text()
+    assert "```mermaid" in topo_md and "Legend:" in topo_md  # GitHub-renderable wrapper
 
 
 def test_messaging_topic_joins_producer_and_consumer_repos(tmp_path):

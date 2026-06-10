@@ -47,6 +47,21 @@ _SHAPE = {
 }
 
 
+# Node styling by type. Class names and styles come ONLY from this fixed engine vocabulary —
+# an unknown (possibly hand-authored) node type renders unstyled rather than letting scanned
+# strings reach a Mermaid class/style line.
+_CLASS_STYLE = {
+    "service": "fill:#e8f0fe,stroke:#1a73e8",
+    "datastore": "fill:#e6f4ea,stroke:#188038",
+    "broker": "fill:#fef7e0,stroke:#f9ab00",
+    "topic": "fill:#fef7e0,stroke:#f9ab00,stroke-dasharray: 3 3",
+    "external": "fill:#f1f3f4,stroke:#5f6368",
+}
+
+TOPOLOGY_LEGEND = ("Legend: rectangle = service · rounded = datastore · trapezoid = broker · "
+                   "stadium (dashed) = topic · hexagon = external.")
+
+
 def mermaid_topology(topology: dict) -> str:
     spec = topology.get("spec", {})
 
@@ -54,16 +69,33 @@ def mermaid_topology(topology: dict) -> str:
         return "n_" + re.sub(r"[^A-Za-z0-9]", "_", name)
 
     out = ["graph LR"]
+    used_types: set[str] = set()
     for node in spec.get("nodes", []):
         name = node.get("name")
         if not name:
             continue  # a node with no name can't be rendered; skip rather than KeyError
-        label = _SHAPE.get(node.get("type", "service"), '["{}"]').format(_mm(name))
+        ntype = node.get("type", "service")
+        label = _SHAPE.get(ntype, '["{}"]').format(_mm(name))
         out.append(f"  {nid(name)}{label}")
+        if ntype in _CLASS_STYLE:
+            out.append(f"  class {nid(name)} {ntype}")
+            used_types.add(ntype)
     for e in spec.get("edges", []):
         src, dst = e.get("from"), e.get("to")
         if not src or not dst:
             continue  # an edge missing an endpoint can't be drawn
         rel = _mm(e.get("relation", ""))
         out.append(f"  {nid(src)} -->|{rel}| {nid(dst)}")
+    for ntype in sorted(used_types):
+        out.append(f"  classDef {ntype} {_CLASS_STYLE[ntype]}")
     return "\n".join(out)
+
+
+def diagram_markdown(title: str, mermaid_src: str, legend: str | None = None) -> str:
+    """A GitHub-renderable wrapper: the same Mermaid source in a fenced block, so the diagram
+    draws inline in PRs and the published KB without tooling. The title is sanitized like any
+    other untrusted label."""
+    parts = [f"# {_mm(title)}", "", "```mermaid", mermaid_src, "```"]
+    if legend:
+        parts += ["", legend]
+    return "\n".join(parts) + "\n"

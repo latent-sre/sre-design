@@ -73,15 +73,14 @@ visual encoding; no grouping; output is bare `.mmd` that GitHub won't render inl
 
 ### Increments
 
-1. **Legends + engine-controlled styling.** Append a legend block and Mermaid `classDef`s
-   derived from *artifact data we already have*: color nodes by `Criticality.tier`, dash/red
-   edges where `stateful.dataLossRisk` is true, badge co-tenancy resources from `BlastRadius`.
-   Invariant to keep: class names and style strings come from a fixed engine vocabulary; the
-   `_MERMAID_META` strip still applies to every label — styling must never be derivable from
-   scanned bytes.
-2. **Render GitHub-native wrappers.** Emit `diagrams/<name>.md` with a fenced ```mermaid
-   block (plus the legend) alongside the `.mmd`, so PR reviewers and the published KB render
-   drawings inline with zero tooling.
+1. **Legends + engine-controlled styling.** *Partially done on this branch:* topology nodes
+   are styled per type from a fixed engine `classDef` vocabulary (unknown types render
+   unstyled — scanned strings can never reach a style line), with a legend in the markdown
+   wrapper. Still open: criticality-tier coloring and data-loss edge styling from
+   `Criticality`/`BlastRadius` artifact joins.
+2. **Render GitHub-native wrappers** — **done on this branch.** Every flow and topology
+   diagram also emits `diagrams/<name>.md` with a fenced ```mermaid block (plus the topology
+   legend), so PRs and the published KB render drawings inline with zero tooling.
 3. **Promote known services to named participants.** In sequence diagrams, when a step's
    target matches a `config.client` name (or, after §5.1, a resolved service), render it as a
    named participant instead of the `Dependency` catch-all.

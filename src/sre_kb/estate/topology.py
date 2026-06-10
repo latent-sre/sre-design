@@ -270,6 +270,18 @@ def build_estate(services: list[dict],
             deduped.append(e)
     edges = deduped
 
+    # §4.3: org/space from each service's cf-env snapshot — the grouping that makes blast
+    # radius legible to an app team ("everything in acme/prod degrades together").
+    by_space: dict[tuple, list[str]] = {}
+    for s in services:
+        sp = s["fs"].first("pcf.space")
+        if sp and (sp.attrs.get("organization") or sp.attrs.get("space")):
+            key = (sp.attrs.get("organization"), sp.attrs.get("space"))
+            by_space.setdefault(key, []).append(s["service"])
+            topo_evidence.append(sp.evidence)
+    pcf_spaces = [{"organization": org, "space": space, "services": sorted(svcs)}
+                  for (org, space), svcs in sorted(by_space.items(), key=str)]
+
     docs.append(
         emit(
             "Topology",
@@ -277,7 +289,7 @@ def build_estate(services: list[dict],
             {
                 "nodes": [{"type": t, "name": n} for n, t in nodes.items()],
                 "edges": edges,
-                "pcfSpaces": [],
+                "pcfSpaces": pcf_spaces,
             },
             topo_evidence,
             "verified",

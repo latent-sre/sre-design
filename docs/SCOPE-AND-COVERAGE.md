@@ -32,7 +32,7 @@ application behaves and is configured*, including its contract with PCF — not 
 | In scope | Out of scope |
 |---|---|
 | Application code behavior (flows, resiliency, failure modes, idempotency, messaging, jobs) | Platform networking, the PCF foundation, load balancers, the mesh |
-| The app's PCF descriptor: `manifest.yml`, env vars, service bindings (VCAP), routes, health checks, instances/memory/disk, buildpack | Platform DR, datacenter/VM provisioning, cluster ops |
+| The app's PCF descriptor: `manifest.yml` (incl. processes/sidecars/vars), env vars, declared service bindings, routes, health checks, instances/memory/disk, buildpack — plus binding label/plan/tags and org/space from a checked-in, credential-stripped `.sre/cf-env.json` snapshot | Platform DR, datacenter/VM provisioning, cluster ops; live platform APIs (autoscaler, network policies, broker SLAs) |
 | App-level observability: what the code emits (logs/metrics/traces), log *format* and *quality* | Collector/agent infrastructure, telemetry backends' own health |
 | App-level resilience: timeouts, retries, breakers, fallbacks, rate-limit/load-shed *in the app* | Gateway/edge rate limiting, infra firewalls |
 | App data safety the app controls (outbox, idempotency, DLQ wiring it declares) | Database/broker infrastructure DR and backup |

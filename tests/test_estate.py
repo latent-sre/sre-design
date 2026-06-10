@@ -309,3 +309,30 @@ def test_ambiguous_base_urls_become_confirm_items_not_edges(tmp_path):
     assert len(items) == 2  # the plain external hostname is NOT ambiguous
     possible = [f for f in (r.findings or []) if f["type"] == "possible-call-edge"]
     assert {f["client"] for f in possible} == {"legacy", "orders"}
+
+
+def test_estate_groups_by_org_space_when_snapshots_exist(tmp_path):
+    """§4.3 + §2.4: cf-env snapshots populate estate pcfSpaces and the topology drawing
+    clusters services by org/space instead of one cluster per service."""
+    import json
+    for name, space in (("orders", "prod"), ("billing", "prod"), ("reports", "dev")):
+        d = tmp_path / name
+        (d / ".sre").mkdir(parents=True)
+        (d / "manifest.yml").write_text(
+            f"applications:\n- name: {name}\n  services:\n  - shared-postgres\n",
+            encoding="utf-8")
+        (d / ".sre" / "cf-env.json").write_text(json.dumps(
+            {"organization": "acme", "space": space, "services": []}), encoding="utf-8")
+    r = run_estate([str(tmp_path / n) for n in ("orders", "billing", "reports")],
+                   work_root=str(tmp_path / "w"), run_id="spaces")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    assert topo["spec"]["pcfSpaces"] == [
+        {"organization": "acme", "space": "dev", "services": ["reports"]},
+        {"organization": "acme", "space": "prod", "services": ["billing", "orders"]},
+    ]
+    mmd = (r.root / "projections" / "diagrams" / "topology.mmd").read_text()
+    assert 'subgraph sg_acme_prod["acme/prod"]' in mmd
+    assert 'subgraph sg_acme_dev["acme/dev"]' in mmd
+    # the postgres shared across spaces still lands in the co-tenant cluster
+    shared = mmd.split('["shared co-tenant"]')[1].split("end")[0]
+    assert "n_shared_postgres" in shared

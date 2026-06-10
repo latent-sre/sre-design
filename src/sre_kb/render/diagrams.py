@@ -143,14 +143,19 @@ def topology_overlays(topology: dict, docs: list[dict]) -> tuple[dict[str, str],
 _SHARED_GROUP = "shared (co-tenant)"
 
 
-def _groups(nodes: dict[str, str], edges: list[dict]) -> dict[str, str] | None:
+def _groups(nodes: dict[str, str], edges: list[dict],
+            space_of: dict[str, str] | None = None) -> dict[str, str] | None:
     """Subgraph assignment for a multi-service topology: a non-service node touched by exactly
     one service joins that service's cluster; one touched by several joins the shared
-    (co-tenant) cluster — the grouping that makes blast radius legible. Returns None for a
-    single-service topology (flat rendering, as before)."""
+    (co-tenant) cluster — the grouping that makes blast radius legible. When org/space is
+    known (`pcfSpaces`, §4.3), services cluster by space instead of one-per-service, so the
+    drawing says "everything in acme/prod fails together". Returns None for a single-service
+    topology (flat rendering, as before)."""
     services = [n for n, t in nodes.items() if t in ("service", "frontend")]
     if len(services) < 2:
         return None
+    space_of = space_of or {}
+    group: dict[str, str] = {s: space_of.get(s, s) for s in services}
     owners: dict[str, set[str]] = {}
     for e in edges:
         src, dst = e.get("from"), e.get("to")
@@ -158,9 +163,9 @@ def _groups(nodes: dict[str, str], edges: list[dict]) -> dict[str, str] | None:
             owners.setdefault(dst, set()).add(src)
         elif dst in services and src in nodes and src not in services:
             owners.setdefault(src, set()).add(dst)
-    group: dict[str, str] = {s: s for s in services}
     for n, owning in owners.items():
-        group[n] = next(iter(owning)) if len(owning) == 1 else _SHARED_GROUP
+        clusters = {group[s] for s in owning}
+        group[n] = next(iter(clusters)) if len(clusters) == 1 else _SHARED_GROUP
     return group
 
 
@@ -194,7 +199,12 @@ def mermaid_topology(topology: dict, tiers: dict[str, str] | None = None,
             used_types.add(ntype)
 
     out = ["graph LR"]
-    group = _groups(nodes, edges)
+    space_of = {str(svc): label
+                for entry in spec.get("pcfSpaces") or [] if isinstance(entry, dict)
+                if (label := "/".join(p for p in (entry.get("organization"),
+                                                  entry.get("space")) if p))
+                for svc in entry.get("services") or []}
+    group = _groups(nodes, edges, space_of)
     if group is None:
         out += [f"  {line}" for line in node_lines.values()]
     else:

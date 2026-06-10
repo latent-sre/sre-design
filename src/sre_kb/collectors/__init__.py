@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from sre_kb.collectors.base import CollectorProtocol, ScanContext
 from sre_kb.collectors.common import criticality, manifest_pcf, slo_catalog
-from sre_kb.collectors.common import delivery_pipeline, feature_flags, openapi
+from sre_kb.collectors.common import cf_env, delivery_pipeline, feature_flags, openapi
 from sre_kb.collectors.dotnet_steeltoe import annotations as dotnet_annotations
 from sre_kb.collectors.dotnet_steeltoe import build as dotnet_build
 from sre_kb.collectors.dotnet_steeltoe import resiliency as dotnet_resiliency
@@ -38,6 +38,7 @@ from sre_kb.models.facts import FactSet
 # File-collectors: ctx -> list[Fact]
 _FILE_COLLECTORS: list[CollectorProtocol] = [
     manifest_pcf.collect,
+    cf_env.collect,
     slo_catalog.collect,
     criticality.collect,
     delivery_pipeline.collect,

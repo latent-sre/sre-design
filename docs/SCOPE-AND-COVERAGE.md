@@ -6,7 +6,7 @@ Date: 2026-06-09
 > the lens that turns "extract patterns from a repo to populate SRE needs" into a concrete, testable
 > coverage contract. It does **not** restate the architecture or the plan — those live in:
 >
-> - `docs/DESIGN.md` — the architecture (deterministic Python engine + Copilot-as-only-LLM, the
+> - `docs/DESIGN.md` — the architecture (deterministic Python engine + the `LLMProvider` seam, the
 >   `apiVersion/kind` artifact backbone, the three neutralities, PCF reality). Still authoritative.
 > - `docs/HYBRID-PLAN.md` — the implementation plan + **live status** (§8 tracker, §9 reassessment,
 >   §9.7 backlog). Still the single source of truth for status.
@@ -117,7 +117,9 @@ schemas + 4 golden examples + their registry rows removed; `DataStore.engine` fo
 
 ## 6. The LLM gate — discover + confirm, as skills
 
-The engine **never calls a model** (`docs/DESIGN.md`); the LLM is Copilot, driven by **skills**, and is
+The engine **embeds no model** (`docs/DESIGN.md`); the LLM sits behind the `LLMProvider` seam —
+Copilot in the IDE by default, a subprocess oracle or an approved API provider programmatically —
+driven by **skills**, and is
 a **pointer-generator, not a fact source** (`.github/skills/sre-gap-finder/SKILL.md` is the contract
 model). The gate has two loops:
 
@@ -226,7 +228,8 @@ The §4 matrix + the SRE rubric **are** the coverage contract. **The eval harnes
 
 The Tier-B half already has a working, reproducible measurement loop — `copilot-gap-validate`. It is
 the seed of the harness above; the same shape extends to every discover/confirm skill. The engine
-**never calls a model**, so the model boundary is an explicit manual step:
+**embeds no model**; with the default Copilot provider the model boundary is an explicit manual
+step (a programmatic `LLMProvider` automates the same exchange):
 
 1. `sre-kb run --target <service> --to-stage scaffold` — produces a fresh context pack.
 2. In VS Code, run Copilot with the relevant `SKILL.md` and save the answer to

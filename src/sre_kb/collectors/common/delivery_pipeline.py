@@ -29,11 +29,18 @@ def _branches(data: dict) -> list[str]:
 
 
 def _deploys_with_cf(jobs: dict) -> bool:
+    # Both step styles count: a literal `cf push` in a run: script, or a marketplace
+    # cloudfoundry action in uses: (e.g. cloudfoundry-community/*). A bespoke action that
+    # hides cf entirely is still invisible — only what the file states is asserted.
     for job in jobs.values():
         if not isinstance(job, dict):
             continue
         for step in job.get("steps") or []:
-            if isinstance(step, dict) and "cf push" in str(step.get("run", "")):
+            if not isinstance(step, dict):
+                continue
+            if "cf push" in str(step.get("run", "")):
+                return True
+            if "cloudfoundry" in str(step.get("uses", "")).lower():
                 return True
     return False
 

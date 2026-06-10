@@ -5,7 +5,8 @@
 
 One row per field of each registered kind's `spec`, rendered from the same JSON Schemas the
 validator enforces (`additionalProperties: false` — fields not listed here are rejected).
-Skills and reviews should link here rather than restating shapes in prose.
+A nested field marked required is required *within its parent object* when that parent is
+present. Skills and reviews should link here rather than restating shapes in prose.
 
 ## Flow
 
@@ -14,14 +15,14 @@ A user/business-visible request flow: trigger, the ordered steps through code an
 | field | type | required | notes |
 |---|---|---|---|
 | `trigger` | object | yes |  |
-| `trigger.type` | string |  |  |
+| `trigger.type` | string | yes |  |
 | `trigger.method` | string or null |  |  |
 | `trigger.path` | string or null |  |  |
 | `trigger.entrypoint` | string or null |  |  |
 | `steps` | array | yes |  |
-| `steps[].id` | string |  |  |
-| `steps[].name` | string |  |  |
-| `steps[].kind` | string |  |  |
+| `steps[].id` | string | yes |  |
+| `steps[].name` | string | yes |  |
+| `steps[].kind` | string | yes |  |
 | `steps[].failureModes` | array |  |  |
 | `sinks` | array |  |  |
 | `sloRef` | string |  |  |
@@ -44,8 +45,8 @@ What the service emits and exposes: logging (framework, format, statement qualit
 | field | type | required | notes |
 |---|---|---|---|
 | `logging` | object | yes |  |
-| `logging.framework` | string |  |  |
-| `logging.format` | string |  |  |
+| `logging.framework` | string | yes |  |
+| `logging.format` | string | yes |  |
 | `logging.pattern` | string or null |  |  |
 | `logging.correlationFields` | array of string |  |  |
 | `logging.statements` | object |  | Roll-up of the log statements parsed from code (S2 assess-logging). |
@@ -90,20 +91,20 @@ An alerting rule grounded in the scan: SLO burn-rate (multi-window/multi-burn-ra
 | `rationale` | string |  |  |
 | `class` | string |  | one of: `symptom`, `cause` — SRE alert class (adopted from resiliency-skills AlertIntent): symptom = user-visible SLO burn; cause = a specific failure mode (e.g. a swallowed publish). |
 | `signal` | object |  | Tool-neutral description of what is observed (the intent), independent of any backend's query dialect. |
-| `signal.type` | string |  | one of: `log`, `metric`, `trace`, `synthetic` |
+| `signal.type` | string | yes | one of: `log`, `metric`, `trace`, `synthetic` |
 | `signal.metric` | string |  |  |
 | `signal.route` | string or null |  |  |
 | `signal.description` | string |  |  |
 | `condition` | object |  | Tool-neutral threshold for a threshold-type alert. |
-| `condition.comparator` | string |  | one of: `>`, `>=`, `<`, `<=`, `==`, `!=` |
-| `condition.threshold` | number or string |  |  |
+| `condition.comparator` | string | yes | one of: `>`, `>=`, `<`, `<=`, `==`, `!=` |
+| `condition.threshold` | number or string | yes |  |
 | `condition.window` | string |  |  |
 | `condition.occurrences` | integer |  |  |
 | `burnRate` | object |  | Structured multi-window error-budget burn-rate parameters (the intent behind the rendered `expr`). |
-| `burnRate.sloRef` | string |  |  |
+| `burnRate.sloRef` | string | yes |  |
 | `burnRate.sli` | string |  | one of: `latency`, `availability` |
-| `burnRate.shortWindow` | string |  |  |
-| `burnRate.longWindow` | string |  |  |
+| `burnRate.shortWindow` | string | yes |  |
+| `burnRate.longWindow` | string | yes |  |
 | `burnRate.shortFactor` | number |  |  |
 | `burnRate.longFactor` | number |  |  |
 | `burnRate.budgetFraction` | number |  |  |
@@ -117,7 +118,7 @@ Operator guidance for one alert/failure mode: trigger, symptoms, diagnosis, reme
 |---|---|---|---|
 | `banner` | string |  |  |
 | `trigger` | object | yes |  |
-| `trigger.alertRef` | string |  |  |
+| `trigger.alertRef` | string | yes |  |
 | `symptoms` | array of string |  |  |
 | `diagnosis` | array |  |  |
 | `remediation` | array of string | yes |  |
@@ -131,8 +132,8 @@ Engine-computed failure impact for one node (dependency/broker/datastore): the f
 | field | type | required | notes |
 |---|---|---|---|
 | `node` | object | yes |  |
-| `node.type` | string |  |  |
-| `node.name` | string |  |  |
+| `node.type` | string | yes |  |
+| `node.name` | string | yes |  |
 | `impactedFlows` | array of string | yes |  |
 | `impactedServices` | array of string |  |  |
 | `containment` | array |  |  |
@@ -150,7 +151,7 @@ The service-level objectives for a flow: SLI, target, and window per objective, 
 | field | type | required | notes |
 |---|---|---|---|
 | `objectives` | array | yes |  |
-| `objectives[].sli` | string |  |  |
+| `objectives[].sli` | string | yes |  |
 | `objectives[].target` | string or number or null |  |  |
 | `objectives[].window` | string or null |  |  |
 | `source` | string | yes |  |
@@ -200,8 +201,8 @@ The service's architecture narrative: components, layers, and design patterns/st
 | field | type | required | notes |
 |---|---|---|---|
 | `components` | array | yes |  |
-| `components[].name` | string |  |  |
-| `components[].type` | string |  |  |
+| `components[].name` | string | yes |  |
+| `components[].type` | string | yes |  |
 | `components[].symbol` | string |  |  |
 | `layers` | array of string |  |  |
 | `patterns` | array of string |  |  |
@@ -255,9 +256,9 @@ The service's inbound surface: REST/messaging style, the concrete endpoints/chan
 | `contract.specOnly` | array of string |  |  |
 | `contract.baselineVersion` | string or null |  |  |
 | `contract.changes` | array |  | Deterministic, byte-grounded diff vs the committed baseline spec. |
-| `contract.changes[].changeType` | string |  | one of: `operation-removed`, `operation-added`, `required-parameter-added` |
-| `contract.changes[].ref` | string |  |  |
-| `contract.changes[].breaking` | boolean |  |  |
+| `contract.changes[].changeType` | string | yes | one of: `operation-removed`, `operation-added`, `required-parameter-added` |
+| `contract.changes[].ref` | string | yes |  |
+| `contract.changes[].breaking` | boolean | yes |  |
 | `contract.changes[].detail` | string or null |  |  |
 | `contract.versionPolicy` | object or null |  | Semver check: a breaking change present without a major bump fails (ok=false). |
 | `contract.versionPolicy.ok` | boolean |  |  |
@@ -272,9 +273,9 @@ Consumer-side async-resilience posture (HYBRID-PLAN S3). The Interface kind carr
 | field | type | required | notes |
 |---|---|---|---|
 | `consumers` | array | yes |  |
-| `consumers[].channel` | string |  |  |
-| `consumers[].broker` | string |  |  |
-| `consumers[].handler` | string |  |  |
+| `consumers[].channel` | string | yes |  |
+| `consumers[].broker` | string | yes |  |
+| `consumers[].handler` | string | yes |  |
 | `consumers[].resilience` | object |  |  |
 | `consumers[].resilience.deadLetter` | boolean |  |  |
 | `consumers[].resilience.deadLetterMechanism` | string or null |  |  |
@@ -316,11 +317,11 @@ The app-centric dependency graph: services and the datastores/brokers/externals 
 | field | type | required | notes |
 |---|---|---|---|
 | `nodes` | array | yes |  |
-| `nodes[].type` | string |  |  |
-| `nodes[].name` | string |  |  |
+| `nodes[].type` | string | yes |  |
+| `nodes[].name` | string | yes |  |
 | `edges` | array | yes |  |
-| `edges[].from` | string |  |  |
-| `edges[].to` | string |  |  |
+| `edges[].from` | string | yes |  |
+| `edges[].to` | string | yes |  |
 | `edges[].relation` | string |  |  |
 | `pcfSpaces` | array |  |  |
 
@@ -357,11 +358,11 @@ A monitoring dashboard (adopted from resiliency-skills' dashboard schema, on our
 | `title` | string | yes |  |
 | `renderTarget` | string |  | one of: `prometheus`, `splunk`, `wavefront`, `appdynamics`, `grafana` |
 | `panels` | array | yes |  |
-| `panels[].title` | string |  |  |
-| `panels[].type` | string |  | one of: `timeseries`, `stat`, `gauge`, `table`, `heatmap` |
+| `panels[].title` | string | yes |  |
+| `panels[].type` | string | yes | one of: `timeseries`, `stat`, `gauge`, `table`, `heatmap` |
 | `panels[].unit` | string |  |  |
-| `panels[].signal` | object |  |  |
-| `panels[].signal.source` | string |  | one of: `prometheus`, `splunk`, `wavefront`, `appdynamics`, `grafana` |
+| `panels[].signal` | object | yes |  |
+| `panels[].signal.source` | string | yes | one of: `prometheus`, `splunk`, `wavefront`, `appdynamics`, `grafana` |
 | `panels[].signal.metric` | string |  |  |
 | `panels[].signal.query` | string |  |  |
 | `panels[].signal.description` | string |  |  |

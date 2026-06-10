@@ -270,6 +270,9 @@ slots — candidates for run id / criticality tier / org-space once §4.3 lands)
 Still open from the audit: `Topology.pcfSpaces` (waits on §4.3's org/space source) and .NET
 parity for the new lossy-save, authz, and refresh-scope signals. **Decided:** CI is GitHub
 Actions only, so `common.delivery_pipeline`'s GitHub-only scope is the design, not a gap.
+Within that scope, deploy detection covers `cf push` in `run:` steps and cloudfoundry
+marketplace actions in `uses:`; a bespoke action that hides cf entirely stays undetected
+(tracked, not closed).
 
 The through-line: every increment keeps the engine's core contract — deterministic facts with
 byte provenance, LLM as pointer-generator behind the seam, downgrade-only gating — and most of

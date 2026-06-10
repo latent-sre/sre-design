@@ -5,7 +5,9 @@ facts of several repos.
 
 ## `Topology`
 
-The cross-service graph: services, the datastores/brokers they bind to, the messaging
+Field shapes for every kind live in the generated
+[docs/SCHEMA-REFERENCE.md](../../../../docs/SCHEMA-REFERENCE.md); this file carries the
+semantics. The cross-service graph: services, the datastores/brokers they bind to, the messaging
 topics they publish/consume, and the downstreams they call. Rendered to
 `projections/diagrams/topology.mmd` plus a GitHub-renderable `topology.md` (fenced Mermaid
 with a shape legend). Read it to spot **shared infrastructure** — any datastore/broker/topic
@@ -14,7 +16,7 @@ node with more than one attached service.
 ```yaml
 kind: Topology
 spec:
-  nodes: [ { type: service|datastore|broker|topic|external, name: orders-postgres }, ... ]
+  nodes: [ { type: service|datastore|broker|topic|resource|external, name: orders-postgres }, ... ]
   edges: [ { from: order-service, to: orders-postgres, relation: binds }, ... ]
   # relation: binds | calls | publishes | consumes
   pcfSpaces: []

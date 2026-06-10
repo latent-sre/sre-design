@@ -14,7 +14,7 @@ from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, FactSet, Symbol
 from sre_kb.util import member_of, slug
 
-_SAVE = {"save", "saveAll", "Save", "SaveAsync"}
+SAVE_METHODS = {"save", "saveAll", "Save", "SaveAsync"}
 _PUBLISH = {"publish", "Publish", "PublishAsync", "ProduceAsync", "send", "Send", "SendAsync"}
 
 
@@ -90,7 +90,7 @@ def collect(ctx: ScanContext, fs: FactSet) -> list[Fact]:
                     "sink": {"type": "http", "target": cb.attrs["name"]},
                 })
                 continue
-            if call.method in _SAVE:
+            if call.method in SAVE_METHODS:
                 repo = _match_repo(repos, rtype)
                 if repo:
                     # A save inside a logged-and-swallowed catch is silent write loss — the same
@@ -98,12 +98,15 @@ def collect(ctx: ScanContext, fs: FactSet) -> list[Fact]:
                     if call.swallow:
                         fmodes = [{"mode": "db-unavailable", "surfacedAs": "logged-and-swallowed",
                                    "dataLossRisk": True}]
+                        refs = [{"kind": "Alert", "name": f"{slug(repo.attrs['name'])}-write-failures",
+                                 "relation": "alerts-on"}]
                     else:
                         fmodes = [{"mode": "db-unavailable", "surfacedAs": "http-500"}]
+                        refs = []
                     raw.append({
                         "line": call.line, "name": "persist", "kind": "db-write",
                         "failureModes": fmodes,
-                        "refs": [], "sink": {"type": "db", "target": slug(repo.attrs["name"])},
+                        "refs": refs, "sink": {"type": "db", "target": slug(repo.attrs["name"])},
                     })
                     continue
             if call.method in _PUBLISH:

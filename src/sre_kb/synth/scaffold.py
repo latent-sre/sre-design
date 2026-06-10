@@ -418,11 +418,14 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
 
     def _lossy_sink(node_slug: str) -> bool:
         """A flow step writing to `node_slug` whose failure is logged-and-swallowed: data loss.
-        Steps and sinks are parallel lists (built from the same ordered walk)."""
+        Steps and sinks are index-parallel only when the flow deriver built both from one
+        ordered walk — nothing validates that shape, so a flow with unequal lengths (e.g.
+        hand-authored) derives nothing (the safe lower bound) instead of mispairing."""
         return any(
             slug(str(sink.get("target"))) == node_slug
             and any(fm.get("dataLossRisk") for fm in step.get("failureModes", []))
             for ff in flows
+            if len(ff.attrs.get("steps", [])) == len(ff.attrs.get("sinks", []))
             for step, sink in zip(ff.attrs.get("steps", []), ff.attrs.get("sinks", []))
         )
 
@@ -504,6 +507,59 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                 "Verify the order-kafka binding and broker availability",
                 "No built-in replay: missing events are lost — assess impact window",
                 "Code change: make publish transactional / add an outbox (follow-up)",
+            ],
+            "escalation": "service owner (needs-review)",
+            "relatedFlow": for_flow,
+        }, [sw.evidence], "needs-review", confidence(Signal.INFERRED), service,
+            cross_refs=[{"kind": "Alert", "name": a_name, "relation": "covers"},
+                        {"kind": "Flow", "name": for_flow, "relation": "covers"}]))
+
+    # --- Alert + Runbook, one per swallowed repository write (the DB dual of the loop above:
+    # the engine just flagged silent write loss, so the Flow->Alert->Runbook chain must exist
+    # for it too) ---
+    for sw in fs.of("swallowed.db.failure"):
+        repo_f = next((r for r in repos if r.attrs["name"] == sw.attrs.get("repository")), None)
+        if repo_f is None:
+            continue
+        node = slug(repo_f.attrs["name"])
+        a_name = f"{node}-write-failures"
+        impacted = _flows_touching(node)
+        for_flow = impacted[0] if impacted else flow_name
+        search = sw.attrs["message"].split("{")[0].strip()
+        lp_expr = render_log_pattern(LogPatternIntent(search=search, service=service), alert_tools)
+        docs.append(_doc("Alert", a_name, {
+            "alertType": "threshold",
+            "sloRef": None,
+            "signalSource": "log-pattern",
+            "severity": effective_severity("high", floor_tier),
+            "forFlow": for_flow,
+            "logFormatRef": obs_name,
+            "expr": lp_expr,
+            "rationale": (
+                "DB write failure is logged and swallowed (silent write loss); no metric exists, "
+                "so alert on the log line. Surface the failure or make the write transactional "
+                "(needs-review)."
+            ),
+            "class": "cause",
+            "signal": {"type": "log", "description": f'swallowed DB-write log line "{search}"'},
+            "renderTargets": rendered_targets(lp_expr),
+        }, [sw.evidence] + ([obs.evidence] if obs else []), "needs-review", confidence(Signal.INFERRED),
+            service, cross_refs=[{"kind": "Flow", "name": for_flow, "relation": "alerts-on"}]))
+        docs.append(_doc("Runbook", a_name, {
+            "banner": "GENERATED — verify before executing",
+            "trigger": {"alertRef": a_name},
+            "symptoms": [
+                f"'{search}' appears in logs",
+                "writes acknowledged to callers but rows missing downstream",
+            ],
+            "diagnosis": [
+                {"step": "Check the database service binding and datastore health"},
+                {"step": "Inspect the save() catch block (failure is swallowed)"},
+            ],
+            "remediation": [
+                "Verify the datastore binding and availability",
+                "No automatic replay: writes in the failure window are lost — assess impact",
+                "Code change: surface the failure / make the write transactional (follow-up)",
             ],
             "escalation": "service owner (needs-review)",
             "relatedFlow": for_flow,

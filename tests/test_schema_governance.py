@@ -15,16 +15,32 @@ from sre_kb.validation import validate_doc
 FIXTURE = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
 
 
+# tools/ is not a package, so load the generator module by path (lint_skills pattern).
+_GEN_PATH = Path(__file__).resolve().parents[1] / "tools" / "gen_schema_ref.py"
+_gen_spec = importlib.util.spec_from_file_location("gen_schema_ref", _GEN_PATH)
+gen_schema_ref = importlib.util.module_from_spec(_gen_spec)
+_gen_spec.loader.exec_module(gen_schema_ref)
+
+
 def test_schema_reference_doc_is_current() -> None:
     """docs/SCHEMA-REFERENCE.md is generated from the schemas (the single human-readable field
     guide skills link instead of restating shapes); a schema change without `make schema-ref`
     fails here, the same regenerate-and-diff gate as the lockfile."""
-    gen_path = Path(__file__).resolve().parents[1] / "tools" / "gen_schema_ref.py"
-    spec = importlib.util.spec_from_file_location("gen_schema_ref", gen_path)
-    gen = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(gen)
-    assert gen.OUTPUT.read_text(encoding="utf-8") == gen.generate(), \
+    assert gen_schema_ref.OUTPUT.read_text(encoding="utf-8") == gen_schema_ref.generate(), \
         "docs/SCHEMA-REFERENCE.md is stale — run `make schema-ref`"
+
+
+def test_schema_reference_marks_nested_required() -> None:
+    # The validator enforces nested required (e.g. Flow trigger.type, Runbook trigger.alertRef);
+    # the reference must say so, not render every nested field as optional.
+    doc = gen_schema_ref.generate()
+    assert "| `trigger.type` | string | yes |" in doc
+    assert "| `trigger.alertRef` | string | yes |" in doc
+
+
+def test_schema_reference_escapes_table_cells() -> None:
+    # A description/enum written in the house "a | b" style must not split the markdown row.
+    assert gen_schema_ref._cell("ast (deterministic) | llm") == "ast (deterministic) \\| llm"
 
 
 def _flow(spec_extra: dict | None = None) -> dict:

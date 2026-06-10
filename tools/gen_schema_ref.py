@@ -11,10 +11,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import yaml
+from sre_kb.config import schemas_dir
+from sre_kb.registry import kinds, schema_for
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMAS = ROOT / "src" / "sre_kb" / "schemas"
 OUTPUT = ROOT / "docs" / "SCHEMA-REFERENCE.md"
 
 _HEADER = """\
@@ -25,11 +25,24 @@ _HEADER = """\
 
 One row per field of each registered kind's `spec`, rendered from the same JSON Schemas the
 validator enforces (`additionalProperties: false` — fields not listed here are rejected).
-Skills and reviews should link here rather than restating shapes in prose.
+A nested field marked required is required *within its parent object* when that parent is
+present. Skills and reviews should link here rather than restating shapes in prose.
 """
 
 
+def _cell(text: object) -> str:
+    """Collapse whitespace and escape `|` so arbitrary schema text can't split a table row."""
+    return " ".join(str(text).split()).replace("|", "\\|")
+
+
+def _is_array(prop: dict) -> bool:
+    t = prop.get("type")
+    return t == "array" or (isinstance(t, list) and "array" in t)
+
+
 def _type_of(prop: dict) -> str:
+    if any(k in prop for k in ("anyOf", "oneOf", "allOf", "$ref")):
+        return "composite (see schema)"  # composed shapes aren't flattened into rows
     t = prop.get("type")
     if isinstance(t, list):
         return " or ".join(str(x) for x in t)  # not "|" — it would split the markdown cell
@@ -43,10 +56,10 @@ def _type_of(prop: dict) -> str:
 def _notes(prop: dict) -> str:
     notes = []
     if "enum" in prop:
-        notes.append("one of: " + ", ".join(f"`{v}`" for v in prop["enum"]))
+        notes.append("one of: " + ", ".join(f"`{_cell(v)}`" for v in prop["enum"]))
     desc = prop.get("description")
     if desc:
-        notes.append(" ".join(str(desc).split()))
+        notes.append(_cell(desc))
     return " — ".join(notes)
 
 
@@ -56,29 +69,28 @@ def _rows(props: dict, required: set[str], prefix: str = "") -> list[tuple[str, 
         if not isinstance(prop, dict):
             continue
         path = f"{prefix}{name}"
-        rows.append((path, _type_of(prop), name in required and not prefix, _notes(prop)))
-        child = prop.get("items") if prop.get("type") == "array" else prop
+        rows.append((path, _type_of(prop), name in required, _notes(prop)))
+        child = prop.get("items") if _is_array(prop) else prop
         if isinstance(child, dict) and isinstance(child.get("properties"), dict):
-            suffix = "[]." if prop.get("type") == "array" else "."
+            suffix = "[]." if _is_array(prop) else "."
             rows.extend(_rows(child["properties"], set(child.get("required") or []),
                               f"{path}{suffix}"))
     return rows
 
 
 def generate() -> str:
-    registry = yaml.safe_load((SCHEMAS / "registry.yaml").read_text(encoding="utf-8"))
     out = [_HEADER]
-    for kind, entry in (registry.get("kinds") or {}).items():
-        schema_rel = (entry or {}).get("schema")
+    for kind in kinds():
+        schema_rel = schema_for(kind)
         if not schema_rel:
             continue
-        schema = json.loads((SCHEMAS.parent / schema_rel).read_text(encoding="utf-8"))
+        schema = json.loads((schemas_dir().parent / schema_rel).read_text(encoding="utf-8"))
         spec = (schema.get("properties") or {}).get("spec") or {}
         out.append(f"## {kind}")
         desc = schema.get("description")
         if desc:
             out.append("")
-            out.append(" ".join(str(desc).split()))
+            out.append(_cell(desc))
         out.append("")
         out.append("| field | type | required | notes |")
         out.append("|---|---|---|---|")

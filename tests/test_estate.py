@@ -67,7 +67,11 @@ def test_client_base_url_resolves_to_a_scanned_services_route(tmp_path):
         "applications:\n- name: caller\n  routes:\n  - route: caller.apps.internal\n",
         encoding="utf-8")
     (caller / "src/main/resources/application.yml").write_text(
-        "clients:\n  callee:\n    base-url: http://callee.apps.internal\n    timeout: 2s\n",
+        # one scheme-less baseUrl (the common Spring style) and one with scheme+port+path:
+        # both must normalize to the same host and resolve to the callee service
+        "clients:\n"
+        "  callee:\n    base-url: callee.apps.internal\n    timeout: 2s\n"
+        "  callee-api:\n    base-url: http://callee.apps.internal:8080/api\n    timeout: 2s\n",
         encoding="utf-8")
     callee = tmp_path / "callee"
     callee.mkdir()

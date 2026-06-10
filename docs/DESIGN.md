@@ -36,9 +36,9 @@ seam; GitHub implemented first because that is the company SCM).
 **First deployment profile: on-prem VMs + PCF / Pivotal Cloud Foundry.** There,
 `manifest.yml`, buildpacks, routes, service bindings (VCAP), Spring Cloud Config,
 Eureka, Actuator, Micrometer, Resilience4j/Hystrix are first-class signals. The
-platform is a profile, not the architecture: collectors are registry-driven
-(`config/profiles/*`), so Kubernetes or cloud deployment descriptors are additional
-profiles, not a redesign. Collectors ship for Java/Spring, .NET/Steeltoe,
+platform is a profile, not the architecture: language/manifest detection selects the
+collector set (`collectors/base.py`), so Kubernetes or cloud deployment descriptors
+are additional collectors, not a redesign. Collectors ship for Java/Spring, .NET/Steeltoe,
 Python/FastAPI, Node/Express, and Go.
 
 **Confirmed decisions:** the LLM is a pointer-generator behind the `LLMProvider` seam,
@@ -94,47 +94,36 @@ what makes the KB *validated*.
 
 ```
 sre-design/
-├── pyproject.toml                # packaging; console_script "sre-kb"; ruff+pytest
-├── README.md, Makefile, .pre-commit-config.yaml
-├── config/
-│   ├── default.yaml              # gates, paths, enabled collectors
-│   ├── profiles/java-spring-pcf.yaml
-│   └── forges/github.yaml
-├── schemas/                      # JSON Schema, Draft 2020-12
-│   ├── _envelope.schema.json     # shared metadata/evidence/confidence/status
-│   ├── v1alpha1/<Kind>.schema.json   (one per kind — see catalog)
-│   └── registry.yaml             # kind → schema + collector + prompt + validator
-├── prompts/                      # canonical analysis instructions (domain-versioned)
-│   └── <domain>/v1/{template.md,examples.yaml}
-├── .github/                      # the Copilot "skill/agent" driver (ships in tool repo)
-│   ├── copilot-instructions.md           # repo-wide grounding (+ AGENTS.md, always-on)
-│   ├── agents/sre-analyst.agent.md       # custom agent (the renamed "chat mode")
-│   ├── skills/                           # Agent Skills — each a self-contained folder
-│   │   └── sre-flow-analysis/
-│   │       ├── SKILL.md                  # name + description (discovery) + body
-│   │       ├── scripts/run.sh            # thin wrapper → `sre-kb scan/validate`
-│   │       ├── references/{envelope.md,flow-schema.md,failure-modes.md,provenance-rules.md}
-│   │       └── templates/flow.skeleton.yaml
-│   └── prompts/{flow,alert,runbook}.prompt.md   # one-shot manual entrypoints
+├── pyproject.toml                # packaging; console_script "sre-kb"; ruff+pytest; Python ≥3.13
+├── README.md · Makefile · CLAUDE.md · requirements.lock (hash-pinned) · renovate.json
+├── docs/                         # DESIGN (architecture) · HYBRID-PLAN (live status) ·
+│                                 #   SCOPE-AND-COVERAGE (coverage contract) · VERTEX case
+├── .github/
+│   ├── workflows/ci.yml          # test + lint + lockfile + secret-scan
+│   ├── copilot-instructions.md   # repo-wide grounding (always-on)
+│   ├── agents/                   # sre-analyst · read-only sre-target-scan · sre-oncall
+│   ├── prompts/                  # one-shot entrypoints: autopilot, flow, alert, runbook
+│   └── skills/                   # Agent Skills — pipeline.yaml is the canonical manifest
 ├── src/sre_kb/
-│   ├── cli.py                    # Typer app; one subcommand per stage
-│   ├── config.py                 # pydantic-settings (file + env overlay)
-│   ├── models/{facts.py,envelope.py,artifacts.py}
-│   ├── workspace/{clone.py,layout.py}
-│   ├── collectors/
-│   │   ├── base.py               # Collector protocol + registry + lang detection
-│   │   ├── common/{fs_walk.py,manifest_pcf.py,dependency_lock.py}
-│   │   └── java_spring/{build,annotations,config_props,resiliency,observability,flow_builder}.py
-│   ├── flow/{callgraph.py,failure_modes.py,budget_check.py}  # +timeout/retry-budget check
-│   ├── synth/{scaffold.py,context_pack.py}   # deterministic skeletons + Copilot context packs
-│   ├── scoring/readiness.py          # PRR checks + KB-coverage scorecard
-│   ├── validation/{structural,provenance,crossref,gating,report}.py
-│   ├── render/{kb_writer,copilot,catalog,diagrams}.py   # +Mermaid sequence/topology
-│   ├── publish/forge/{base.py,github.py}     # Forge protocol; GitHub first
-│   ├── publish/pr_builder.py
-│   └── pipeline/{stages.py,orchestrator.py,state.py}
-├── output_templates/{copilot/*.j2, catalog/catalog-info.yaml.j2, pr/pr_body.md.j2}
-└── tests/{fixtures/sample-spring-pcf/, unit/, golden/, e2e/}
+│   ├── cli.py                    # Typer app; one subcommand per stage/loop
+│   ├── config.py · data/default.yaml   # defaults (gates, budgets) + env overlay
+│   ├── schemas/                  # _envelope + v1alpha1/<Kind> + registry.yaml + taxonomy.yaml
+│   ├── models/ · parsing/        # facts/envelope · tree-sitter code model (5 languages)
+│   ├── collectors/               # per-stack fact extractors + the fenced llm/ gap-finder
+│   ├── flow/ · scoring/ · security/   # budget checks · confidence/readiness · resource guards
+│   ├── synth/                    # scaffold · context packs · scan worklist · draft prompts
+│   ├── validation/               # structural/provenance/crossref/gating/challenge/safety
+│   ├── pipeline/                 # orchestrator + the LLM loops: worklist_run, autopilot,
+│   │                             #   challenge/confirm, drafters, gap_finder, graduation_draft
+│   ├── llm/provider.py           # the LLMProvider seam (file-exchange default · subprocess · cache)
+│   ├── render/ (+ templates/)    # KB writer · diagrams · alert/dashboard adapters · guardrails
+│   ├── publish/                  # Forge seam (github/local) + PR builder + generated repo CI
+│   ├── reporting/ · eval/ · drift/ · estate/ · graduation/
+│   │                             # findings/narrative · scorecard · KB diff · cross-service
+│   │                             #   topology · promotion tracker
+│   └── workspace/layout.py       # the .work/<run-id>/ run-dir layout
+├── scripts/build-offline.sh · tools/lint_skills.py
+└── tests/                        # fixtures/sample-* (12 labeled) + the suite
 ```
 
 **Ephemeral run dir** (git-ignored) — stages hand off via disk, so runs are
@@ -277,8 +266,8 @@ Adding a kind = schema + prompt + (optional) collector + one `registry.yaml` row
 ## Deterministic Python engine
 
 - **Collector registry** keyed by `(language, framework)`; language detection
-  (build files, extensions, manifest presence) selects a collector set, overridable
-  by `config/profiles/*`. `Collector` protocol: `applies(ctx)` / `collect(ctx)→Iterable[Fact]`.
+  (build files, extensions, manifest presence) selects the collector set
+  (`collectors/base.py`). `Collector` protocol: `applies(ctx)` / `collect(ctx)→Iterable[Fact]`.
 - **Normalized facts** (`models/facts.py`): `Fact{type, attrs, symbol, evidence}`
   streamed to `facts/facts.jsonl`. Provenance mandatory on every fact;
   `Symbol.fqn` is language-neutral (`com.acme.OrderController#createOrder`).
@@ -344,19 +333,12 @@ Body links use **relative paths** (`See [Flow schema](./references/flow-schema.m
 [the skeleton](./templates/flow.skeleton.yaml)`). Skills are auto-discovered by
 `description` or invoked directly via `/sre-flow-analysis`.
 
-**The three P1 skills and the references each bundles** (references are the reusable
-"help" the user wants baked in):
-
-| Skill (`name`) | Purpose | Key `references/` |
-|---|---|---|
-| `sre-flow-analysis` | Build the request flow + failure points from facts | `flow-schema.md`, `failure-modes.md`, `envelope.md`, `provenance-rules.md` |
-| `sre-alert-from-logs` | Derive alerts from log patterns + meters | `logging-format.md`, `alert-backends.md` (Splunk SPL · PromQL · AppDynamics health rules · Wavefront/Aria ts() · ThousandEyes path), `alert-schema.md`, `provenance-rules.md` |
-| `sre-runbook` | Write a runbook from a flow + its alert | `runbook-schema.md`, `diagnosis-playbook.md` (which logs/endpoints/dashboards to check), `pcf-remediation.md` (restart/scale within instance limits, Spring Cloud Config flips), `provenance-rules.md` |
-
-Shared references (`envelope.md`, `provenance-rules.md`) live once under
-`skills/_shared/` and are symlinked/copied into each skill so the rules stay
-identical. The canonical text is generated from the JSON Schemas + `prompts/` so a
-schema change updates the references (no drift).
+**The canonical skill list is `.github/skills/pipeline.yaml`** (CI-enforced: every skill
+dir appears there exactly once), organized into classify → map → assess → generate phases
+plus the `sre-autopilot` orchestrator (the one-invocation launcher) and the post-publish
+`consume` side. The flow → alert → runbook slice maps to `sre-flow-analysis` +
+`generate-alerts` + `generate-runbooks`; each skill vendors the references it needs
+(`provenance-rules.md`, schemas, failure-mode catalogs) so the rules ship with the skill.
 
 ### Custom agent — the orchestrator
 
@@ -375,8 +357,8 @@ the envelope and the "never invent provenance" rule. Per the verified precedence
 these layers **stack and merge** (personal → `copilot-instructions.md` →
 `*.instructions.md`(`applyTo`) → `AGENTS.md` → skill → agent), higher wins only on a
 direct conflict — so instructions, skills, and the agent reinforce rather than fight.
-`.github/prompts/{flow,alert,runbook}.prompt.md` are thin one-shot entrypoints
-reusing the same `prompts/<domain>/v1/template.md` text as the skill bodies.
+`.github/prompts/{autopilot,flow,alert,runbook}.prompt.md` are thin one-shot
+entrypoints into the same skills (`autopilot.prompt.md` launches the whole loop).
 
 ### The loop (run by the engineer in VS Code)
 
@@ -465,8 +447,8 @@ loaded by other engineers' Copilot). Poison in → trusted out, at incident time
 - **Secret / recon-data exfil via the PR** → ✓ fail-closed publish-time secret-scan gate
   (redaction on the `--allow-secrets` override; see *Secret safety*); document the Copilot
   enterprise data-boundary dependency.
-- **Tool / prompt supply chain** → ✓ **sandboxed/autoescaped Jinja**; CODEOWNERS on
-  `prompts/`+`schemas/` and pinned+hashed deps are infra (deferred).
+- **Tool / prompt supply chain** → ✓ **sandboxed/autoescaped Jinja** + ✓ hash-pinned deps
+  (`requirements.lock`, Renovate digest-pinning); CODEOWNERS on `schemas/`+`skills/` is infra (deferred).
 - **False confidence → self-inflicted outage** → ✓ blast radius labeled "best-effort
   lower bound; `flow.gap`s may hide impact"; ✓ "GENERATED — verify before executing"
   banner + scanned-commit/age on every runbook.

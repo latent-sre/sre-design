@@ -233,7 +233,9 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
     # per run means one service's bindings/downstreams are drawable without an estate sweep ---
     bindings = fs.of("pcf.service-binding")
     clients = fs.of("config.client")
-    if bindings or clients:
+    pubs = fs.of("message.egress")
+    cons = fs.of("message.consumer")
+    if bindings or clients or pubs or cons:
         topo_nodes: list[dict] = [{"type": "service", "name": service}]
         topo_edges: list[dict] = []
         seen_nodes = {service}
@@ -252,7 +254,19 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
                 seen_nodes.add(downstream)
                 topo_nodes.append({"type": "external", "name": downstream})
             topo_edges.append({"from": service, "to": downstream, "relation": "calls"})
-        topo_ev = [(bindings[0] if bindings else clients[0]).evidence]
+        for facts, edge_of in ((pubs, lambda ch: {"from": service, "to": ch, "relation": "publishes"}),
+                               (cons, lambda ch: {"from": ch, "to": service, "relation": "consumes"})):
+            for f in facts:
+                channel = f.attrs.get("channel")
+                if not channel:
+                    continue
+                if channel not in seen_nodes:
+                    seen_nodes.add(channel)
+                    topo_nodes.append({"type": "topic", "name": channel})
+                edge = edge_of(channel)
+                if edge not in topo_edges:
+                    topo_edges.append(edge)
+        topo_ev = [(bindings or clients or pubs or cons)[0].evidence]
         docs.append(emit("Topology", service, {
             "nodes": topo_nodes,
             "edges": topo_edges,

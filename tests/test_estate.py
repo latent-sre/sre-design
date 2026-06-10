@@ -51,6 +51,48 @@ def test_cotenancy_impacted_flows_join_each_tenants_flows(docs):
     assert co["spec"]["impactedFlows"] == ["order-service/create-order"]
 
 
+def test_unresolved_client_stays_an_external_node(docs):
+    # inventory-service.apps.internal matches no scanned service's route -> external, as before
+    topo = docs[("Topology", "estate")]
+    nodes = {n["name"]: n["type"] for n in topo["spec"]["nodes"]}
+    assert nodes["inventory"] == "external"
+
+
+def test_client_base_url_resolves_to_a_scanned_services_route(tmp_path):
+    """A config-declared baseUrl whose hostname matches another scanned service's PCF route
+    becomes a real service->service edge, not a synthetic external node."""
+    caller = tmp_path / "caller"
+    (caller / "src/main/resources").mkdir(parents=True)
+    (caller / "manifest.yml").write_text(
+        "applications:\n- name: caller\n  routes:\n  - route: caller.apps.internal\n",
+        encoding="utf-8")
+    (caller / "src/main/resources/application.yml").write_text(
+        "clients:\n  callee:\n    base-url: http://callee.apps.internal\n    timeout: 2s\n",
+        encoding="utf-8")
+    callee = tmp_path / "callee"
+    callee.mkdir()
+    (callee / "manifest.yml").write_text(
+        "applications:\n- name: callee\n  routes:\n  - route: callee.apps.internal\n",
+        encoding="utf-8")
+    r = run_estate([str(caller), str(callee)], work_root=str(tmp_path / "w"), run_id="resolve")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    assert {"from": "caller", "to": "callee", "relation": "calls"} in topo["spec"]["edges"]
+    assert all(n["name"] != "callee" or n["type"] == "service" for n in topo["spec"]["nodes"])
+
+
+def test_messaging_topic_joins_producer_and_consumer_repos(tmp_path):
+    """order-service publishes order.created; the messaging fixture consumes it from another
+    repo — the topic becomes a shared node with both edges, answering 'who consumes this?'."""
+    r = run_estate([str(ORDER), str(FIX / "sample-messaging")],
+                   work_root=str(tmp_path / "w"), run_id="topics")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    nodes = {n["name"]: n["type"] for n in topo["spec"]["nodes"]}
+    assert nodes["order.created"] == "topic"
+    edges = topo["spec"]["edges"]
+    assert {"from": "order-service", "to": "order.created", "relation": "publishes"} in edges
+    assert {"from": "order.created", "to": "sample-messaging", "relation": "consumes"} in edges
+
+
 def test_unshared_resources_are_not_cotenancy(docs):
     assert ("BlastRadius", "order-kafka-cotenancy") not in docs
     assert ("BlastRadius", "billing-kafka-cotenancy") not in docs

@@ -42,6 +42,7 @@ _SHAPE = {
     "service": '["{}"]',
     "datastore": '[("{}")]',
     "broker": '[/"{}"/]',
+    "topic": '(["{}"])',
     "external": '{{"{}"}}',
 }
 

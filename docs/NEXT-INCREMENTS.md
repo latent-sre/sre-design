@@ -190,16 +190,14 @@ collected** — these are joins in `build_estate`, not new collectors.
 
 ### Increments
 
-1. **Route ↔ baseUrl resolution.** In `build_estate`, match each `config.client.baseUrl`
-   hostname against every other service's `pcf.app.routes`. Hit → a real
-   `service —calls→ service` edge carrying evidence from *both* repos; miss → the current
-   `external` node stands. Turns the estate graph from "services + resources" into an actual
-   call topology.
-2. **Messaging topic join.** Merge `message.egress.channel` against `message.consumer.channel`
-   across services: topic nodes become shared estate nodes, producer→topic→consumer edges
-   appear, and "who consumes `order.created`?" becomes answerable in `sre-incident-response`.
-   Also extends co-tenancy: a topic with producers and consumers in different repos is a
-   shared-fate edge today's binding-only logic misses.
+1. **Route ↔ baseUrl resolution** — **done on this branch.** `build_estate` matches each
+   `config.client.baseUrl` hostname against every scanned service's `pcf.app.routes`; a hit
+   becomes a real `service —calls→ service` edge, a miss stays the `external` node
+   (`estate/topology.py`).
+2. **Messaging topic join** — **done on this branch.** `message.egress.channel` and
+   `message.consumer.channel` merge across services into shared `topic` nodes with
+   publishes/consumes edges (estate and single-service Topology both), so "who consumes
+   `order.created`?" is answerable from the graph.
 3. **Shared-library lineage.** `tech.dependency` facts already come from
    pom.xml/csproj/package.json. Join on a configurable internal-namespace allowlist
    (e.g. `com.acme.*`, `@acme/*`) → `service —uses-library→ lib` edges, plus a **version-skew

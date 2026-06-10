@@ -3,6 +3,8 @@ facts. A resource bound by >1 service is shared — its failure spans all tenant
 
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from sre_kb.inventory_signatures import is_broker, is_datastore
 from sre_kb.synth.emit import emit
 from sre_kb.util import slug
@@ -44,6 +46,16 @@ def build_estate(services: list[dict]) -> list[dict]:
     topo_evidence = []
     owners: dict[str, dict] = {}  # resource -> {service: Evidence}
 
+    # Pass 1: each service's PCF route hostnames, so a config-declared baseUrl pointing at
+    # another scanned service resolves to a real service->service edge, not an external node.
+    route_owner: dict[str, str] = {}
+    for s in services:
+        app = s["fs"].first("pcf.app")
+        for route in (app.attrs.get("routes") or []) if app else []:
+            host = str(route).split("/")[0].strip().lower()
+            if host:
+                route_owner[host] = s["service"]
+
     for s in services:
         name = s["service"]
         fs = s["fs"]
@@ -57,9 +69,35 @@ def build_estate(services: list[dict]) -> list[dict]:
             edges.append({"from": name, "to": res, "relation": "binds"})
             owners.setdefault(res, {})[name] = sb.evidence
         for c in fs.of("config.client"):
-            downstream = c.attrs.get("client", "downstream")
-            nodes.setdefault(downstream, "external")
-            edges.append({"from": name, "to": downstream, "relation": "calls"})
+            host = (urlparse(str(c.attrs.get("baseUrl") or "")).hostname or "").lower()
+            resolved = route_owner.get(host)
+            if resolved and resolved != name:
+                edges.append({"from": name, "to": resolved, "relation": "calls"})
+            else:
+                downstream = c.attrs.get("client", "downstream")
+                nodes.setdefault(downstream, "external")
+                edges.append({"from": name, "to": downstream, "relation": "calls"})
+        # Messaging topics join across repos: a channel one service publishes and another
+        # consumes is a shared-fate edge the binding-only view misses.
+        for pub in fs.of("message.egress"):
+            channel = pub.attrs.get("channel")
+            if channel:
+                nodes.setdefault(channel, "topic")
+                edges.append({"from": name, "to": channel, "relation": "publishes"})
+        for con in fs.of("message.consumer"):
+            channel = con.attrs.get("channel")
+            if channel:
+                nodes.setdefault(channel, "topic")
+                edges.append({"from": channel, "to": name, "relation": "consumes"})
+
+    deduped: list[dict] = []
+    seen_edges: set[tuple] = set()
+    for e in edges:
+        key = (e["from"], e["to"], e.get("relation"))
+        if key not in seen_edges:
+            seen_edges.add(key)
+            deduped.append(e)
+    edges = deduped
 
     docs.append(
         emit(

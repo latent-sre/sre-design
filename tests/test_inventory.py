@@ -79,6 +79,8 @@ def test_single_service_topology(docs):
     assert nodes["inventory"] == "external"
     assert {"from": "order-service", "to": "orders-postgres", "relation": "binds"} in spec["edges"]
     assert {"from": "order-service", "to": "inventory", "relation": "calls"} in spec["edges"]
+    assert nodes["order.created"] == "topic"  # published channels are graph nodes too
+    assert {"from": "order-service", "to": "order.created", "relation": "publishes"} in spec["edges"]
 
 
 def test_interface_idempotency_matches_the_gap_signature(docs):

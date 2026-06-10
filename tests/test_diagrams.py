@@ -137,3 +137,40 @@ def test_lossy_attribution_never_guesses_between_two_nodes_of_type():
                       "stateful": {"dataLossRisk": True}}}]
     _, lossy = topology_overlays(topo, docs)
     assert lossy == set()  # ambiguous -> no styling, never a guessed edge
+
+
+def test_sequence_names_known_http_clients_as_participants():
+    """An http-egress step whose sink target is a configured client renders as a named
+    participant; without the join (or for unknown targets) it stays the Downstream catch-all."""
+    flow = {
+        "metadata": {"service": "orders"},
+        "spec": {
+            "trigger": {"method": "POST", "path": "/orders"},
+            "steps": [{"id": "s0", "kind": "http-egress", "name": "call-inventory"},
+                      {"id": "s1", "kind": "db-write", "name": "persist"}],
+            "sinks": [{"type": "http", "target": "inventory"},
+                      {"type": "db", "target": "order-repository"}],
+        },
+    }
+    out = mermaid_sequence(flow, known_targets={"inventory": "inventory"})
+    assert "participant P_inventory as inventory" in out
+    assert "SVC->>P_inventory: call-inventory" in out
+    assert "Downstream" not in out
+    assert "SVC->>Datastore: persist" in out          # non-http steps keep the vocabulary
+    assert "Downstream" in mermaid_sequence(flow)     # no join -> unchanged output
+
+
+def test_sequence_with_mismatched_sinks_never_mispairs():
+    """Steps and sinks are index-parallel only by construction; a hand-authored flow with
+    unequal lengths keeps every generic participant instead of guessing the pairing."""
+    flow = {
+        "metadata": {"service": "orders"},
+        "spec": {
+            "trigger": {"method": "GET", "path": "/x"},
+            "steps": [{"id": "s0", "kind": "http-egress", "name": "call-a"},
+                      {"id": "s1", "kind": "http-egress", "name": "call-b"}],
+            "sinks": [{"type": "http", "target": "inventory"}],
+        },
+    }
+    out = mermaid_sequence(flow, known_targets={"inventory": "inventory"})
+    assert "P_inventory" not in out and out.count("Downstream") == 2

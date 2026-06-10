@@ -18,14 +18,39 @@ _PARTICIPANT = {
 }
 
 
-def mermaid_sequence(flow: dict) -> str:
+def mermaid_sequence(flow: dict, known_targets: dict[str, str] | None = None) -> str:
+    """`known_targets` (slug -> display name) promotes an http-egress step whose sink target is
+    a configured client to a named participant instead of the `Downstream` catch-all. Targets
+    live on the index-parallel `sinks` list, so pairing applies only when the deriver built
+    steps and sinks in one ordered walk (the `_lossy_sink` guard); otherwise every step keeps
+    its generic participant rather than mispairing."""
+    from sre_kb.util import slug
+
     spec = flow.get("spec", {})
     trigger = spec.get("trigger", {})
     service = (flow.get("metadata") or {}).get("service", "service")
+    steps = spec.get("steps", [])
+    sinks = spec.get("sinks", [])
+    paired = sinks if known_targets and len(sinks) == len(steps) else [None] * len(steps)
+
+    def peer_of(step: dict, sink: dict | None) -> tuple[str, str | None]:
+        """(participant id, display name to declare or None for the generic vocabulary)."""
+        if step.get("kind") == "http-egress" and isinstance(sink, dict):
+            target = slug(str(sink.get("target")))
+            if known_targets and target in known_targets:
+                return "P_" + re.sub(r"[^A-Za-z0-9]", "_", target), known_targets[target]
+        return _PARTICIPANT.get(step.get("kind", ""), "Dependency"), None
+
     out = ["sequenceDiagram", "  actor Client", f"  participant SVC as {_mm(service)}"]
+    declared: set[str] = set()
+    for step, sink in zip(steps, paired):
+        pid, label = peer_of(step, sink)
+        if label is not None and pid not in declared:
+            declared.add(pid)
+            out.append(f"  participant {pid} as {_mm(label)}")
     out.append(f"  Client->>SVC: {_mm(trigger.get('method', ''))} {_mm(trigger.get('path', ''))}".rstrip())
-    for step in spec.get("steps", []):
-        peer = _PARTICIPANT.get(step.get("kind", ""), "Dependency")
+    for step, sink in zip(steps, paired):
+        peer, _ = peer_of(step, sink)
         out.append(f"  SVC->>{peer}: {_mm(step.get('name', 'step'))}")
         notes = []
         for fm in step.get("failureModes", []):

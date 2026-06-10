@@ -18,6 +18,17 @@ def test_normalize_path_is_template_insensitive():
     assert openapi.normalize_path("/") == "/"
 
 
+def test_operation_parameter_overrides_path_level_required():
+    # Per the OpenAPI spec an operation parameter with the same (in, name) overrides the path-level
+    # one. A path-level `required: true` that the operation relaxes to optional must NOT count as
+    # required (the old union kept it required, fabricating a breaking change).
+    path_item = {"parameters": [{"name": "trace", "in": "header", "required": True}]}
+    op = {"parameters": [{"name": "trace", "in": "header", "required": False}]}
+    assert openapi._required_params(path_item, op) == set()
+    # A genuinely path-required param the operation doesn't redeclare is still required.
+    assert openapi._required_params(path_item, {}) == {"header:trace"}
+
+
 def test_spec_operations_ingested_and_byte_grounded():
     ctx = ScanContext(root=FIXTURE, repo="file://sample-api")
     facts = [f for f in openapi.collect(ctx) if f.type == "api.spec.endpoint"]

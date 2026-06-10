@@ -65,12 +65,16 @@ def _spec_version(data: dict) -> str:
 def _required_params(path_item: dict, op: dict) -> set[str]:
     """The required request inputs of an operation, as stable `in:name` tokens (plus `(requestBody)`
     when a required body is declared). Path-level parameters merge into each operation, mirroring the
-    OpenAPI spec. Only `required: true` parameters count — an optional parameter is non-breaking."""
-    names: set[str] = set()
+    OpenAPI spec: an operation parameter with the same `(in, name)` OVERRIDES the path-level one — so
+    an operation that relaxes a path-level `required: true` to optional is correctly non-breaking,
+    rather than the two being unioned and the parameter staying "required". Only `required: true`
+    parameters count — an optional parameter is non-breaking."""
+    merged: dict[tuple[str, str], dict] = {}
     for params in (path_item.get("parameters"), op.get("parameters")):
         for p in params or []:
-            if isinstance(p, dict) and p.get("required") is True and p.get("name"):
-                names.add(f"{p.get('in', 'query')}:{p['name']}")
+            if isinstance(p, dict) and p.get("name"):
+                merged[(p.get("in", "query"), p["name"])] = p
+    names = {f"{loc}:{name}" for (loc, name), p in merged.items() if p.get("required") is True}
     body = op.get("requestBody")
     if isinstance(body, dict) and body.get("required") is True:
         names.add("(requestBody)")

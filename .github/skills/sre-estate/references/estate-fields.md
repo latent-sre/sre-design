@@ -5,27 +5,43 @@ facts of several repos.
 
 ## `Topology`
 
-The cross-service graph: services, the datastores/brokers they bind to (and external deps
-they call), and the edges between them. Rendered to `projections/diagrams/topology.mmd`
-(Mermaid). Read it to spot **shared infrastructure** — any datastore/broker node with more
-than one inbound service.
+Field shapes for every kind live in the generated
+[docs/SCHEMA-REFERENCE.md](../../../../docs/SCHEMA-REFERENCE.md); this file carries the
+semantics. The cross-service graph: services, the datastores/brokers they bind to, the messaging
+topics they publish/consume, and the downstreams they call. Rendered to
+`projections/diagrams/topology.mmd` plus a GitHub-renderable `topology.md` (fenced Mermaid
+with a shape legend). Read it to spot **shared infrastructure** — any datastore/broker/topic
+node with more than one attached service.
 
 ```yaml
 kind: Topology
 spec:
-  nodes: [ { type: service|datastore|broker|external, name: orders-postgres }, ... ]
-  edges: [ { from: order-service, to: orders-postgres, relation: binds }, ... ]  # relation: binds | calls
+  nodes: [ { type: service|datastore|broker|topic|resource|external, name: orders-postgres }, ... ]
+  edges: [ { from: order-service, to: orders-postgres, relation: binds }, ... ]
+  # relation: binds | calls | publishes | consumes
   pcfSpaces: []
 ```
 
+Two joins make the edges real, not just declared:
+
+- **`calls` edges resolve across repos** — a `clients.*.base-url` whose hostname matches
+  another scanned service's PCF route becomes a `service -> service` edge; an unmatched
+  hostname stays an `external` node (call out the naming gap, don't invent the edge).
+- **`topic` nodes join producers to consumers** — a channel one repo publishes and another
+  consumes appears once, with `publishes`/`consumes` edges on each side. "Who consumes
+  `order.created`?" is read straight off the graph.
+
 ## Cross-service `BlastRadius`
 
-Like the single-service `BlastRadius`, but `impactedServices` and `coTenancy` are populated
-across repos (and `impactedFlows` is typically empty — the impact is expressed per service):
+Like the single-service `BlastRadius`, but populated across repos: `impactedServices` and
+`coTenancy` span every tenant, and `impactedFlows` lists each tenant's affected flows as
+`service/flow` (joined from each repo's flow sinks):
 
 - **`coTenancy`** — a list of `{ sharedBy: [services] }`: the services co-located on this
   shared resource. A non-empty list means a failure here is a *simultaneous* multi-service event.
 - **`impactedServices`** — every service that degrades if this node is down.
+- **`impactedFlows`** — the concrete flows behind that fan-out, qualified per service
+  (e.g. `order-service/create-order`).
 - **`stateful.dataLossRisk`** — for a shared datastore/broker, whether a tenant loses in-flight
   data. The co-tenancy path can raise `severityHint` to `critical`.
 

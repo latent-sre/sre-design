@@ -36,7 +36,10 @@ CONTRACT: dict[str, set[str]] = {
     # sre-prr-review/references/prr-checks.md
     "ReadinessScore": {"prrChecks", "score", "grade", "coverage", "gaps"},
     # sre-estate/references/estate-fields.md
-    "Topology": {"nodes", "edges"},
+    "Topology": {"nodes.type", "nodes.name", "edges.from", "edges.to", "edges.relation",
+                 "pcfSpaces"},
+    # sre-security-posture (the engine's deterministic baseline the skill enriches)
+    "SecurityPosture": {"controls"},
     # sre-incident-response/references/kb-layout.md
     "Runbook": {
         "trigger.alertRef", "relatedFlow", "symptoms", "diagnosis", "remediation",

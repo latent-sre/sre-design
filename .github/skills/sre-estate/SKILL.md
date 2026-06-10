@@ -28,7 +28,8 @@ facts; you explain and prioritize it, grounded in each service's code.
 
   See [scripts/estate.sh](./scripts/estate.sh) for a thin wrapper. Output lands under
   `.work/<estate-run>/`: a `Topology` artifact, cross-service `BlastRadius` artifacts, and a
-  `projections/diagrams/topology.mmd` Mermaid graph.
+  `projections/diagrams/topology.mmd` Mermaid graph plus a GitHub-renderable `topology.md`
+  (fenced Mermaid + legend).
 
 ## Workflow
 
@@ -63,6 +64,9 @@ databases), or — short of that — a shared-fate runbook and an alert that pag
   be a fleet risk if others share it without that containment. Compare per-service breakers.
 - **Names must reconcile across repos.** Co-tenancy is keyed on the shared resource name (e.g.
   the bound service / datastore identifier). If two services name the same store differently,
-  the engine can't link them — call out the naming gap rather than inventing the edge.
-- **No diagram?** Only runs that produce a `Topology` emit `topology.mmd`; a single-target run
-  won't. Use `sre-kb estate` with ≥2 targets for cross-service work.
+  the engine can't link them — call out the naming gap rather than inventing the edge. HTTP
+  `calls` edges resolve only when a client baseUrl hostname matches a scanned service's route;
+  topics join only on the exact channel name.
+- **Single-service vs estate.** A plain `sre-kb run` now emits that service's own `Topology`
+  (rendered as `<service>-topology.mmd`/`.md`); cross-service joins (co-tenancy, resolved
+  calls, producer/consumer topics) still need `sre-kb estate` with ≥2 targets.

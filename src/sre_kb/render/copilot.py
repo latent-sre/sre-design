@@ -37,11 +37,21 @@ def _rules_for(d: dict) -> list[str]:
     if d["kind"] == "Flow":
         for s in spec.get("steps", []):
             if any(fm.get("dataLossRisk") for fm in s.get("failureModes", [])):
-                out.append(
-                    f"Step `{_inline(s['name'])}` loses data on failure (fire-and-forget "
-                    f"publish). Do NOT swallow the exception; add an outbox/retry instead "
-                    f"of hiding it."
-                )
+                # Name the actual lossy mechanism — a swallowed DB write is not a publish,
+                # and a wrong remedy in a hard rule steers the editor at a broker that
+                # isn't involved.
+                if s.get("kind") == "db-write":
+                    out.append(
+                        f"Step `{_inline(s['name'])}` loses data on failure (DB write inside "
+                        f"a swallowed catch). Do NOT swallow the exception; surface the "
+                        f"failure or make the write transactional."
+                    )
+                else:
+                    out.append(
+                        f"Step `{_inline(s['name'])}` loses data on failure (fire-and-forget "
+                        f"publish). Do NOT swallow the exception; add an outbox/retry instead "
+                        f"of hiding it."
+                    )
     return out
 
 

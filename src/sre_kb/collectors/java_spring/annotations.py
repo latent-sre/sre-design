@@ -9,6 +9,7 @@ and real try/catch nodes replace the substring + brace-counting heuristics.
 from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
+from sre_kb.collectors.java_spring.flow_builder import SAVE_METHODS
 from sre_kb.models.facts import Fact, Symbol
 from sre_kb.util import fqn, swallow_level
 
@@ -88,6 +89,17 @@ def collect(ctx: ScanContext) -> list[Fact]:
                                 ctx.evidence(rel, sw.start, sw.end, "java_spring.annotations"),
                                 Symbol(tfqn, "class"),
                             ))
+                    if c.method in SAVE_METHODS and "Repository" in rtype and c.swallow:
+                        # A repository save in a logged-and-swallowed catch: the write is lost
+                        # silently — the DB dual of the swallowed publish above.
+                        sw = c.swallow
+                        facts.append(Fact(
+                            "swallowed.db.failure",
+                            {"repository": rtype, "level": swallow_level(sw.log_method),
+                             "message": sw.message, "class": tfqn},
+                            ctx.evidence(rel, sw.start, sw.end, "java_spring.annotations"),
+                            Symbol(tfqn, "class"),
+                        ))
                     if c.receiver == "restTemplate" or "RestTemplate" in rtype:
                         facts.append(Fact(
                             "http.egress", {"class": tfqn},

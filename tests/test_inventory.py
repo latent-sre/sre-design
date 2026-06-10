@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from sre_kb.pipeline import run as run_pipeline
+from sre_kb.render.copilot import reliability_guardrails
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
 
@@ -205,3 +206,15 @@ def test_derived_fields_from_a_guarded_refreshable_service(tmp_path):
 
     br = out[("BlastRadius", "pay-repository")]["spec"]
     assert br["stateful"]["dataLossRisk"] is True  # swallowed save = silent write loss
+
+    # The lossy write gets the same Flow->Alert->Runbook chain a swallowed publish gets.
+    alert = out[("Alert", "pay-repository-write-failures")]
+    assert alert["status"] == "needs-review"
+    assert alert["spec"]["signalSource"] == "log-pattern"
+    rb = out[("Runbook", "pay-repository-write-failures")]
+    assert rb["spec"]["trigger"]["alertRef"] == "pay-repository-write-failures"
+
+    # The hard guardrail names the actual lossy mechanism — a DB write, not a publish.
+    rules = reliability_guardrails(list(out.values()))
+    db_rules = [r for r in rules if "persist" in r]
+    assert db_rules and all("DB write" in r and "publish" not in r for r in db_rules)

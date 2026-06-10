@@ -3,14 +3,21 @@ facts. A resource bound by >1 service is shared — its failure spans all tenant
 
 from __future__ import annotations
 
-from urllib.parse import urlparse
-
 from sre_kb.inventory_signatures import is_broker, is_datastore
 from sre_kb.synth.emit import emit
 from sre_kb.util import slug
 
 # Flow sinks carry the code-side target type; bindings carry the platform-side resource type.
 _SINK_TYPE_FOR = {"datastore": "db", "broker": "kafka"}
+
+
+def _host(value: object) -> str:
+    """The bare hostname of a route or baseUrl: scheme, path, and port stripped, lowercased.
+    Both sides of the route<->baseUrl join MUST normalize identically — Spring config commonly
+    omits the scheme (`base-url: callee.apps.internal`) and an internal route can carry a port
+    (`callee.apps.internal:8080`); either asymmetry silently breaks the join."""
+    rest = str(value or "").split("://", 1)[-1]
+    return rest.split("/", 1)[0].rsplit(":", 1)[0].strip().lower()
 
 
 def _impacted_flows(res: str, ntype: str, owners: dict, fs_by_service: dict) -> list[str]:
@@ -52,7 +59,7 @@ def build_estate(services: list[dict]) -> list[dict]:
     for s in services:
         app = s["fs"].first("pcf.app")
         for route in (app.attrs.get("routes") or []) if app else []:
-            host = str(route).split("/")[0].strip().lower()
+            host = _host(route)
             if host:
                 route_owner[host] = s["service"]
 
@@ -69,8 +76,7 @@ def build_estate(services: list[dict]) -> list[dict]:
             edges.append({"from": name, "to": res, "relation": "binds"})
             owners.setdefault(res, {})[name] = sb.evidence
         for c in fs.of("config.client"):
-            host = (urlparse(str(c.attrs.get("baseUrl") or "")).hostname or "").lower()
-            resolved = route_owner.get(host)
+            resolved = route_owner.get(_host(c.attrs.get("baseUrl")))
             if resolved and resolved != name:
                 edges.append({"from": name, "to": resolved, "relation": "calls"})
             else:

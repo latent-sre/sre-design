@@ -93,8 +93,11 @@ def collect(ctx: ScanContext) -> list[Fact]:
                 continue
             seen_deps.add(name)
             ln = find_line(lines, f'"{name}"') or 1
+            attrs: dict = {"name": name}
+            if isinstance(deps[name], str):
+                attrs["version"] = deps[name]
             facts.append(Fact(
-                "tech.dependency", {"name": name},
+                "tech.dependency", attrs,
                 ctx.evidence(rel, ln, ln, "node_express.package_json"),
                 Symbol(name, "dependency"),
             ))

@@ -124,3 +124,60 @@ def test_same_target_listed_twice_is_idempotent(tmp_path_factory):
     work = tmp_path_factory.mktemp("dup2")
     r = run_estate([str(ORDER), str(ORDER), str(BILLING)], work_root=str(work), run_id="idem")
     assert sorted(r.services) == ["billing-service", "order-service"]
+
+
+def _lib_repo(root: Path, name: str, version: str) -> None:
+    root.mkdir(parents=True)
+    (root / "manifest.yml").write_text(
+        f"applications:\n- name: {name}\n", encoding="utf-8")
+    (root / "pom.xml").write_text(
+        "<project>\n<dependencies>\n<dependency>\n"
+        "<groupId>com.acme</groupId>\n<artifactId>acme-models</artifactId>\n"
+        f"<version>{version}</version>\n</dependency>\n</dependencies>\n</project>\n",
+        encoding="utf-8")
+
+
+def test_internal_library_joins_services_and_flags_version_skew(tmp_path):
+    """Allowlisted internal dependencies become library nodes with uses-library edges; two
+    services pinning different versions of the same library raise a version-skew finding."""
+    _lib_repo(tmp_path / "a", "svc-a", "1.0.0")
+    _lib_repo(tmp_path / "b", "svc-b", "2.0.0")
+    r = run_estate([str(tmp_path / "a"), str(tmp_path / "b")],
+                   work_root=str(tmp_path / "w"), run_id="libs",
+                   internal_namespaces=["com.acme*"])
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    nodes = {n["name"]: n["type"] for n in topo["spec"]["nodes"]}
+    assert nodes["acme-models"] == "library"
+    edges = topo["spec"]["edges"]
+    assert {"from": "svc-a", "to": "acme-models", "relation": "uses-library"} in edges
+    assert {"from": "svc-b", "to": "acme-models", "relation": "uses-library"} in edges
+    skew = [f for f in (r.findings or []) if f["type"] == "library-version-skew"]
+    assert len(skew) == 1
+    assert skew[0]["versions"] == {"svc-a": "1.0.0", "svc-b": "2.0.0"}
+    # The finding also lands in the written estate report (the reviewer-facing record).
+    import json
+    report = json.loads(r.report_path.read_text())
+    assert report["findings"] == skew
+
+
+def test_no_allowlist_means_no_library_lineage(tmp_path):
+    """Default (empty allowlist): dependency facts never become graph nodes — third-party
+    libraries would drown the topology."""
+    _lib_repo(tmp_path / "a", "svc-a", "1.0.0")
+    _lib_repo(tmp_path / "b", "svc-b", "2.0.0")
+    r = run_estate([str(tmp_path / "a"), str(tmp_path / "b")],
+                   work_root=str(tmp_path / "w"), run_id="nolibs")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    assert all(n["type"] != "library" for n in topo["spec"]["nodes"])
+    assert not r.findings
+
+
+def test_same_version_everywhere_is_lineage_without_skew(tmp_path):
+    _lib_repo(tmp_path / "a", "svc-a", "1.0.0")
+    _lib_repo(tmp_path / "b", "svc-b", "1.0.0")
+    r = run_estate([str(tmp_path / "a"), str(tmp_path / "b")],
+                   work_root=str(tmp_path / "w"), run_id="same",
+                   internal_namespaces=["com.acme*"])
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    assert any(n["type"] == "library" for n in topo["spec"]["nodes"])
+    assert not r.findings

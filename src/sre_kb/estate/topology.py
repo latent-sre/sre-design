@@ -3,12 +3,54 @@ facts. A resource bound by >1 service is shared — its failure spans all tenant
 
 from __future__ import annotations
 
+import fnmatch
+
 from sre_kb.inventory_signatures import is_broker, is_datastore
 from sre_kb.synth.emit import emit
 from sre_kb.util import slug
 
 # Flow sinks carry the code-side target type; bindings carry the platform-side resource type.
 _SINK_TYPE_FOR = {"datastore": "db", "broker": "kafka"}
+
+
+def _internal_libs(fs, patterns: tuple[str, ...]) -> dict[str, str | None]:
+    """lib name -> pinned version (or None) for the `tech.dependency` facts matching the
+    internal-namespace allowlist. Patterns are shell globs matched against the dependency name,
+    its group, and `group:name` — so `com.acme*` catches Maven coordinates and `@acme/*`
+    catches scoped npm packages."""
+    out: dict[str, str | None] = {}
+    for f in fs.of("tech.dependency"):
+        name = f.attrs["name"]
+        group = f.attrs.get("group")
+        keys = [name] + ([group, f"{group}:{name}"] if group else [])
+        if any(fnmatch.fnmatchcase(k, p) for k in keys for p in patterns):
+            out[name] = f.attrs.get("version")
+    return out
+
+
+def library_version_skew(services: list[dict],
+                         internal_namespaces: tuple[str, ...]) -> list[dict]:
+    """Version-skew findings: an internal library pinned at different versions by different
+    services means a change to it blasts into all of them — and they disagree about which
+    version of it they share."""
+    by_lib: dict[str, dict[str, str | None]] = {}
+    for s in services:
+        for lib, version in _internal_libs(s["fs"], internal_namespaces).items():
+            by_lib.setdefault(lib, {})[s["service"]] = version
+    findings: list[dict] = []
+    for lib, by_svc in sorted(by_lib.items()):
+        pinned = {v for v in by_svc.values() if v}
+        if len(by_svc) >= 2 and len(pinned) >= 2:
+            findings.append({
+                "type": "library-version-skew",
+                "severity": "medium",
+                "library": lib,
+                "versions": dict(sorted(by_svc.items())),
+                "detail": (f"{lib} is pinned at {len(pinned)} different versions across "
+                           f"{len(by_svc)} services — a library change blasts into all of "
+                           "them, and the skew means they already disagree about its behavior."),
+            })
+    return findings
 
 
 def _host(value: object) -> str:
@@ -45,8 +87,11 @@ def _impacted_flows(res: str, ntype: str, owners: dict, fs_by_service: dict) -> 
     return impacted
 
 
-def build_estate(services: list[dict]) -> list[dict]:
-    """services: [{"service": name, "ctx": ScanContext, "fs": FactSet}]."""
+def build_estate(services: list[dict],
+                 internal_namespaces: tuple[str, ...] = ()) -> list[dict]:
+    """services: [{"service": name, "ctx": ScanContext, "fs": FactSet}]. `internal_namespaces`
+    is the shared-library allowlist (config `estate.internal_namespaces`); empty = no library
+    lineage."""
     docs: list[dict] = []
     nodes: dict[str, str] = {}
     edges: list[dict] = []
@@ -95,6 +140,11 @@ def build_estate(services: list[dict]) -> list[dict]:
             if channel:
                 nodes.setdefault(channel, "topic")
                 edges.append({"from": channel, "to": name, "relation": "consumes"})
+        # Shared-library lineage: internal dependencies (allowlisted namespaces) join across
+        # repos, so "which services does a change to this library blast into?" reads off the graph.
+        for lib in _internal_libs(fs, internal_namespaces):
+            nodes.setdefault(lib, "library")
+            edges.append({"from": name, "to": lib, "relation": "uses-library"})
 
     deduped: list[dict] = []
     seen_edges: set[tuple] = set()

@@ -28,3 +28,19 @@ def test_dependency_cites_its_artifactid_not_a_name_collision(tmp_path):
 
     cited = _POM.splitlines()[dep.evidence.lines.start - 1]
     assert "<artifactId>" in cited and "<groupId>" not in cited
+
+
+def test_dependency_captures_group_and_version_when_adjacent(tmp_path):
+    """Canonical pom order (groupId, artifactId, version) yields group/version attrs; a bare
+    artifactId still emits a fact with just the name."""
+    (tmp_path / "pom.xml").write_text(
+        "<project><dependencies>\n"
+        "<dependency>\n  <groupId>com.acme</groupId>\n  <artifactId>acme-models</artifactId>\n"
+        "  <version>1.2.3</version>\n</dependency>\n"
+        "<dependency>\n  <artifactId>bare</artifactId>\n</dependency>\n"
+        "</dependencies></project>\n",
+        encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    deps = {f.attrs["name"]: f.attrs for f in build.collect(ctx) if f.type == "tech.dependency"}
+    assert deps["acme-models"] == {"name": "acme-models", "group": "com.acme", "version": "1.2.3"}
+    assert deps["bare"] == {"name": "bare"}

@@ -44,6 +44,7 @@ _SHAPE = {
     "broker": '[/"{}"/]',
     "topic": '(["{}"])',
     "resource": '[["{}"]]',
+    "library": '("{}")',
     "external": '{{"{}"}}',
 }
 
@@ -57,12 +58,13 @@ _CLASS_STYLE = {
     "broker": "fill:#fef7e0,stroke:#f9ab00",
     "topic": "fill:#fef7e0,stroke:#f9ab00,stroke-dasharray: 3 3",
     "resource": "fill:#f3e8fd,stroke:#9334e6",
+    "library": "fill:#e0f7fa,stroke:#00838f",
     "external": "fill:#f1f3f4,stroke:#5f6368",
 }
 
 TOPOLOGY_LEGEND = ("Legend: rectangle = service · rounded = datastore · trapezoid = broker · "
                    "stadium (dashed) = topic · double rectangle = other bound resource · "
-                   "hexagon = external.")
+                   "round-edged rectangle = internal library · hexagon = external.")
 
 
 def mermaid_topology(topology: dict) -> str:

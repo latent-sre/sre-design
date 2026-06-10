@@ -16,13 +16,13 @@ node with more than one attached service.
 ```yaml
 kind: Topology
 spec:
-  nodes: [ { type: service|datastore|broker|topic|resource|external, name: orders-postgres }, ... ]
+  nodes: [ { type: service|datastore|broker|topic|resource|library|external, name: orders-postgres }, ... ]
   edges: [ { from: order-service, to: orders-postgres, relation: binds }, ... ]
-  # relation: binds | calls | publishes | consumes
+  # relation: binds | calls | publishes | consumes | uses-library
   pcfSpaces: []
 ```
 
-Two joins make the edges real, not just declared:
+Three joins make the edges real, not just declared:
 
 - **`calls` edges resolve across repos** — a `clients.*.base-url` whose hostname matches
   another scanned service's PCF route becomes a `service -> service` edge; an unmatched
@@ -30,6 +30,11 @@ Two joins make the edges real, not just declared:
 - **`topic` nodes join producers to consumers** — a channel one repo publishes and another
   consumes appears once, with `publishes`/`consumes` edges on each side. "Who consumes
   `order.created`?" is read straight off the graph.
+- **`library` nodes join shared internal code** — dependencies matching the configured
+  `estate.internal_namespaces` globs (e.g. `com.acme*`, `@acme/*`) become `uses-library`
+  edges, so "which repos does a change to this library blast into?" reads off the graph.
+  When two services pin different versions, the estate report carries a
+  `library-version-skew` finding.
 
 ## Cross-service `BlastRadius`
 

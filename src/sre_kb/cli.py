@@ -1099,6 +1099,8 @@ def estate(
     typer.echo(f"estate {r.run_id}: {len(r.services)} services {r.services}, {r.docs} artifact(s)")
     for status, n in sorted(r.by_status.items()):
         typer.echo(f"  {status}: {n}")
+    for f in r.findings or []:
+        typer.echo(f"  [{f['severity'].upper()}] {f['type']}: {f['detail']}")
     typer.echo(f"  output: {r.root}")
 
 

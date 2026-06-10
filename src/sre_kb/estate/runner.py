@@ -11,7 +11,7 @@ import yaml
 from sre_kb.collectors import scan
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.config import load_config
-from sre_kb.estate.topology import build_estate
+from sre_kb.estate.topology import build_estate, library_version_skew
 from sre_kb.render.diagrams import TOPOLOGY_LEGEND, diagram_markdown, mermaid_topology
 from sre_kb.util import slug
 from sre_kb.validation.gating import final_status
@@ -29,15 +29,19 @@ class EstateResult:
     docs: int
     by_status: dict
     report_path: Path | None = None
+    findings: list[dict] | None = None
 
 
 def _dump(path: Path, doc: dict) -> None:
     path.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
-def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | None = None) -> EstateResult:
+def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | None = None,
+               internal_namespaces: list[str] | None = None) -> EstateResult:
     cfg = load_config()
     gate = cfg.get("gating", {})
+    if internal_namespaces is None:
+        internal_namespaces = (cfg.get("estate") or {}).get("internal_namespaces") or []
     run_id = run_id or "estate-" + time.strftime("%Y%m%d-%H%M%S")
     layout = RunLayout(Path(work_root), run_id)
     layout.ensure()
@@ -62,7 +66,8 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
         services.append({"service": name, "ctx": ctx, "fs": fs})
         roots[ctx.repo] = root
 
-    docs = build_estate(services)
+    docs = build_estate(services, tuple(internal_namespaces))
+    findings = library_version_skew(services, tuple(internal_namespaces))
     layout.reset_kb()  # re-run under the same run-id must not leak stale estate artifacts
     by_status: dict[str, int] = {}
     records = []
@@ -99,5 +104,5 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
     svc_names = [s["service"] for s in services]
     report_path = layout.reports / "estate_report.json"
     write_report(report_path, {"run_id": run_id, "services": svc_names, "docs": len(docs),
-                               "by_status": by_status, "records": records})
-    return EstateResult(run_id, layout.root, svc_names, len(docs), by_status, report_path)
+                               "by_status": by_status, "records": records, "findings": findings})
+    return EstateResult(run_id, layout.root, svc_names, len(docs), by_status, report_path, findings)

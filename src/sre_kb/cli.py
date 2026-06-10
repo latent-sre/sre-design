@@ -290,15 +290,15 @@ def graduation_draft_cmd(
 @app.command()
 def run(
     target: str = typer.Option(..., "--target", help="Local path or git URL of the target repo."),
-    profile: str = typer.Option("java-spring-pcf", "--profile"),
     to_stage: str = typer.Option("validate", "--to-stage", help="scan | scaffold | validate"),
     work_root: str = typer.Option(".work", "--work-root"),
     run_id: str = typer.Option(None, "--run", help="Run id (default: timestamp)."),
 ) -> None:
     """Run the deterministic pipeline: clone(local) -> scan -> validate.
 
-    LLM enrichment (Copilot in VS Code) happens between scan and validate; the engine
-    itself never calls a model.
+    LLM enrichment happens between scan and validate — in VS Code (Copilot + the sre-*
+    skills), via `worklist-run --oracle`, or end-to-end with `autopilot`. The engine
+    itself embeds no model.
     """
     from sre_kb.pipeline import run as run_pipeline
 

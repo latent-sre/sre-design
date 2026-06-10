@@ -1,13 +1,14 @@
 """`sre-kb` command-line interface.
 
 All subcommands are implemented: `run`/`scan`/`render`/`publish` (the deterministic pipeline),
-`validate-kb`, `findings`, `estate`, `diff`, `scan-worklist`/`worklist-run`,
+`validate-kb`, `findings`, `estate`, `diff`, `scan-worklist`/`worklist-run`/`autopilot`,
 `challenge-worklist`/`challenge-apply`, `gap-finder`, `secret-scan`, and `schema`. There is no separate
 `validate` subcommand — validation is the default `--to-stage` of `run`. The engine embeds no LLM —
 enrichment runs through the `LLMProvider` seam between `scan` and the validate stage: by default
 Copilot in VS Code via the manual file exchange (`scan-worklist` is its single front door — one
-manifest of every discover/confirm task), or `worklist-run --oracle` drives the same tasks through a
-programmatic provider end-to-end.
+manifest of every discover/confirm/drafting task), `worklist-run --oracle` drives the same tasks
+through a programmatic provider, and `autopilot` converges the whole loop (scan → provider → apply →
+re-scan) in one command.
 """
 
 from __future__ import annotations
@@ -510,6 +511,64 @@ def worklist_run_cmd(
         typer.echo("ingest (deterministic, re-grounds every output):")
         for cmd in ingests:
             typer.echo(f"  {cmd}")
+
+
+@app.command()
+def autopilot(
+    target: str = typer.Option(..., "--target", help="Local path of the target repo."),
+    oracle: str = typer.Option(
+        None,
+        "--oracle",
+        envvar="SRE_KB_ORACLE",
+        help="External LLM-oracle command (e.g. 'copilot -p'). Prompt is fed on stdin. "
+        "Required — without a provider the loop is the manual IDE exchange.",
+    ),
+    cycles: int = typer.Option(2, "--cycles", help="Convergence cycles (scan → provider → apply)."),
+    timeout: float = typer.Option(120.0, "--timeout", help="Per-prompt oracle timeout (seconds)."),
+    cache_dir: Path = typer.Option(None, "--cache-dir", help="Prompt-hash response cache dir (reproducibility)."),
+    run_id: str = typer.Option(None, "--run", help="Base run id (cycles get -c1, -c2, …)."),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Converge the whole LLM loop in one command: scan → worklist through the provider → apply →
+    re-scan (the SCOPE §6 discover→re-ground cycle, default 2 cycles), then fold the surviving
+    Tier-B drafts into the final run's KB.
+
+    The trust boundary is unchanged from the manual loop: verdicts apply monotonically
+    (downgrade-only), proposals are re-grounded byte-by-byte on the next scan, and drafts land
+    `needs-review` — a provider can never assert a verdict the engine trusts. The engine embeds no
+    model; `--cache-dir` makes re-runs replay deterministically.
+    """
+    from sre_kb.llm.provider import make_provider
+    from sre_kb.pipeline.autopilot import run_autopilot
+    from sre_kb.workspace import RunLayout
+
+    if not oracle:
+        typer.echo(
+            "no --oracle configured (or SRE_KB_ORACLE unset): autopilot needs a programmatic "
+            "provider.\nUse the manual loop instead (sre-kb run, then sre-kb scan-worklist), or "
+            "point --oracle at a Copilot/Claude CLI."
+        )
+        raise typer.Exit(code=0)
+    cfg = {"llm": {"provider": "subprocess", "command": oracle, "timeout": timeout,
+                   **({"cache_dir": str(cache_dir)} if cache_dir else {})}}
+    client = make_provider(cfg)
+    result = run_autopilot(target, client, work_root=work_root, run_base=run_id, cycles=cycles)
+    for i, cycle in enumerate(result.cycles, 1):
+        typer.echo(f"cycle {i} — run {cycle.run_id}")
+        if not cycle.tasks:
+            typer.echo("  no LLM work — converged")
+            continue
+        for t in cycle.tasks:
+            typer.echo(f"  [{t['status']}] {t['task']}: {t['note']}")
+        typer.echo(f"  applied: {cycle.challenge_changed} challenge downgrade(s), "
+                   f"{cycle.confirm_outcomes} boundary call(s) re-ground")
+    typer.echo(f"drafts folded into the final run: {result.drafted_alerts} alert(s), "
+               f"{result.drafted_runbooks} runbook(s), {result.contract_routed} contract break(s) "
+               "routed to review")
+    if result.narrative_note:
+        typer.echo(f"narrative: {result.narrative_note}")
+    final = RunLayout(Path(work_root), result.run_id)
+    typer.echo(f"converged KB: {final.kb}  (render/publish: sre-kb render --run {result.run_id})")
 
 
 @app.command("challenge-worklist")

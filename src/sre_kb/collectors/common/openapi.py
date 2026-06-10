@@ -170,6 +170,14 @@ def _diff_facts(ctx: ScanContext, cur_rel: str, cur_data: dict,
     return facts
 
 
+def current_specs(ctx: ScanContext) -> list[str]:
+    """Relpaths of the repo's *current* spec files. The baseline dir is excluded — those files are
+    only the diff baseline, never the live contract."""
+    prefix = BASELINE_DIR + "/"
+    return [rel for path in ctx.files(*_SPEC_GLOBS)
+            if not (rel := ctx.rel(path)).startswith(prefix)]
+
+
 def collect(ctx: ScanContext) -> list[Fact]:
     facts: list[Fact] = []
     baselines = _baseline_specs(ctx)

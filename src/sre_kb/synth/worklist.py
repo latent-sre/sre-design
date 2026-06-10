@@ -36,14 +36,21 @@ def build_scan_worklist(
     context_packs: int,
     challenge_items: int,
     confirm_boundaries: int = 0,
+    alert_candidates: int = 0,
+    uncovered_alerts: int = 0,
+    contract_specs: int = 0,
+    findings: int = 0,
 ) -> dict:
     """Build the unified worklist for a validated run.
 
     `context_packs` is how many per-artifact context packs the run wrote (the discover inputs);
     `challenge_items` is how many judgment-call claims need adjudication (the confirm-of-judgment
     inputs); `confirm_boundaries` is how many Tier-A absence claims the engine wants affirmed/disputed
-    (the S4 confirm loop). A task is included only when it has work, so the manifest is the exact
-    to-do list — no empty steps.
+    (the S4 confirm loop). The drafting exchanges (S7–S9, N5) gate the same way: `alert_candidates`
+    (error/warn log statements the generate-alerts skill judges), `uncovered_alerts` (Alerts with no
+    Runbook for generate-runbooks), `contract_specs` (current OpenAPI/AsyncAPI specs for
+    map-api-contracts), and `findings` (the digest the narrative summarizes). A task is included only
+    when it has work, so the manifest is the exact to-do list — no empty steps.
     """
     tasks: list[dict] = []
     if context_packs:
@@ -84,6 +91,59 @@ def build_scan_worklist(
                 "writeTo": "confirm/verdicts.json",  # relative to the run root
                 "writeToBase": "run",
                 "ingest": f"sre-kb confirm-apply --run {run_id}",
+            }
+        )
+    if alert_candidates:
+        tasks.append(
+            {
+                "id": "draft-alerts",
+                "mode": "discover",
+                "title": f"Judge which of {alert_candidates} error/warn log line(s) warrant an alert",
+                "skill": ".github/skills/generate-alerts/SKILL.md",
+                "reads": ["facts/facts.jsonl"],  # the parsed log statements (relative to the run root)
+                "writeTo": ".sre/alert-proposals.json",  # relative to the target repo
+                "writeToBase": "target",
+                "ingest": f"sre-kb generate-alerts --target {target}",
+            }
+        )
+    if uncovered_alerts:
+        tasks.append(
+            {
+                "id": "draft-runbooks",
+                "mode": "discover",
+                "title": f"Draft runbooks for {uncovered_alerts} uncovered Alert(s)",
+                "skill": ".github/skills/generate-runbooks/SKILL.md",
+                "reads": ["kb/"],  # the run's Alerts + the closed world of citable artifacts
+                "writeTo": ".sre/runbook-proposals.json",  # relative to the target repo
+                "writeToBase": "target",
+                "ingest": f"sre-kb generate-runbooks --target {target}",
+            }
+        )
+    if contract_specs:
+        tasks.append(
+            {
+                "id": "map-contracts",
+                "mode": "discover",
+                "title": "Propose semantic API-contract breaks the baseline shape-diff can't see",
+                "skill": ".github/skills/map-api-contracts/SKILL.md",
+                "reads": ["the current OpenAPI/AsyncAPI spec(s) in the target"],
+                "writeTo": ".sre/contract-proposals.json",  # relative to the target repo
+                "writeToBase": "target",
+                "ingest": f"sre-kb map-contracts --target {target}",
+            }
+        )
+    if findings:
+        tasks.append(
+            {
+                "id": "findings-narrative",
+                "mode": "discover",
+                "title": f"Write the advisory narrative over {findings} finding(s)",
+                "skill": f"findings narrative (the brief: sre-kb findings-narrative --run {run_id})",
+                "reads": ["kb/"],  # the digest + closed ref set are derived from the run's KB
+                "writeTo": ".sre/findings-narrative.md",  # relative to the target repo
+                "writeToBase": "target",
+                "ingest": (f"sre-kb findings-narrative --run {run_id} "
+                           f"--narrative {target}/.sre/findings-narrative.md"),
             }
         )
     return {

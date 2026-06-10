@@ -485,8 +485,9 @@ Engine stages under `.work/<run-id>/`, resumable via `--from-stage/--to-stage`:
 **The engine embeds no model.** The synthesis / enrichment step sits *between* `scan`
 and `validate` and runs through the configured `LLMProvider`: by default **Copilot in
 VS Code** (the `sre-analyst` agent + `sre-*` skills) edits the scaffolded artifacts in
-`candidates/` in place; a programmatic provider (the subprocess `--oracle`, or an
-approved API provider) drives the same worklist tasks headlessly. Either way every
+`candidates/` in place; `sre-kb worklist-run --oracle '<llm-cli>'` drives the same
+scan-worklist tasks (discover + confirm + challenge) through a programmatic provider
+end-to-end, writing the exact files the manual exchange would have. Either way every
 output is re-grounded and gated. With no provider configured, CI / headless runs take
 the **deterministic path only** (scaffold → validate → render) — exactly what the
 offline e2e test exercises; `--from-stage validate` resumes after an enrichment
@@ -498,6 +499,7 @@ sre-kb scan    --run <id>            # deterministic facts + scaffold (no LLM)
 sre-kb validate --run <id>           # schema + provenance + crossref + gating
 sre-kb render  --run <id>            # Copilot projection + Backstage catalog
 sre-kb publish --run <id> --sre-repo <git-url> --forge github [--dry-run]
+sre-kb worklist-run --run <id> --oracle '<llm-cli>'   # run the whole LLM worklist programmatically
 sre-kb validate-kb <dir>             # standalone validate an existing KB tree
 sre-kb diff    --from <commit> --to <commit>   # P2: drift — diff the KB across commits
 sre-kb schema list|show <kind>

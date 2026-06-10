@@ -2,9 +2,11 @@
 in the IDE) should run for a validated run, so the manual loop is "read one file, do the tasks, save
 to the declared paths" instead of juggling separate per-mechanism exchanges.
 
-The engine never calls a model (`docs/DESIGN.md`): Copilot reads this worklist (via the
-`sre-target-scan` agent) and writes each task's output to the path the worklist names; the engine then
-re-grounds every output through the same gate. This generalizes the proven
+The engine embeds no model (`docs/DESIGN.md`): Copilot reads this worklist (via the
+`sre-target-scan` agent) and writes each task's output to the path the worklist names — or
+`sre-kb worklist-run --oracle` (`pipeline/worklist_run.py`) drives the same tasks through a
+programmatic `LLMProvider` and writes the same files; the engine then re-grounds every output
+through the same gate. This generalizes the proven
 `challenge-worklist → Copilot → challenge-apply` pattern to the whole LLM half.
 
 Two task modes mirror the gate's two loops:

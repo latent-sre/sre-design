@@ -1,0 +1,152 @@
+"""Drive the unified scan worklist through a programmatic `LLMProvider` — the automated
+counterpart of the manual IDE file exchange (`synth/worklist.py`).
+
+The manual loop is "read scan-worklist.json, run each task in the IDE, save to the declared
+paths". This module runs the same tasks through the configured provider and lands every output
+in the **exact file the manual exchange would have written**, so the deterministic ingest gates
+downstream (`sre-kb run` re-grounding proposals, `challenge-apply`, `confirm-apply`) are
+identical — automation changes the transport, never the trust boundary. The engine still embeds
+no model: the provider is operator-configured (`--oracle`, or a config `llm` block).
+
+Reply parsing is conservative by construction, mirroring `parse_verdict_reply`:
+  - discover: a reply that doesn't parse to a proposals JSON object defers the task to the
+    manual loop — nothing is fabricated, and whatever does parse is re-grounded byte-by-byte
+    by the gap-finder anyway (an anchor that doesn't locate dies at the door).
+  - confirm: only a reply whose first token *is* `dispute` counts as one; anything else (an
+    affirm, prose, an empty/failed call) leaves the engine's claim standing — a dispute can
+    only ever be *confirmed* by the engine re-deriving it at the cited bytes.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+from sre_kb.workspace import RunLayout
+
+_FENCE_LINE = re.compile(r"^\s*```[\w-]*\s*$")
+
+
+def parse_confirm_reply(raw: str) -> tuple[str, str]:
+    """Map a free-text reply to a boundary-call verdict ``(verdict, anchor)``. Safe by
+    construction: only a reply whose first token starts with ``dispute`` is a dispute; everything
+    else — affirms, prose, negations, an empty reply from a failed call — is ``affirm`` (the
+    engine's claim stands, the no-op). A dispute's anchor is the quoted remainder (code fences
+    stripped); a wrong or empty anchor is harmless because `confirm-apply` only acts when the
+    engine's own deterministic rule fires at the located bytes."""
+    lines = (raw or "").strip().splitlines()
+    idx = next((i for i, ln in enumerate(lines) if ln.strip()), 0)
+    first = lines[idx].strip().lstrip("*_#>-•· \t") if lines else ""
+    if not first.lower().startswith("dispute"):
+        return "affirm", ""
+    rest = [ln for ln in lines[idx + 1 :] if not _FENCE_LINE.match(ln)]
+    anchor = "\n".join(rest).strip().strip("`").strip()
+    if not anchor:  # single-line dispute: the anchor is whatever follows the verdict token
+        anchor = first[len("dispute"):].lstrip("dD").lstrip(":—-, ").strip().strip("`").strip('"')
+    return "dispute", anchor
+
+
+def extract_json_object(raw: str):
+    """Pull the proposals JSON out of a free-text reply: the whole reply, a fenced ```json block,
+    or the outermost brace/bracket span. Returns the parsed object (dict or list) or None — never
+    raises, never invents. A None defers the task to the manual loop."""
+    text = (raw or "").strip()
+    candidates = [text]
+    candidates += re.findall(r"```(?:json)?\s*\n(.*?)```", text, flags=re.S)
+    for open_c, close_c in (("{", "}"), ("[", "]")):
+        start, end = text.find(open_c), text.rfind(close_c)
+        if 0 <= start < end:
+            candidates.append(text[start : end + 1])
+    for cand in candidates:
+        try:
+            data = json.loads(cand)
+        except ValueError:
+            continue
+        if isinstance(data, dict | list):
+            return data
+    return None
+
+
+def _run_discover(layout: RunLayout, provider, target: Path) -> dict:
+    """Build the gap-finder prompt from the run's own facts, ask the provider, and write the
+    proposals where the manual loop would have (`<target>/.sre/gap-proposals.json`). Ingest is the
+    next `sre-kb run --target`, which re-grounds every proposal exactly as a hand-written file."""
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.collectors.llm.gap_finder import PROPOSALS_REL
+    from sre_kb.models.facts import FactSet
+    from sre_kb.pipeline.confirm import load_facts_of
+    from sre_kb.synth.gap_prompt import build_gap_context
+
+    ctx = ScanContext(root=target, repo=f"file://{target.name}")
+    fs = FactSet(load_facts_of(layout.facts / "facts.jsonl",
+                               "resiliency.circuitbreaker", "resiliency.fallback"))
+    data = extract_json_object(provider(build_gap_context(ctx, fs)))
+    if data is None:
+        return {"task": "discover-gaps", "status": "deferred",
+                "note": "unparseable reply — task left to the manual loop"}
+    out = target / PROPOSALS_REL
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(data if isinstance(data, dict) else {"proposals": data}, indent=2),
+                   encoding="utf-8")
+    n = len((data.get("proposals") if isinstance(data, dict) else data) or [])
+    return {"task": "discover-gaps", "status": "written", "output": str(out),
+            "note": f"{n} proposal(s)"}
+
+
+def _run_challenge(layout: RunLayout, provider) -> dict:
+    from sre_kb.pipeline.challenge_run import run_worklist
+
+    wpath = layout.root / "challenge" / "worklist.json"
+    worklist = json.loads(wpath.read_text(encoding="utf-8"))
+    result = run_worklist(worklist, provider, oracle_id=provider.id)
+    out = layout.root / "challenge" / "verdicts.json"
+    out.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    return {"task": "confirm-challenge", "status": "written", "output": str(out),
+            "note": f"{len(result['verdicts'])} verdict(s)"}
+
+
+def _run_confirm(layout: RunLayout, provider) -> dict:
+    """Adjudicate each boundary call; an unanswered call (empty/failed reply parses to affirm) is
+    omitted rather than recorded as a fake affirmation — the claim stands by omission."""
+    from sre_kb.pipeline.confirm import VERDICTS_SCHEMA
+
+    wpath = layout.root / "confirm" / "boundary-calls.json"
+    worklist = json.loads(wpath.read_text(encoding="utf-8"))
+    verdicts = []
+    for item in worklist.get("items", []):
+        reply = provider(item["prompt"])
+        if not (reply or "").strip():
+            continue
+        verdict, anchor = parse_confirm_reply(reply)
+        verdicts.append({"claimId": item["claimId"], "verdict": verdict, "anchor": anchor})
+    out = layout.root / "confirm" / "verdicts.json"
+    out.write_text(json.dumps({"schema": VERDICTS_SCHEMA, "runId": worklist.get("runId"),
+                               "oracle": provider.id, "verdicts": verdicts}, indent=2),
+                   encoding="utf-8")
+    return {"task": "confirm-boundaries", "status": "written", "output": str(out),
+            "note": f"{len(verdicts)} verdict(s)"}
+
+
+def run_scan_worklist(layout: RunLayout, worklist: dict, provider, *, target: Path) -> list[dict]:
+    """Execute every task in the scan worklist through `provider`, returning one summary dict per
+    task (`status`: written | deferred). An interactive provider (the model-free Copilot file
+    exchange) can't answer synchronously, so the whole worklist defers to the manual loop."""
+    if getattr(provider, "interactive", False):
+        return [{"task": t["id"], "status": "deferred",
+                 "note": "interactive provider — use the manual file exchange"}
+                for t in worklist.get("tasks", [])]
+    runners = {"discover-gaps": lambda: _run_discover(layout, provider, target),
+               "confirm-challenge": lambda: _run_challenge(layout, provider),
+               "confirm-boundaries": lambda: _run_confirm(layout, provider)}
+    summaries = []
+    for task in worklist.get("tasks", []):
+        runner = runners.get(task["id"])
+        if runner is None:  # a worklist from a newer engine — surface, never silently drop
+            summaries.append({"task": task["id"], "status": "deferred",
+                              "note": "unknown task — left to the manual loop"})
+            continue
+        summary = runner()
+        summary["ingest"] = task["ingest"]
+        summaries.append(summary)
+    return summaries

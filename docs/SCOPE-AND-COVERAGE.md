@@ -229,7 +229,7 @@ The §4 matrix + the SRE rubric **are** the coverage contract. **The eval harnes
 The Tier-B half already has a working, reproducible measurement loop — `copilot-gap-validate`. It is
 the seed of the harness above; the same shape extends to every discover/confirm skill. The engine
 **embeds no model**; with the default Copilot provider the model boundary is an explicit manual
-step (a programmatic `LLMProvider` automates the same exchange):
+step (`sre-kb worklist-run --oracle '<llm-cli>'` automates the same exchange end-to-end):
 
 1. `sre-kb run --target <service> --to-stage scaffold` — produces a fresh context pack.
 2. In VS Code, run Copilot with the relevant `SKILL.md` and save the answer to

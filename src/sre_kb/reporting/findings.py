@@ -22,7 +22,8 @@ def _first_evidence(doc: dict) -> str | None:
 
 
 def collect_findings(docs: list[dict]) -> list[dict]:
-    """Extract ranked risk findings from BlastRadius artifacts (severity-ordered)."""
+    """Extract ranked risk findings from BlastRadius artifacts (severity-ordered), plus the
+    cf-env snapshot adoption nudges (§4.3)."""
     out: list[dict] = []
     for d in docs:
         if d.get("kind") != "BlastRadius":
@@ -58,8 +59,65 @@ def collect_findings(docs: list[dict]) -> list[dict]:
                 "detail": "A failure degrades several flows at once even though it is behind a bulkhead.",
                 **common,
             })
+    out += _snapshot_findings(docs)
     out.sort(key=lambda f: (_SEV_RANK.get(f["severity"], 9), _TYPE_RANK.get(f["type"], 9), f["title"]))
     return out
+
+
+def _snapshot_findings(docs: list[dict]) -> list[dict]:
+    """§4.3 adoption loop: a PCF app with no checked-in cf-env snapshot — or a stale one — is
+    itself a finding, so the convention propagates instead of relying on someone remembering.
+    Deterministic from the docs: Deployment proves the app is on PCF, a populated
+    Topology.pcfSpaces proves a snapshot was ingested, Dependency.snapshot.capturedAt carries
+    its age."""
+    from datetime import UTC, datetime
+
+    from sre_kb.config import load_config
+
+    pcf = next((d for d in docs if d.get("kind") == "Deployment"
+                and (d.get("spec") or {}).get("hosting") == "PCF"), None)
+    if pcf is None:
+        return []
+    common = {"severity": "info", "impactedFlows": [],
+              "artifact": f"Deployment/{pcf['metadata']['name']}",
+              "evidence": _first_evidence(pcf), "tier": "ast"}
+    has_snapshot = any(d.get("kind") == "Topology" and (d.get("spec") or {}).get("pcfSpaces")
+                       for d in docs)
+    if not has_snapshot:
+        return [{
+            "type": "missing-cf-env-snapshot",
+            "title": "no cf-env snapshot is checked in",
+            "detail": ("A credential-stripped .sre/cf-env.json (from `cf env <app>`) would type "
+                       "the service bindings, populate org/space, and group estate drawings — "
+                       "see the cf-env snapshot convention (NEXT-INCREMENTS §4.3)."),
+            **common,
+        }]
+    max_age = int((load_config().get("estate") or {}).get("snapshot_max_age_days", 90))
+    stamps = []
+    for d in docs:
+        if d.get("kind") != "Dependency":
+            continue
+        captured = ((d.get("spec") or {}).get("snapshot") or {}).get("capturedAt")
+        if not captured:
+            continue
+        try:
+            ts = datetime.fromisoformat(str(captured))
+        except ValueError:
+            continue
+        stamps.append(ts if ts.tzinfo else ts.replace(tzinfo=UTC))
+    if not stamps:
+        return []
+    age_days = (datetime.now(UTC) - min(stamps)).days
+    if age_days <= max_age:
+        return []
+    return [{
+        "type": "stale-cf-env-snapshot",
+        "title": f"the cf-env snapshot is {age_days} day(s) old",
+        "detail": (f"Snapshot-derived facts drift from live platform state; this one exceeds "
+                   f"the {max_age}-day freshness budget (estate.snapshot_max_age_days) — "
+                   "re-run `cf env <app>`, redact, and refresh .sre/cf-env.json."),
+        **common,
+    }]
 
 
 # --- §7.1 tier-conflict detector ------------------------------------------------------

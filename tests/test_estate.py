@@ -336,3 +336,41 @@ def test_estate_groups_by_org_space_when_snapshots_exist(tmp_path):
     # the postgres shared across spaces still lands in the co-tenant cluster
     shared = mmd.split('["shared co-tenant"]')[1].split("end")[0]
     assert "n_shared_postgres" in shared
+
+
+def test_breaking_change_blast_labels_path_level_hits(tmp_path):
+    """§5.5 path precision: a consumer whose code carries a literal egress URL hitting the
+    changed endpoint is labeled preciselyImpacted; a resolved consumer without path evidence
+    stays in the assumed lower bound only."""
+    provider = tmp_path / "orders"
+    (provider / ".sre" / "api-baseline").mkdir(parents=True)
+    (provider / "manifest.yml").write_text(
+        "applications:\n- name: orders\n  routes:\n  - route: orders.apps.internal\n",
+        encoding="utf-8")
+    (provider / "openapi.yaml").write_text(
+        "openapi: 3.0.0\ninfo: {title: o, version: 2.0.0}\npaths:\n  /orders:\n    get: {}\n",
+        encoding="utf-8")
+    (provider / ".sre" / "api-baseline" / "openapi.yaml").write_text(
+        "openapi: 3.0.0\ninfo: {title: o, version: 1.0.0}\npaths:\n"
+        "  /orders:\n    get: {}\n  /orders/{id}:\n    delete: {}\n",
+        encoding="utf-8")
+
+    def consumer(name: str, java_body: str) -> str:
+        d = tmp_path / name
+        (d / "src/main/resources").mkdir(parents=True)
+        (d / "manifest.yml").write_text(f"applications:\n- name: {name}\n", encoding="utf-8")
+        (d / "src/main/resources/application.yml").write_text(
+            "clients:\n  orders:\n    base-url: orders.apps.internal\n    timeout: 2s\n",
+            encoding="utf-8")
+        (d / "src" / "C.java").write_text(
+            "package acme;\npublic class C {\n  private RestTemplate restTemplate;\n"
+            f"  public void go() {{\n{java_body}\n  }}\n}}\n", encoding="utf-8")
+        return str(d)
+
+    hit = consumer("shop", '    restTemplate.delete("http://orders.apps.internal/orders/" + id);')
+    miss = consumer("audit", '    restTemplate.getForObject("http://orders.apps.internal/orders", String.class);')
+    r = run_estate([str(provider), hit, miss], work_root=str(tmp_path / "w"), run_id="ppath")
+    blast = next(f for f in (r.findings or []) if f["type"] == "api-breaking-change-blast")
+    assert blast["impactedServices"] == ["audit", "shop"]   # the resolved lower bound
+    assert blast["preciselyImpacted"] == ["shop"]           # only the code-level path hit
+    assert "shop" in blast["detail"]

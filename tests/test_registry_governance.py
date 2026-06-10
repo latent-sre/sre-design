@@ -69,3 +69,17 @@ def test_novel_name_rule_is_lock_step_with_the_schema_pattern():
     schema = json.loads((schemas_dir() / "v1alpha1" / "ResiliencyGap.schema.json").read_text())
     pattern = schema["properties"]["spec"]["properties"]["proposedCategory"]["pattern"]
     assert pattern == _NOVEL_NAME.pattern
+
+
+def test_every_registry_prompt_key_resolves_to_a_prompt_file():
+    """§1.3: the registry `prompt:` key is a contract, not decoration — every non-null key
+    must resolve to `.github/prompts/<key>.prompt.md`. Dead keys (pointing at nothing) were
+    pruned to null; a new kind either ships its prompt file or declares none."""
+    from pathlib import Path
+
+    prompts = Path(__file__).resolve().parents[1] / ".github" / "prompts"
+    missing = {k: key for k in kinds()
+               if (key := kind_meta(k).get("prompt")) and not (prompts / f"{key}.prompt.md").is_file()}
+    assert not missing, f"registry prompt keys with no prompt file: {missing}"
+    declared = {key for k in kinds() if (key := kind_meta(k).get("prompt"))}
+    assert declared == {"flow", "alert", "runbook"}  # the prompts that actually exist today

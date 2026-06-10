@@ -41,6 +41,8 @@ def build_scan_worklist(
     architecture_components: int = 0,
     contract_specs: int = 0,
     findings: int = 0,
+    pcf_apps: int = 0,
+    diagrams: int = 0,
 ) -> dict:
     """Build the unified worklist for a validated run.
 
@@ -146,6 +148,34 @@ def build_scan_worklist(
                 "writeTo": ".sre/contract-proposals.json",  # relative to the target repo
                 "writeToBase": "target",
                 "ingest": f"sre-kb map-contracts --target {target}",
+            }
+        )
+    if pcf_apps:
+        tasks.append(
+            {
+                "id": "review-pcf",
+                "mode": "discover",
+                "title": f"Judge {pcf_apps} PCF manifest(s) for deployment-review attention",
+                "skill": "PCF deployment review (the prompt embeds the check vocabulary; the "
+                         "engine re-derives every accepted check from the manifest bytes)",
+                "reads": ["facts/facts.jsonl"],  # the pcf.app facts (relative to the run root)
+                "writeTo": ".sre/pcf-review-proposals.json",  # relative to the target repo
+                "writeToBase": "target",
+                "ingest": f"sre-kb pcf-review --target {target}",
+            }
+        )
+    if diagrams:
+        tasks.append(
+            {
+                "id": "narrate-diagrams",
+                "mode": "discover",
+                "title": f"Write advisory captions for {diagrams} drawing(s)",
+                "skill": "diagram narration (closed-world artifact JSON; rendered clearly "
+                         "labeled advisory, never a fact source)",
+                "reads": ["kb/"],  # the diagram-bearing artifacts (relative to the run root)
+                "writeTo": ".sre/diagram-narrations.json",  # relative to the target repo
+                "writeToBase": "target",
+                "ingest": f"sre-kb narrate-diagrams --run {run_id} --target {target}",
             }
         )
     if findings:

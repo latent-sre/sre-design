@@ -278,3 +278,34 @@ def test_cotenancy_impact_folds_transitive_callers(tmp_path):
     assert set(co["spec"]["impactedServices"]) == {"order-service", "billing-service", "gateway"}
     assert co["spec"]["indirectServices"] == ["gateway"]
     assert set(co["spec"]["coTenancy"][0]["sharedBy"]) == {"order-service", "billing-service"}
+
+
+def test_ambiguous_base_urls_become_confirm_items_not_edges(tmp_path):
+    """§3.2/§5.6: an IP-literal baseUrl and an alias-suspect hostname are never guessed into
+    edges — each becomes a confirm-worklist item plus an advisory finding."""
+    caller = tmp_path / "caller"
+    (caller / "src/main/resources").mkdir(parents=True)
+    (caller / "manifest.yml").write_text("applications:\n- name: caller\n", encoding="utf-8")
+    (caller / "src/main/resources/application.yml").write_text(
+        "clients:\n"
+        "  legacy:\n    base-url: http://10.0.3.7:8080\n    timeout: 2s\n"          # ip-literal
+        "  orders:\n    base-url: orders.internal.acme\n    timeout: 2s\n"          # alias-suspect
+        "  stripe:\n    base-url: api.stripe.com\n    timeout: 2s\n",               # plain external
+        encoding="utf-8")
+    orders = tmp_path / "orders"
+    orders.mkdir()
+    (orders / "manifest.yml").write_text(  # no route matching orders.internal.acme
+        "applications:\n- name: orders\n  routes:\n  - route: orders.apps.internal\n",
+        encoding="utf-8")
+    r = run_estate([str(caller), str(orders)], work_root=str(tmp_path / "w"), run_id="amb")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    # no guessed caller->orders edge: both ambiguous clients stay external nodes
+    assert {"from": "caller", "to": "orders", "relation": "calls"} not in topo["spec"]["edges"]
+    import json
+    items = json.loads((r.root / "confirm" / "edge-calls.json").read_text())["items"]
+    by_reason = {i["reason"]: i for i in items}
+    assert by_reason["ip-literal"]["client"] == "legacy" and by_reason["ip-literal"]["candidate"] is None
+    assert by_reason["alias-suspect"]["candidate"] == "orders"
+    assert len(items) == 2  # the plain external hostname is NOT ambiguous
+    possible = [f for f in (r.findings or []) if f["type"] == "possible-call-edge"]
+    assert {f["client"] for f in possible} == {"legacy", "orders"}

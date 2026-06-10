@@ -53,6 +53,10 @@ class StubProvider:
                 {"pattern": "event-notification", "anchor": _PUBLISH_LINE,
                  "rationale": "publishes a domain event after the write"},
             ]})
+        if "deployment-review context" in prompt:
+            return '{"proposals": []}'
+        if "Diagram-narration context" in prompt:
+            return '{"narrations": []}'
         if "allowedRefs" in prompt:  # the narrative brief
             return "Risk is concentrated in the publish path; review the uncovered burn-rate alert."
         if "Affirm" in prompt:

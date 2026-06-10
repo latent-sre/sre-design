@@ -162,3 +162,74 @@ def build_contract_prompt(ctx: ScanContext, specs: list[str], covered_refs: list
     out += [f"- {ref}" for ref in covered_refs] or ["- (none)"]
     out += ["", _CONTRACT_CONTRACT]
     return "\n".join(out)
+
+
+_PCF_REVIEW_CONTRACT = """\
+## Required answer
+Judge the deployment manifests above against the checks below; propose ONLY the ones that
+genuinely deserve operator attention for THIS app (most checks are fine to leave — a worker
+with one instance or a port health check on a non-HTTP process can be correct).
+
+Checks: single-instance | port-health-check | missing-disk-quota | env-config-binding
+
+{"proposals": [
+  {"check": "single-instance",          // one of the checks above
+   "app": "<the application name from a manifest block>",
+   "severity": "medium",                // high | medium | low
+   "rationale": "a tier-relevant judgment, e.g. an HTTP app with one instance has no failover"}
+]}
+
+Rules:
+- `check` and `app` must come from the vocabulary/manifests above — the engine re-derives the
+  condition from the manifest bytes itself and DROPS any proposal it cannot re-prove
+  (a `single-instance` claim on a 3-instance app dies at the door).
+- Reply {"proposals": []} when nothing deserves attention.
+"""
+
+
+def build_pcf_review_prompt(ctx: ScanContext, apps: list[Fact]) -> str:
+    """The review-pcf context: every collected PCF manifest fenced verbatim, plus the fixed
+    check vocabulary the ingest re-derives deterministically (pipeline/pcf_review.py)."""
+    out = ["# PCF deployment-review context", "", _HEADER, "",
+           "## Deployment manifests (untrusted)"]
+    for rel in sorted({a.evidence.path for a in apps}):
+        try:
+            text = ctx.read_text(rel).rstrip()
+        except OSError:
+            continue
+        out += [_fence(text, rel), ""]
+    out += [_PCF_REVIEW_CONTRACT]
+    return "\n".join(out)
+
+
+_NARRATION_CONTRACT = """\
+## Required answer
+Write a one-paragraph caption (<= 80 words) per drawing above: what it shows and what an
+on-call engineer should worry about. Plain prose, no markdown, no headings.
+
+{"narrations": [
+  {"diagram": "<exactly one of the diagram names above>",
+   "text": "one paragraph"}
+]}
+
+Rules:
+- `diagram` must be one of the names listed — anything else is dropped.
+- Mention only nodes/steps that appear in that drawing's data; the caption renders clearly
+  labeled as advisory, never as a fact source.
+"""
+
+
+def build_narration_prompt(diagrams: list[dict]) -> str:
+    """The narrate-diagrams context: each diagram-bearing artifact's spec as closed-world JSON
+    (engine-emitted shape, target-derived strings — fenced as data all the same)."""
+    import json as _json
+
+    out = ["# Diagram-narration context", "", _HEADER, "",
+           "## Drawings (artifact data, untrusted strings)"]
+    for d in diagrams:
+        name = (d.get("metadata") or {}).get("name")
+        out += [_fence(_json.dumps({"kind": d.get("kind"), "name": name,
+                                    "spec": d.get("spec", {})}, indent=2),
+                       f"{d.get('kind')}/{name}"), ""]
+    out += [_NARRATION_CONTRACT]
+    return "\n".join(out)

@@ -1190,6 +1190,47 @@ def diff(
         raise typer.Exit(code=1)
 
 
+@app.command("pcf-review")
+def pcf_review_cmd(
+    target: str = typer.Option(..., "--target", help="Local path of the target repo."),
+) -> None:
+    """Tier-B PCF deployment review (§3.2): ingest the review-pcf proposals and re-derive each
+    accepted check deterministically from the manifest bytes — a claim the manifest disproves is
+    refuted regardless of the rationale. Survivors land as advisory findings in
+    <target>/.sre/pcf-review.json; the engine never calls a model."""
+    from sre_kb.pipeline.pcf_review import REVIEW_REL, run_pcf_review
+
+    result = run_pcf_review(target)
+    kept = result.kept()
+    for o in result.outcomes:
+        typer.echo(f"  {o.proposal.check} / {o.proposal.app}: {o.result}  ({o.note})")
+    typer.echo(f"pcf-review: {len(result.outcomes)} proposal(s) -> {len(kept)} routed, "
+               f"{len(result.outcomes) - len(kept)} dropped")
+    if kept:
+        typer.echo(f"  findings: {Path(target) / REVIEW_REL}")
+
+
+@app.command("narrate-diagrams")
+def narrate_diagrams_cmd(
+    run_id: str = typer.Option(..., "--run"),
+    target: str = typer.Option(..., "--target", help="Target repo holding .sre/diagram-narrations.json."),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Tier-B diagram narration (§3.2/§2.6): apply the narrate-diagrams captions to the run's
+    rendered diagram markdown — only names this run actually rendered, sanitized to one plain
+    paragraph, and always labeled advisory."""
+    from sre_kb.pipeline.diagram_narration import PROPOSALS_REL, apply_narrations
+    from sre_kb.render import load_kb
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    result = apply_narrations(layout, load_kb(layout.root), Path(target) / PROPOSALS_REL)
+    for o in result.outcomes:
+        typer.echo(f"  {o.diagram}: {o.result}  ({o.note})")
+    applied = result.applied()
+    typer.echo(f"narrate-diagrams: {len(result.outcomes)} narration(s) -> {len(applied)} applied")
+
+
 def main() -> None:
     app()
 

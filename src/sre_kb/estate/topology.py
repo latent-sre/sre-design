@@ -4,10 +4,13 @@ facts. A resource bound by >1 service is shared — its failure spans all tenant
 from __future__ import annotations
 
 import fnmatch
+import re
 
 from sre_kb.inventory_signatures import is_broker, is_datastore
 from sre_kb.synth.emit import emit
 from sre_kb.util import slug
+
+_IP_HOST = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
 
 # Flow sinks carry the code-side target type; bindings carry the platform-side resource type.
 _SINK_TYPE_FOR = {"datastore": "db", "broker": "kafka"}
@@ -104,6 +107,65 @@ def _impacted_flows(res: str, ntype: str, owners: dict, fs_by_service: dict) -> 
     return impacted
 
 
+def _route_owners(services: list[dict]) -> dict[str, str]:
+    """hostname -> owning scanned service, from each service's PCF route declarations."""
+    out: dict[str, str] = {}
+    for s in services:
+        app = s["fs"].first("pcf.app")
+        for route in (app.attrs.get("routes") or []) if app else []:
+            host = _host(route)
+            if host:
+                out[host] = s["service"]
+    return out
+
+
+def ambiguous_call_edges(services: list[dict]) -> list[dict]:
+    """Cross-repo edge candidates the deterministic join must NOT guess (§3.2/§5.6): an
+    IP-literal baseUrl (it could be anything) and an unmatched hostname whose first label
+    matches a scanned service's name (an alias suspicion). Each becomes a confirm-worklist
+    item and an advisory finding — never an invented edge; the graph stays downgrade-only
+    honest."""
+    route_owner = _route_owners(services)
+    by_slug = {slug(s["service"]): s["service"] for s in services}
+    items: list[dict] = []
+    for s in services:
+        name = s["service"]
+        for c in s["fs"].of("config.client"):
+            base_url = c.attrs.get("baseUrl")
+            host = _host(base_url)
+            if not host or host in route_owner:
+                continue  # resolved (or undeclarable) — not ambiguous
+            candidate = (by_slug.get(slug(host.split(".", 1)[0]))
+                         or by_slug.get(slug(str(c.attrs.get("client")))))
+            if candidate == name:
+                candidate = None
+            reason = ("ip-literal" if _IP_HOST.match(host)
+                      else "alias-suspect" if candidate
+                      else None)
+            if reason is None:
+                continue  # a plain external hostname is the external node, as before
+            ev = c.evidence
+            items.append({
+                "claimId": f"edge:{name}:{slug(str(c.attrs.get('client')))}",
+                "from": name,
+                "client": c.attrs.get("client"),
+                "baseUrl": base_url,
+                "reason": reason,
+                "candidate": candidate if reason == "alias-suspect" else None,
+                "evidence": f"{ev.path}:{ev.lines.start}",
+                "prompt": (
+                    f"Service `{name}` declares HTTP client `{c.attrs.get('client')}` with "
+                    f"baseUrl `{base_url}` ({ev.path}:{ev.lines.start}). The engine could not "
+                    "resolve this hostname to any scanned service's route"
+                    + (f"; its first label resembles scanned service `{candidate}`"
+                       if candidate else " and it is an IP literal")
+                    + ". Reply `affirm` if it is genuinely external, or `dispute` followed by "
+                    "the scanned service name it actually targets."
+                ),
+            })
+    return items
+
+
 def contract_change_blast(services: list[dict], edges: list[dict]) -> list[dict]:
     """Estate-level blast radius for breaking API changes (§5.5): a provider whose baseline
     diff produced breaking `api.contract.change` facts impacts every scanned consumer with a
@@ -147,15 +209,8 @@ def build_estate(services: list[dict],
     # Pass 1: each service's PCF route hostnames, so a config-declared baseUrl pointing at
     # another scanned service resolves to a real service->service edge, not an external node.
     # A provider with an ingested OpenAPI spec backs its resolved edges with that contract.
-    route_owner: dict[str, str] = {}
-    has_contract: dict[str, bool] = {}
-    for s in services:
-        has_contract[s["service"]] = bool(s["fs"].of("api.spec.endpoint"))
-        app = s["fs"].first("pcf.app")
-        for route in (app.attrs.get("routes") or []) if app else []:
-            host = _host(route)
-            if host:
-                route_owner[host] = s["service"]
+    route_owner = _route_owners(services)
+    has_contract = {s["service"]: bool(s["fs"].of("api.spec.endpoint")) for s in services}
 
     for s in services:
         name = s["service"]
@@ -181,6 +236,11 @@ def build_estate(services: list[dict],
                 edges.append(edge)
             else:
                 downstream = c.attrs.get("client", "downstream")
+                if any(downstream == s["service"] for s in services):
+                    # The client KEY collides with a scanned service but its baseUrl did not
+                    # resolve to that service's routes: drawing the edge would be a guess.
+                    # It stays off the graph; ambiguous_call_edges routes it to confirmation.
+                    continue
                 nodes.setdefault(downstream, "external")
                 edges.append({"from": name, "to": downstream, "relation": "calls"})
         # Messaging topics join across repos: a channel one service publishes and another

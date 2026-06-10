@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,7 +12,12 @@ import yaml
 from sre_kb.collectors import scan
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.config import load_config
-from sre_kb.estate.topology import build_estate, contract_change_blast, library_version_skew
+from sre_kb.estate.topology import (
+    ambiguous_call_edges,
+    build_estate,
+    contract_change_blast,
+    library_version_skew,
+)
 from sre_kb.render.diagrams import (
     TOPOLOGY_LEGEND,
     diagram_markdown,
@@ -76,6 +82,26 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
     topo_edges = next((d["spec"]["edges"] for d in docs if d["kind"] == "Topology"), [])
     findings = (library_version_skew(services, tuple(internal_namespaces))
                 + contract_change_blast(services, topo_edges))
+    # §3.2/§5.6: ambiguous baseUrls (IP literals, alias-suspect hostnames) are never guessed
+    # into edges — they become confirm-worklist items plus advisory findings.
+    ambiguous = ambiguous_call_edges(services)
+    if ambiguous:
+        confirm_dir = layout.root / "confirm"
+        confirm_dir.mkdir(parents=True, exist_ok=True)
+        (confirm_dir / "edge-calls.json").write_text(
+            json.dumps({"schema": "sre-kb/estate-edge-confirm/v1", "runId": run_id,
+                        "items": ambiguous}, indent=2), encoding="utf-8")
+        findings += [{
+            "type": "possible-call-edge",
+            "severity": "info",
+            "from": a["from"],
+            "client": a["client"],
+            "baseUrl": a["baseUrl"],
+            "candidate": a["candidate"],
+            "detail": (f"{a['from']}'s client '{a['client']}' targets {a['baseUrl']} "
+                       f"({a['reason']}); the edge was not guessed — confirm it via "
+                       "confirm/edge-calls.json."),
+        } for a in ambiguous]
     layout.reset_kb()  # re-run under the same run-id must not leak stale estate artifacts
     by_status: dict[str, int] = {}
     records = []

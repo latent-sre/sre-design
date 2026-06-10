@@ -27,6 +27,10 @@ Four joins make the edges real, not just declared:
 - **`calls` edges resolve across repos** — a `clients.*.base-url` whose hostname matches
   another scanned service's PCF route becomes a `service -> service` edge; an unmatched
   hostname stays an `external` node (call out the naming gap, don't invent the edge).
+  *Ambiguous* targets — an IP-literal baseUrl, or a hostname/client key that resembles a
+  scanned service without matching its routes — are never guessed: each becomes a
+  `possible-call-edge` advisory finding plus an item in the run's
+  `confirm/edge-calls.json` worklist for human/LLM confirmation.
 - **`topic` nodes join producers to consumers** — a channel one repo publishes and another
   consumes appears once, with `publishes`/`consumes` edges on each side. "Who consumes
   `order.created`?" is read straight off the graph.

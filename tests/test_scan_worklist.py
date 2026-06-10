@@ -40,3 +40,19 @@ def test_empty_worklist_has_no_tasks_but_is_well_formed():
     wl = build_scan_worklist("r", service="s", target="/t", context_packs=0, challenge_items=0)
     assert wl["tasks"] == []
     assert wl["schema"] == SCHEMA  # still a valid, parseable manifest
+
+
+def test_pcf_review_and_narration_tasks_gate_on_their_inputs():
+    from sre_kb.synth.worklist import build_scan_worklist
+
+    wl = build_scan_worklist("r1", service="s", target="/t", context_packs=0,
+                             challenge_items=0, pcf_apps=2, diagrams=3)
+    by_id = {t["id"]: t for t in wl["tasks"]}
+    assert by_id["review-pcf"]["writeTo"] == ".sre/pcf-review-proposals.json"
+    assert by_id["review-pcf"]["ingest"] == "sre-kb pcf-review --target /t"
+    assert by_id["narrate-diagrams"]["writeTo"] == ".sre/diagram-narrations.json"
+    assert "narrate-diagrams --run r1" in by_id["narrate-diagrams"]["ingest"]
+    none = build_scan_worklist("r1", service="s", target="/t", context_packs=0,
+                               challenge_items=0)
+    ids = {t["id"] for t in none["tasks"]}
+    assert "review-pcf" not in ids and "narrate-diagrams" not in ids

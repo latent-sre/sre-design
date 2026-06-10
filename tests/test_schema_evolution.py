@@ -49,7 +49,7 @@ def schema_root(tmp_path):
 def _doc(spec: dict) -> dict:
     return {"apiVersion": "sre.kb/v1alpha1", "kind": "Widget",
             "metadata": {"name": "w"}, "spec": spec,
-            "evidence": [{"repo": "r", "commit": "5f3e9c1a7b", "path": "p",
+            "evidence": [{"repo": "r", "commit": "5f3e9c1a7b", "path": "p",  # pragma: allowlist secret
                           "lines": {"start": 1, "end": 1},
                           "excerptHash": "sha256:" + "0" * 64, "detector": "d"}],
             "status": "verified", "confidence": 0.9}

@@ -94,9 +94,8 @@ def _automated_oracle(prompt: str) -> str:
             {"category": "missing-timeout", "target": "inventory-service", "severity": "high",
              "anchor": "not actually in the fixture", "rationale": "stub"},
         ]})
-    if "Alert-draft context" in prompt or "Runbook-draft context" in prompt \
-            or "Contract-review context" in prompt:
-        return '{"proposals": []}'
+    if "-draft context" in prompt or "Contract-review context" in prompt:
+        return '{"proposals": []}'  # alert/runbook/architecture drafts + contract review
     if "allowedRefs" in prompt:  # the narrative brief is a JSON document
         return "No significant risks beyond the digest."
     if "Affirm" in prompt or "affirm" in prompt:

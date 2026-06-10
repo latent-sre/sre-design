@@ -38,6 +38,7 @@ def build_scan_worklist(
     confirm_boundaries: int = 0,
     alert_candidates: int = 0,
     uncovered_alerts: int = 0,
+    architecture_components: int = 0,
     contract_specs: int = 0,
     findings: int = 0,
 ) -> dict:
@@ -46,11 +47,13 @@ def build_scan_worklist(
     `context_packs` is how many per-artifact context packs the run wrote (the discover inputs);
     `challenge_items` is how many judgment-call claims need adjudication (the confirm-of-judgment
     inputs); `confirm_boundaries` is how many Tier-A absence claims the engine wants affirmed/disputed
-    (the S4 confirm loop). The drafting exchanges (S7–S9, N5) gate the same way: `alert_candidates`
-    (error/warn log statements the generate-alerts skill judges), `uncovered_alerts` (Alerts with no
-    Runbook for generate-runbooks), `contract_specs` (current OpenAPI/AsyncAPI specs for
-    map-api-contracts), and `findings` (the digest the narrative summarizes). A task is included only
-    when it has work, so the manifest is the exact to-do list — no empty steps.
+    (the S4 confirm loop). The drafting exchanges (S7–S9, N5, #2/#3) gate the same way:
+    `alert_candidates` (error/warn log statements the generate-alerts skill judges),
+    `uncovered_alerts` (Alerts with no Runbook for generate-runbooks), `architecture_components`
+    (the deterministic skeleton map-architecture judges patterns over), `contract_specs` (current
+    OpenAPI/AsyncAPI specs for map-api-contracts), and `findings` (the digest the narrative
+    summarizes). A task is included only when it has work, so the manifest is the exact to-do
+    list — no empty steps.
     """
     tasks: list[dict] = []
     if context_packs:
@@ -117,6 +120,19 @@ def build_scan_worklist(
                 "writeTo": ".sre/runbook-proposals.json",  # relative to the target repo
                 "writeToBase": "target",
                 "ingest": f"sre-kb generate-runbooks --target {target}",
+            }
+        )
+    if architecture_components:
+        tasks.append(
+            {
+                "id": "map-architecture",
+                "mode": "discover",
+                "title": "Propose the design patterns/styles the deterministic skeleton can't prove",
+                "skill": ".github/skills/map-architecture/SKILL.md",
+                "reads": ["kb/"],  # the deterministic Architecture skeleton + the target source
+                "writeTo": ".sre/architecture-proposals.json",  # relative to the target repo
+                "writeToBase": "target",
+                "ingest": f"sre-kb map-architecture --target {target}",
             }
         )
     if contract_specs:

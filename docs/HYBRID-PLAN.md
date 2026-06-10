@@ -1120,9 +1120,16 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   pilot floors a CI matrix job. (5) **Graduation drafting**: `graduation-draft` has the provider
   draft the promotion regex from reviewer-confirmed anchors and the engine verify it (compile + fire
   on every anchor) into an advisory review doc — LLM-proposed, engine-verified, human-merged. The
-  trust boundary is unchanged throughout: a provider can never assert a verdict the engine trusts.
-  (`pipeline/{worklist_run,autopilot,graduation_draft}.py`, `synth/{worklist,draft_prompts}.py`,
-  `publish/pr_builder.py`, `cli.py`; `tests/test_{worklist_run,autopilot,automation_loop}.py`.)
+  (6) **`map-architecture`** (SCOPE #2/#3, the last unbuilt §7 skill): a pointer-generator skill
+  proposes the design patterns/styles the deterministic skeleton can't prove; `pipeline/architecture.py`
+  re-grounds each on the gap-finder contract — locate the anchor verbatim, refute byte-proven
+  duplicates, fold survivors into a `needs-review` Architecture artifact — wired as a worklist task,
+  a CLI (`sre-kb map-architecture`), and an autopilot fold. The trust boundary is unchanged
+  throughout: a provider can never assert a verdict the engine trusts.
+  (`pipeline/{worklist_run,autopilot,graduation_draft,architecture}.py`,
+  `synth/{worklist,draft_prompts}.py`, `publish/pr_builder.py`, `cli.py`,
+  `.github/skills/map-architecture/`;
+  `tests/test_{worklist_run,autopilot,automation_loop}.py`.)
 
 #### Decision — LLM transport (2026-06-09)
 

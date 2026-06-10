@@ -267,6 +267,8 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         alert_candidates=sum(1 for f in fs.of("observability.log.statement")
                              if str(f.attrs.get("level")) in ("error", "warn")),
         uncovered_alerts=len(_uncovered_alerts(docs)),
+        architecture_components=sum(len(d["spec"].get("components") or [])
+                                    for d in docs if d.get("kind") == "Architecture"),
         contract_specs=len(current_specs(ctx)),
         findings=len(collect_findings(docs)),
     )

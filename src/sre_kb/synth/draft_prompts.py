@@ -115,6 +115,43 @@ def build_runbook_prompt(docs: list[dict]) -> str:
     return "\n".join(out)
 
 
+_ARCHITECTURE_CONTRACT = """\
+## Required answer
+Propose ONLY the *design patterns and architectural styles* the code embodies that the
+deterministic list above does not already prove (e.g. cqrs, saga, transactional-outbox,
+event-sourcing, hexagonal). Reply with a JSON object:
+
+{"proposals": [
+  {"pattern": "transactional-outbox",   // kebab-case pattern/style name
+   "anchor": "<verbatim line(s) copied EXACTLY from one UNTRUSTED block above>",
+   "rationale": "writes the event row in the same transaction as the order"}
+]}
+
+Rules:
+- `anchor` MUST be bytes from the source — the engine locates them and drops what it can't find.
+- Do NOT re-report the deterministic patterns listed above; those are already byte-proven.
+- Reply {"proposals": []} if the deterministic skeleton tells the whole story.
+"""
+
+
+def build_architecture_prompt(ctx: ScanContext, components: list[dict],
+                              known_patterns: list[str]) -> str:
+    """The map-architecture context: the deterministic skeleton (components + byte-proven
+    patterns, not to be re-reported) and the source fenced verbatim for anchoring."""
+    out = ["# Architecture-draft context", "", _HEADER, "",
+           "## Components the engine already mapped (deterministic)"]
+    out += [f"- {c.get('name')} ({c.get('type')}): {c.get('symbol')}"
+            for c in components] or ["- (none)"]
+    out += ["", "## Patterns already byte-proven (do NOT re-report)"]
+    out += [f"- {p}" for p in known_patterns] or ["- (none)"]
+    out += ["", "## Source (untrusted)"]
+    for path in ctx.files("*.java", "*.cs", "*.py", "*.js", "*.go"):
+        rel = ctx.rel(path)
+        out += [_fence(ctx.read_text(rel).rstrip(), rel), ""]
+    out += [_ARCHITECTURE_CONTRACT]
+    return "\n".join(out)
+
+
 def build_contract_prompt(ctx: ScanContext, specs: list[str], covered_refs: list[str]) -> str:
     """The map-contracts context: the current spec(s) fenced verbatim, plus the structural changes
     the deterministic baseline diff already proves (so they are not re-reported)."""

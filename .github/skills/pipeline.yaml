@@ -16,6 +16,7 @@ phases:
     - sre-estate
     - map-messaging
     - map-api-contracts
+    - map-architecture
   assess:
     - sre-gap-finder
     - sre-confirm-boundaries

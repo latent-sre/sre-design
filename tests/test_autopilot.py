@@ -48,6 +48,11 @@ class StubProvider:
                  "diagnosis": ["inspect recent deploys"], "remediation": ["scale within limits"],
                  "escalation": "platform on-call"},
             ]})
+        if "Architecture-draft context" in prompt:
+            return json.dumps({"proposals": [
+                {"pattern": "event-notification", "anchor": _PUBLISH_LINE,
+                 "rationale": "publishes a domain event after the write"},
+            ]})
         if "allowedRefs" in prompt:  # the narrative brief
             return "Risk is concentrated in the publish path; review the uncovered burn-rate alert."
         if "Affirm" in prompt:
@@ -78,6 +83,8 @@ def test_autopilot_converges_and_folds_every_channel_in(tmp_path):
     assert list((layout.kb / "needs-review").rglob("Alert/*log-alert*.yaml"))
     assert result.drafted_runbooks == 1
     assert (layout.kb / "needs-review" / "Runbook" / "create-order-latency-burn-rate.yaml").exists()
+    assert result.proposed_patterns == 1
+    assert list((layout.kb / "needs-review").rglob("Architecture/*proposed-patterns*.yaml"))
     assert not list((layout.kb / "verified").rglob("Runbook/create-order-latency-burn-rate.yaml"))
     # the narrative was grounded and rendered into the run's reports
     assert result.narrative_note and "resolve" in result.narrative_note

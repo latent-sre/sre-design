@@ -610,8 +610,8 @@ def autopilot(
         typer.echo(f"  applied: {cycle.challenge_changed} challenge downgrade(s), "
                    f"{cycle.confirm_outcomes} boundary call(s) re-ground")
     typer.echo(f"drafts folded into the final run: {result.drafted_alerts} alert(s), "
-               f"{result.drafted_runbooks} runbook(s), {result.contract_routed} contract break(s) "
-               "routed to review")
+               f"{result.drafted_runbooks} runbook(s), {result.proposed_patterns} architecture "
+               f"pattern(s), {result.contract_routed} contract break(s) routed to review")
     if result.narrative_note:
         typer.echo(f"narrative: {result.narrative_note}")
     final = RunLayout(Path(work_root), result.run_id)
@@ -858,6 +858,45 @@ def map_contracts_cmd(
             {"target": o.proposal.target, "category": o.proposal.category, "result": o.result,
              "path": o.path, "lines": list(o.lines) if o.lines else None,
              "severity": o.proposal.severity, "rationale": o.proposal.rationale, "note": o.note}
+            for o in result.outcomes
+        ]
+        report.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        typer.echo(f"  report -> {report}")
+
+
+@app.command("map-architecture")
+def map_architecture_cmd(
+    target: str = typer.Option(..., "--target", help="Local path of the target repo."),
+    proposals: Path = typer.Option(
+        None, "--proposals",
+        help="Design-pattern proposals JSON (default: <target>/.sre/architecture-proposals.json)."
+    ),
+    service: str = typer.Option(None, "--service", help="Service name (default: target dir name)."),
+    report: Path = typer.Option(None, "--report", help="Write the re-grounding report JSON here."),
+) -> None:
+    """Tier-B map-architecture (coverage #2/#3): ingest the skill's design-pattern proposals and
+    re-ground each — locate the anchor verbatim, refute patterns the deterministic scan already
+    proves, and fold survivors into a needs-review Architecture artifact.
+
+    The engine never calls a model — it ingests proposals the skill already wrote (in the IDE, or
+    via worklist-run/autopilot through the provider seam). Nothing proposed can auto-verify.
+    """
+    from sre_kb.pipeline.architecture import run_map_architecture
+
+    result = run_map_architecture(target, proposals_path=proposals, service=service)
+    kept, dropped = result.kept(), result.dropped()
+    typer.echo(
+        f"map-architecture: {len(result.outcomes)} proposal(s) -> {len(kept)} routed to review, "
+        f"{len(dropped)} dropped"
+    )
+    for o in result.outcomes:
+        where = f" @ {o.path}:{o.lines[0]}-{o.lines[1]}" if o.lines else ""
+        typer.echo(f"  [{o.result:<11}] {o.proposal.pattern}{where}  — {o.note}")
+    if report is not None:
+        payload = [
+            {"pattern": o.proposal.pattern, "result": o.result, "path": o.path,
+             "lines": list(o.lines) if o.lines else None,
+             "rationale": o.proposal.rationale, "note": o.note}
             for o in result.outcomes
         ]
         report.write_text(json.dumps(payload, indent=2), encoding="utf-8")

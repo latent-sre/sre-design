@@ -92,6 +92,44 @@ def test_diff_requires_exactly_one_base(tmp_path):
     assert "exactly one of" in res.output
 
 
+# ------------------------------------------------------- map-architecture
+
+def test_map_architecture_grounds_refutes_and_folds(tmp_path):
+    """A duplicate of a byte-proven pattern is refuted, a fabricated anchor is dropped, and a
+    grounded novel pattern folds into one needs-review Architecture artifact."""
+    from sre_kb.pipeline.architecture import run_map_architecture
+
+    target = tmp_path / "target"
+    shutil.copytree(SPRING, target)
+    publisher = target / "src/main/java/com/acme/order/events/OrderEventPublisher.java"
+    anchor = publisher.read_text().splitlines()[23].strip()
+    (target / ".sre").mkdir(exist_ok=True)
+    (target / ".sre" / "architecture-proposals.json").write_text(json.dumps({"proposals": [
+        {"pattern": "circuit-breaker", "anchor": anchor, "rationale": "dup"},
+        {"pattern": "transactional-outbox", "anchor": "not actually in the fixture"},
+        {"pattern": "event-notification", "anchor": anchor, "rationale": "publishes a domain event"},
+    ]}))
+    result = run_map_architecture(str(target))
+    by_pattern = {o.proposal.pattern: o for o in result.outcomes}
+    assert by_pattern["circuit-breaker"].result == "refuted"
+    assert by_pattern["transactional-outbox"].result == "unlocatable"
+    assert by_pattern["event-notification"].result == "routed"
+    assert len(result.docs) == 1
+    doc = result.docs[0]
+    assert doc["kind"] == "Architecture" and doc["status"] == "needs-review"
+    assert doc["spec"]["patterns"] == ["event-notification"]
+    assert doc["evidence"][0]["path"].endswith("OrderEventPublisher.java")
+
+
+def test_map_architecture_no_proposals_file_is_empty(tmp_path):
+    from sre_kb.pipeline.architecture import run_map_architecture
+
+    target = tmp_path / "target"
+    shutil.copytree(SPRING, target)
+    result = run_map_architecture(str(target))
+    assert result.outcomes == [] and result.docs == []
+
+
 # ------------------------------------------------------- graduation-draft
 
 class StubProvider:

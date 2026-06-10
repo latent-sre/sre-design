@@ -47,6 +47,7 @@ class AutopilotResult:
     cycles: list[CycleOutcome] = field(default_factory=list)
     drafted_alerts: int = 0
     drafted_runbooks: int = 0
+    proposed_patterns: int = 0
     contract_routed: int = 0
     narrative_note: str | None = None
 
@@ -78,7 +79,7 @@ def _ingest_drafts(layout: RunLayout, target: Path, result: AutopilotResult) -> 
     """Fold the drafting outputs into the final run: re-ground each proposals file through its
     engine half and land the survivors. Every drafter self-gates on a missing/malformed file, so a
     deferred task simply contributes nothing."""
-    from sre_kb.pipeline import alerts_draft, contract, runbooks_draft
+    from sre_kb.pipeline import alerts_draft, architecture, contract, runbooks_draft
     from sre_kb.render import load_kb
     from sre_kb.render.project import service_name
     from sre_kb.reporting import collect_findings, render_narrative, validate_narrative
@@ -96,6 +97,11 @@ def _ingest_drafts(layout: RunLayout, target: Path, result: AutopilotResult) -> 
         for doc in drafted.docs:
             _write_kb_doc(layout, doc)
         result.drafted_runbooks = len(drafted.docs)
+    if (target / architecture.PROPOSALS_REL).exists():
+        mapped = architecture.run_map_architecture(str(target), service=service)
+        for doc in mapped.docs:
+            _write_kb_doc(layout, doc)
+        result.proposed_patterns = len(mapped.kept())
     if (target / contract.PROPOSALS_REL).exists():
         reviewed = contract.run_map_contracts(str(target))
         result.contract_routed = len(reviewed.kept())

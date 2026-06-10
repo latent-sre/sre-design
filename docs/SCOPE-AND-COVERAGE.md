@@ -78,8 +78,8 @@ Status legend: ✅ solid · ◐ partial · ❌ gap · (S) schema/kind exists but
 | # | Focus area | Kind / output | Tier | Status | Notes / gap |
 |---|---|---|---|---|---|
 | 1 | Tech stack (detailed) | `TechStack` | A | ✅ | build files + buildpack |
-| 2 | Detailed architecture | `Architecture` | B | ◐ | narrative is LLM judgment |
-| 3 | Design patterns used | `Architecture` (or new) | B | ❌ | no detector; semantic |
+| 2 | Detailed architecture | `Architecture` | A/B | ✅ | deterministic component/layer skeleton + `map-architecture` Tier-B channel (anchored proposals re-grounded by `pipeline.architecture`) |
+| 3 | Design patterns used | `Architecture` | A/B | ✅ | mechanism patterns byte-proven (Tier-A); semantic patterns (CQRS/saga/outbox/…) via `map-architecture` — locate-grounded, duplicates refuted, survivors `needs-review` |
 | 4 | Infrastructure (= app's PCF descriptor) | `Deployment` + `pcf.app`/`pcf.service` | A | ✅ | env/bindings/routes/health/scale extracted |
 | 5 | Deployment | `Deployment` | A | ✅ | PCF manifest |
 | 6 | Dependencies | `Dependency` | A | ✅ | |
@@ -180,7 +180,7 @@ New (each pointer-generator, discover+confirm, read-only on targets; add to `.gi
 | ~~`map-messaging`~~ ✅ | #8 consumer resilience: DLQ + idempotent-consumer (Tier-A); ordering/poison-pill/saga (Tier-B) | **done** |
 | ~~`assess-logging`~~ ✅ | #13 + #18: log *format* parse (Tier-A) + quality judgment (Tier-B) — unblocks #19 | **done** |
 | ~~`map-api-contracts`~~ ✅ | #7: ~~OpenAPI/AsyncAPI ingest, undocumented endpoints~~ ✅ (deterministic, `common.openapi`); ~~**versioning/breaking-change** judgment~~ ✅ — baseline-spec diff + version-policy are Tier-A (`common.openapi`), the semantic-break half is the `map-api-contracts` skill re-grounded by `pipeline.contract` | **done** |
-| `map-architecture` | #2 + #3: architecture narrative, design patterns | P1 |
+| ~~`map-architecture`~~ ✅ | #2 + #3: design patterns/styles beyond the deterministic skeleton — anchored proposals; the engine locates each, refutes byte-proven duplicates, folds survivors into a needs-review `Architecture` artifact (`pipeline.architecture`, `sre-kb map-architecture`) | **done** |
 | ~~`generate-alerts`~~ ✅ | #19: draft which error/warn log lines warrant an alert (alert-fatigue judgment); the engine grounds the line against its log-statement facts, refutes info/debug by level, generates the query, and drafts a needs-review log-pattern Alert (`pipeline.alerts_draft`, `sre-kb generate-alerts`) | **done** |
 | ~~`generate-runbooks`~~ ✅ | #20: draft diagnosis/remediation content for an uncovered Alert; the engine grounds the trigger Alert and every Kind/name citation closed-world against the run (`pipeline.runbooks_draft`, `sre-kb generate-runbooks`) | **done** |
 

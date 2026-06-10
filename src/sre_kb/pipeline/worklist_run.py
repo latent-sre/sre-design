@@ -164,6 +164,26 @@ def _run_draft_runbooks(layout: RunLayout, provider, target: Path) -> dict:
     return _write_proposals(target, PROPOSALS_REL, "draft-runbooks", data)
 
 
+def _run_map_architecture(layout: RunLayout, provider, target: Path) -> dict:
+    """Ask which design patterns/styles the code embodies beyond the deterministic skeleton; the
+    ingest (`sre-kb map-architecture`) re-locates each anchor and refutes byte-proven duplicates."""
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.pipeline.architecture import PROPOSALS_REL, known_patterns
+    from sre_kb.render import load_kb
+    from sre_kb.synth.draft_prompts import build_architecture_prompt
+
+    ctx = ScanContext(root=target, repo=f"file://{target.name}")
+    docs = load_kb(layout.root)
+    components = [c for d in docs if d.get("kind") == "Architecture"
+                  for c in (d.get("spec", {}).get("components") or [])]
+    prompt = build_architecture_prompt(ctx, components, sorted(known_patterns(docs)))
+    data = extract_json_object(provider(prompt))
+    if data is None:
+        return {"task": "map-architecture", "status": "deferred",
+                "note": "unparseable reply — task left to the manual loop"}
+    return _write_proposals(target, PROPOSALS_REL, "map-architecture", data)
+
+
 def _run_map_contracts(layout: RunLayout, provider, target: Path) -> dict:
     """Ask for semantic contract breaks over the current spec(s); the ingest
     (`sre-kb map-contracts`) re-locates each anchor and drops what the structural diff covers."""
@@ -218,6 +238,7 @@ def run_scan_worklist(layout: RunLayout, worklist: dict, provider, *, target: Pa
                "confirm-boundaries": lambda: _run_confirm(layout, provider),
                "draft-alerts": lambda: _run_draft_alerts(layout, provider, target),
                "draft-runbooks": lambda: _run_draft_runbooks(layout, provider, target),
+               "map-architecture": lambda: _run_map_architecture(layout, provider, target),
                "map-contracts": lambda: _run_map_contracts(layout, provider, target),
                "findings-narrative": lambda: _run_narrative(layout, provider, target)}
     summaries = []

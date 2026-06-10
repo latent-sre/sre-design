@@ -94,6 +94,10 @@ def _automated_oracle(prompt: str) -> str:
             {"category": "missing-timeout", "target": "inventory-service", "severity": "high",
              "anchor": "not actually in the fixture", "rationale": "stub"},
         ]})
+    if "-draft context" in prompt or "Contract-review context" in prompt:
+        return '{"proposals": []}'  # alert/runbook/architecture drafts + contract review
+    if "allowedRefs" in prompt:  # the narrative brief is a JSON document
+        return "No significant risks beyond the digest."
     if "Affirm" in prompt or "affirm" in prompt:
         return "affirm"
     return "supported: fine"
@@ -124,6 +128,13 @@ def test_runner_writes_every_output_where_the_manual_loop_would(tmp_path):
         verdicts = json.loads((layout.root / "confirm" / "verdicts.json").read_text())
         assert verdicts["schema"] == "confirm.verdicts/v1"
         assert all(v["verdict"] == "affirm" for v in verdicts["verdicts"])
+    if "draft-alerts" in by_task:
+        assert json.loads((target / ".sre" / "alert-proposals.json").read_text()) == {"proposals": []}
+    if "draft-runbooks" in by_task:
+        assert json.loads((target / ".sre" / "runbook-proposals.json").read_text()) == {"proposals": []}
+    if "findings-narrative" in by_task:
+        text = (target / ".sre" / "findings-narrative.md").read_text()
+        assert "No significant risks" in text
 
 
 def test_runner_defers_discover_on_unparseable_reply_never_fabricates(tmp_path):
@@ -207,8 +218,8 @@ def test_cli_worklist_run_with_oracle_writes_outputs_and_prints_ingest(tmp_path)
     # a tiny oracle answering by prompt content, invoked via this interpreter
     oracle = (
         f"{sys.executable} -c \"import sys;p=sys.stdin.read();"
-        "print('{\\\"proposals\\\": []}' if 'Gap-finder' in p else "
-        "'affirm' if 'Affirm' in p else 'supported: ok')\""
+        "print('{\\\"proposals\\\": []}' if ('Gap-finder' in p or '-draft context' in p or "
+        "'Contract-review' in p) else 'affirm' if 'Affirm' in p else 'supported: ok')\""
     )
     res = CliRunner().invoke(
         app, ["worklist-run", "--run", "cw", "--oracle", oracle,

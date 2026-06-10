@@ -248,8 +248,13 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         (fdir / "boundary-calls.json").write_text(
             json.dumps(confirm_worklist, indent=2), encoding="utf-8")
 
-    # Unified LLM scan worklist: one manifest of every discover/confirm task Copilot should run for
-    # this run — the single front door for the manual loop. The engine still never calls a model.
+    # Unified LLM scan worklist: one manifest of every discover/confirm/drafting task the LLM half
+    # should run — the single front door for the manual loop, and exactly what `worklist-run` drives
+    # through a programmatic provider. The engine still embeds no model.
+    from sre_kb.collectors.common.openapi import current_specs
+    from sre_kb.reporting import collect_findings
+    from sre_kb.synth.draft_prompts import _uncovered_alerts
+
     app = fs.first("pcf.app")
     service = (app.attrs.get("name") if app else None) or "service"
     scan_worklist = build_scan_worklist(
@@ -259,6 +264,13 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         context_packs=sum(1 for d in docs if d.get("evidence")),
         challenge_items=len(worklist["items"]),
         confirm_boundaries=len(confirm_worklist["items"]),
+        alert_candidates=sum(1 for f in fs.of("observability.log.statement")
+                             if str(f.attrs.get("level")) in ("error", "warn")),
+        uncovered_alerts=len(_uncovered_alerts(docs)),
+        architecture_components=sum(len(d["spec"].get("components") or [])
+                                    for d in docs if d.get("kind") == "Architecture"),
+        contract_specs=len(current_specs(ctx)),
+        findings=len(collect_findings(docs)),
     )
     (layout.root / "scan-worklist.json").write_text(
         json.dumps(scan_worklist, indent=2), encoding="utf-8"

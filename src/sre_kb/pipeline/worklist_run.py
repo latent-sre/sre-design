@@ -85,13 +85,7 @@ def _run_discover(layout: RunLayout, provider, target: Path) -> dict:
     if data is None:
         return {"task": "discover-gaps", "status": "deferred",
                 "note": "unparseable reply — task left to the manual loop"}
-    out = target / PROPOSALS_REL
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(data if isinstance(data, dict) else {"proposals": data}, indent=2),
-                   encoding="utf-8")
-    n = len((data.get("proposals") if isinstance(data, dict) else data) or [])
-    return {"task": "discover-gaps", "status": "written", "output": str(out),
-            "note": f"{n} proposal(s)"}
+    return _write_proposals(target, PROPOSALS_REL, "discover-gaps", data)
 
 
 def _run_challenge(layout: RunLayout, provider) -> dict:
@@ -128,6 +122,109 @@ def _run_confirm(layout: RunLayout, provider) -> dict:
             "note": f"{len(verdicts)} verdict(s)"}
 
 
+def _write_proposals(target: Path, rel: str, task: str, data) -> dict:
+    """Land a parsed proposals object where the manual loop would have written it."""
+    out = target / rel
+    out.parent.mkdir(parents=True, exist_ok=True)
+    doc = data if isinstance(data, dict) else {"proposals": data}
+    out.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+    n = len(doc.get("proposals") or [])
+    return {"task": task, "status": "written", "output": str(out), "note": f"{n} proposal(s)"}
+
+
+def _run_draft_alerts(layout: RunLayout, provider, target: Path) -> dict:
+    """Ask which alertable (error/warn) log lines warrant paging; the ingest
+    (`sre-kb generate-alerts`) re-locates each anchor, refutes by level, and derives the query."""
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.pipeline.alerts_draft import _ALERTABLE_LEVELS, PROPOSALS_REL
+    from sre_kb.pipeline.confirm import load_facts_of
+    from sre_kb.synth.draft_prompts import build_alert_prompt
+
+    ctx = ScanContext(root=target, repo=f"file://{target.name}")
+    statements = [f for f in load_facts_of(layout.facts / "facts.jsonl", "observability.log.statement")
+                  if str(f.attrs.get("level")) in _ALERTABLE_LEVELS]
+    data = extract_json_object(provider(build_alert_prompt(ctx, statements)))
+    if data is None:
+        return {"task": "draft-alerts", "status": "deferred",
+                "note": "unparseable reply — task left to the manual loop"}
+    return _write_proposals(target, PROPOSALS_REL, "draft-alerts", data)
+
+
+def _run_draft_runbooks(layout: RunLayout, provider, target: Path) -> dict:
+    """Ask for runbook drafts over the run's uncovered Alerts; the ingest
+    (`sre-kb generate-runbooks`) grounds every citation closed-world against the run."""
+    from sre_kb.pipeline.runbooks_draft import PROPOSALS_REL
+    from sre_kb.render import load_kb
+    from sre_kb.synth.draft_prompts import build_runbook_prompt
+
+    data = extract_json_object(provider(build_runbook_prompt(load_kb(layout.root))))
+    if data is None:
+        return {"task": "draft-runbooks", "status": "deferred",
+                "note": "unparseable reply — task left to the manual loop"}
+    return _write_proposals(target, PROPOSALS_REL, "draft-runbooks", data)
+
+
+def _run_map_architecture(layout: RunLayout, provider, target: Path) -> dict:
+    """Ask which design patterns/styles the code embodies beyond the deterministic skeleton; the
+    ingest (`sre-kb map-architecture`) re-locates each anchor and refutes byte-proven duplicates."""
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.pipeline.architecture import PROPOSALS_REL, known_patterns
+    from sre_kb.render import load_kb
+    from sre_kb.synth.draft_prompts import build_architecture_prompt
+
+    ctx = ScanContext(root=target, repo=f"file://{target.name}")
+    docs = load_kb(layout.root)
+    components = [c for d in docs if d.get("kind") == "Architecture"
+                  for c in (d.get("spec", {}).get("components") or [])]
+    prompt = build_architecture_prompt(ctx, components, sorted(known_patterns(docs)))
+    data = extract_json_object(provider(prompt))
+    if data is None:
+        return {"task": "map-architecture", "status": "deferred",
+                "note": "unparseable reply — task left to the manual loop"}
+    return _write_proposals(target, PROPOSALS_REL, "map-architecture", data)
+
+
+def _run_map_contracts(layout: RunLayout, provider, target: Path) -> dict:
+    """Ask for semantic contract breaks over the current spec(s); the ingest
+    (`sre-kb map-contracts`) re-locates each anchor and drops what the structural diff covers."""
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.collectors.common.openapi import current_specs
+    from sre_kb.pipeline.confirm import load_facts_of
+    from sre_kb.pipeline.contract import PROPOSALS_REL
+    from sre_kb.synth.draft_prompts import build_contract_prompt
+
+    ctx = ScanContext(root=target, repo=f"file://{target.name}")
+    covered = sorted({str(f.attrs.get("ref"))
+                      for f in load_facts_of(layout.facts / "facts.jsonl", "api.contract.change")})
+    data = extract_json_object(provider(build_contract_prompt(ctx, current_specs(ctx), covered)))
+    if data is None:
+        return {"task": "map-contracts", "status": "deferred",
+                "note": "unparseable reply — task left to the manual loop"}
+    return _write_proposals(target, PROPOSALS_REL, "map-contracts", data)
+
+
+def _run_narrative(layout: RunLayout, provider, target: Path) -> dict:
+    """Ask for the advisory narrative over the closed-world brief; the ingest
+    (`sre-kb findings-narrative --narrative`) grounds every `Kind/name` citation against the run."""
+    from sre_kb.render import load_kb
+    from sre_kb.render.project import service_name
+    from sre_kb.reporting import collect_findings, narrative_brief
+    from sre_kb.reporting.narrative import NARRATIVE_REL
+
+    docs = load_kb(layout.root)
+    brief = narrative_brief(service_name(docs), layout.run_id, collect_findings(docs), docs)
+    reply = (provider(json.dumps(brief, indent=2)) or "").strip()
+    if not reply:
+        return {"task": "findings-narrative", "status": "deferred",
+                "note": "empty reply — task left to the manual loop"}
+    text = "\n".join(ln for ln in reply.splitlines() if not _FENCE_LINE.match(ln)).strip()
+    out = target / NARRATIVE_REL
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text + "\n", encoding="utf-8")
+    return {"task": "findings-narrative", "status": "written", "output": str(out),
+            "note": f"{len(text.splitlines())} line(s) of narrative"}
+
+
 def run_scan_worklist(layout: RunLayout, worklist: dict, provider, *, target: Path) -> list[dict]:
     """Execute every task in the scan worklist through `provider`, returning one summary dict per
     task (`status`: written | deferred). An interactive provider (the model-free Copilot file
@@ -138,7 +235,12 @@ def run_scan_worklist(layout: RunLayout, worklist: dict, provider, *, target: Pa
                 for t in worklist.get("tasks", [])]
     runners = {"discover-gaps": lambda: _run_discover(layout, provider, target),
                "confirm-challenge": lambda: _run_challenge(layout, provider),
-               "confirm-boundaries": lambda: _run_confirm(layout, provider)}
+               "confirm-boundaries": lambda: _run_confirm(layout, provider),
+               "draft-alerts": lambda: _run_draft_alerts(layout, provider, target),
+               "draft-runbooks": lambda: _run_draft_runbooks(layout, provider, target),
+               "map-architecture": lambda: _run_map_architecture(layout, provider, target),
+               "map-contracts": lambda: _run_map_contracts(layout, provider, target),
+               "findings-narrative": lambda: _run_narrative(layout, provider, target)}
     summaries = []
     for task in worklist.get("tasks", []):
         runner = runners.get(task["id"])

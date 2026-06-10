@@ -78,8 +78,8 @@ Status legend: ✅ solid · ◐ partial · ❌ gap · (S) schema/kind exists but
 | # | Focus area | Kind / output | Tier | Status | Notes / gap |
 |---|---|---|---|---|---|
 | 1 | Tech stack (detailed) | `TechStack` | A | ✅ | build files + buildpack |
-| 2 | Detailed architecture | `Architecture` | B | ◐ | narrative is LLM judgment |
-| 3 | Design patterns used | `Architecture` (or new) | B | ❌ | no detector; semantic |
+| 2 | Detailed architecture | `Architecture` | A/B | ✅ | deterministic component/layer skeleton + `map-architecture` Tier-B channel (anchored proposals re-grounded by `pipeline.architecture`) |
+| 3 | Design patterns used | `Architecture` | A/B | ✅ | mechanism patterns byte-proven (Tier-A); semantic patterns (CQRS/saga/outbox/…) via `map-architecture` — locate-grounded, duplicates refuted, survivors `needs-review` |
 | 4 | Infrastructure (= app's PCF descriptor) | `Deployment` + `pcf.app`/`pcf.service` | A | ✅ | env/bindings/routes/health/scale extracted |
 | 5 | Deployment | `Deployment` | A | ✅ | PCF manifest |
 | 6 | Dependencies | `Dependency` | A | ✅ | |
@@ -180,7 +180,7 @@ New (each pointer-generator, discover+confirm, read-only on targets; add to `.gi
 | ~~`map-messaging`~~ ✅ | #8 consumer resilience: DLQ + idempotent-consumer (Tier-A); ordering/poison-pill/saga (Tier-B) | **done** |
 | ~~`assess-logging`~~ ✅ | #13 + #18: log *format* parse (Tier-A) + quality judgment (Tier-B) — unblocks #19 | **done** |
 | ~~`map-api-contracts`~~ ✅ | #7: ~~OpenAPI/AsyncAPI ingest, undocumented endpoints~~ ✅ (deterministic, `common.openapi`); ~~**versioning/breaking-change** judgment~~ ✅ — baseline-spec diff + version-policy are Tier-A (`common.openapi`), the semantic-break half is the `map-api-contracts` skill re-grounded by `pipeline.contract` | **done** |
-| `map-architecture` | #2 + #3: architecture narrative, design patterns | P1 |
+| ~~`map-architecture`~~ ✅ | #2 + #3: design patterns/styles beyond the deterministic skeleton — anchored proposals; the engine locates each, refutes byte-proven duplicates, folds survivors into a needs-review `Architecture` artifact (`pipeline.architecture`, `sre-kb map-architecture`) | **done** |
 | ~~`generate-alerts`~~ ✅ | #19: draft which error/warn log lines warrant an alert (alert-fatigue judgment); the engine grounds the line against its log-statement facts, refutes info/debug by level, generates the query, and drafts a needs-review log-pattern Alert (`pipeline.alerts_draft`, `sre-kb generate-alerts`) | **done** |
 | ~~`generate-runbooks`~~ ✅ | #20: draft diagnosis/remediation content for an uncovered Alert; the engine grounds the trigger Alert and every Kind/name citation closed-world against the run (`pipeline.runbooks_draft`, `sre-kb generate-runbooks`) | **done** |
 
@@ -229,7 +229,8 @@ The §4 matrix + the SRE rubric **are** the coverage contract. **The eval harnes
 The Tier-B half already has a working, reproducible measurement loop — `copilot-gap-validate`. It is
 the seed of the harness above; the same shape extends to every discover/confirm skill. The engine
 **embeds no model**; with the default Copilot provider the model boundary is an explicit manual
-step (`sre-kb worklist-run --oracle '<llm-cli>'` automates the same exchange end-to-end):
+step (`sre-kb worklist-run --oracle '<llm-cli>'` automates the same exchange, and
+`sre-kb autopilot` converges the full scan → provider → apply → re-scan loop):
 
 1. `sre-kb run --target <service> --to-stage scaffold` — produces a fresh context pack.
 2. In VS Code, run Copilot with the relevant `SKILL.md` and save the answer to
@@ -240,6 +241,11 @@ step (`sre-kb worklist-run --oracle '<llm-cli>'` automates the same exchange end
    "controls": [{"category": "missing-timeout", "target": "shipping-api"}]}`.
 4. Measure: `sre-kb copilot-gap-validate --target <service> --truth <service>/.sre/gap-truth.json
    --report .work/gap-validation.json`.
+
+With a programmatic provider, steps 1–2 fold into the measurement itself:
+`sre-kb copilot-gap-validate --target <service> --truth … --oracle '<llm-cli>'` builds the prompt,
+generates the proposals, and measures them in one command — sweepable across the pilot set in CI
+(the stage-2 floors of §3 become a matrix job, not a manual campaign).
 
 The report separates **raw proposal quality** from **post-grounding quality**: proposal
 recall/precision, kept recall/precision, grounded rate, missed-expected, proposed controls, and

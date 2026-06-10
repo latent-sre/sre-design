@@ -1103,6 +1103,34 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   skills (SCOPE §8.5). (`pipeline/runbooks_draft.py`, `cli.py`, `.github/skills/generate-runbooks/`;
   `tests/test_generate_runbooks.py`.)
 
+- **S10 — Programmatic LLM loop (worklist runner, autopilot, drift, measurement, graduation
+  drafting). ✅ Done.** The `LLMProvider` seam became drivable end-to-end without the IDE.
+  (1) **`worklist-run`** (`pipeline/worklist_run.py`) drives every scan-worklist task through a
+  configured provider — discover/confirm/challenge plus the four drafting exchanges
+  (`generate-alerts`, `generate-runbooks`, `map-contracts`, `findings-narrative`), which joined the
+  worklist as gated tasks with engine-built prompts (`synth/draft_prompts.py`); every output lands in
+  the exact file the manual exchange would have written, so the same ingest gates re-ground it.
+  (2) **`autopilot`** (`pipeline/autopilot.py`) converges the loop — scan → provider → apply →
+  re-scan (the SCOPE §6 cycle, default 2) — folding surviving Tier-B drafts into the final run's KB
+  (needs-review only) and recording graduation only on the final cycle. (3) **Scheduled drift**: the
+  published repo gains a generated `drift-sre-kb.yml` (inert until its TARGET_REPO sentinel is
+  configured) running `sre-kb diff --from-kb catalog/<svc>/kb --to <target> --fail-on-drift`, the new
+  published-KB-vs-target mode of `diff`. (4) **Measurement**: `copilot-gap-validate --oracle` runs
+  the whole SCOPE §9 recipe — prompt → proposals → measurement — in one command, making the stage-2
+  pilot floors a CI matrix job. (5) **Graduation drafting**: `graduation-draft` has the provider
+  draft the promotion regex from reviewer-confirmed anchors and the engine verify it (compile + fire
+  on every anchor) into an advisory review doc — LLM-proposed, engine-verified, human-merged. The
+  (6) **`map-architecture`** (SCOPE #2/#3, the last unbuilt §7 skill): a pointer-generator skill
+  proposes the design patterns/styles the deterministic skeleton can't prove; `pipeline/architecture.py`
+  re-grounds each on the gap-finder contract — locate the anchor verbatim, refute byte-proven
+  duplicates, fold survivors into a `needs-review` Architecture artifact — wired as a worklist task,
+  a CLI (`sre-kb map-architecture`), and an autopilot fold. The trust boundary is unchanged
+  throughout: a provider can never assert a verdict the engine trusts.
+  (`pipeline/{worklist_run,autopilot,graduation_draft,architecture}.py`,
+  `synth/{worklist,draft_prompts}.py`, `publish/pr_builder.py`, `cli.py`,
+  `.github/skills/map-architecture/`;
+  `tests/test_{worklist_run,autopilot,automation_loop}.py`.)
+
 #### Decision — LLM transport (2026-06-09)
 
 The "engine never calls a model" rule was reassessed and found to bundle two separable decisions:

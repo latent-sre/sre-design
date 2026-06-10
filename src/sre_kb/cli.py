@@ -1,13 +1,14 @@
 """`sre-kb` command-line interface.
 
 All subcommands are implemented: `run`/`scan`/`render`/`publish` (the deterministic pipeline),
-`validate-kb`, `findings`, `estate`, `diff`, `scan-worklist`/`worklist-run`,
+`validate-kb`, `findings`, `estate`, `diff`, `scan-worklist`/`worklist-run`/`autopilot`,
 `challenge-worklist`/`challenge-apply`, `gap-finder`, `secret-scan`, and `schema`. There is no separate
 `validate` subcommand — validation is the default `--to-stage` of `run`. The engine embeds no LLM —
 enrichment runs through the `LLMProvider` seam between `scan` and the validate stage: by default
 Copilot in VS Code via the manual file exchange (`scan-worklist` is its single front door — one
-manifest of every discover/confirm task), or `worklist-run --oracle` drives the same tasks through a
-programmatic provider end-to-end.
+manifest of every discover/confirm/drafting task), `worklist-run --oracle` drives the same tasks
+through a programmatic provider, and `autopilot` converges the whole loop (scan → provider → apply →
+re-scan) in one command.
 """
 
 from __future__ import annotations
@@ -237,6 +238,53 @@ def graduation_candidates(
         if is_ready:
             typer.echo(draft_signature(cat, target_concerns(name), known=name in known))
     typer.echo(f"\n{ready} categor{'y' if ready == 1 else 'ies'} ready to graduate (threshold {threshold}).")
+
+
+@app.command("graduation-draft")
+def graduation_draft_cmd(
+    target: Path = typer.Option(Path("."), "--target", help="Target repo whose .sre/ holds the tracker."),
+    oracle: str = typer.Option(
+        None,
+        "--oracle",
+        envvar="SRE_KB_ORACLE",
+        help="External LLM-oracle command (prompt on stdin) to draft the pattern. "
+        "Without one, use graduation-candidates for the deterministic sketch.",
+    ),
+    timeout: float = typer.Option(120.0, "--timeout", help="Oracle timeout (seconds)."),
+    cache_dir: Path = typer.Option(None, "--cache-dir", help="Prompt-hash response cache dir."),
+    out: Path = typer.Option(Path(".work/graduation-drafts"), "--out",
+                             help="Where the per-category review documents are written."),
+) -> None:
+    """Draft the Tier-A signature for every promotion-ready gap category — LLM-proposed,
+    engine-verified, human-merged.
+
+    The provider drafts a regex from the category's reviewer-confirmed anchors; the engine compiles
+    it and reports exactly which anchors it fires on; a maintainer merges it into `signatures.py` by
+    hand. Advisory only — nothing is auto-applied, so the taxonomy→Tier-A promotion loop closes
+    without the engine ever editing its own rules.
+    """
+    from sre_kb.config import load_config
+    from sre_kb.graduation import GraduationTracker
+    from sre_kb.llm.provider import make_provider
+    from sre_kb.pipeline.graduation_draft import draft_candidates
+
+    threshold = int((load_config().get("graduation") or {}).get("confirmation_threshold", 5))
+    if not GraduationTracker.load(target).candidates(threshold):
+        typer.echo(f"no promotion-ready categories (threshold {threshold}) — nothing to draft")
+        raise typer.Exit(code=0)
+    if not oracle:
+        typer.echo(
+            "no --oracle configured (or SRE_KB_ORACLE unset): nothing drafted.\n"
+            "Use `sre-kb graduation-candidates` for the deterministic sketch, or point --oracle "
+            "at a Copilot/Claude CLI to draft the pattern."
+        )
+        raise typer.Exit(code=0)
+    cfg = {"llm": {"provider": "subprocess", "command": oracle, "timeout": timeout,
+                   **({"cache_dir": str(cache_dir)} if cache_dir else {})}}
+    drafts = draft_candidates(target, make_provider(cfg), out, threshold)
+    for d in drafts:
+        typer.echo(f"  {d.category}: {d.note} -> {d.path}")
+    typer.echo(f"{len(drafts)} draft(s) written — review and merge by hand.")
 
 
 @app.command()
@@ -512,6 +560,64 @@ def worklist_run_cmd(
             typer.echo(f"  {cmd}")
 
 
+@app.command()
+def autopilot(
+    target: str = typer.Option(..., "--target", help="Local path of the target repo."),
+    oracle: str = typer.Option(
+        None,
+        "--oracle",
+        envvar="SRE_KB_ORACLE",
+        help="External LLM-oracle command (e.g. 'copilot -p'). Prompt is fed on stdin. "
+        "Required — without a provider the loop is the manual IDE exchange.",
+    ),
+    cycles: int = typer.Option(2, "--cycles", help="Convergence cycles (scan → provider → apply)."),
+    timeout: float = typer.Option(120.0, "--timeout", help="Per-prompt oracle timeout (seconds)."),
+    cache_dir: Path = typer.Option(None, "--cache-dir", help="Prompt-hash response cache dir (reproducibility)."),
+    run_id: str = typer.Option(None, "--run", help="Base run id (cycles get -c1, -c2, …)."),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Converge the whole LLM loop in one command: scan → worklist through the provider → apply →
+    re-scan (the SCOPE §6 discover→re-ground cycle, default 2 cycles), then fold the surviving
+    Tier-B drafts into the final run's KB.
+
+    The trust boundary is unchanged from the manual loop: verdicts apply monotonically
+    (downgrade-only), proposals are re-grounded byte-by-byte on the next scan, and drafts land
+    `needs-review` — a provider can never assert a verdict the engine trusts. The engine embeds no
+    model; `--cache-dir` makes re-runs replay deterministically.
+    """
+    from sre_kb.llm.provider import make_provider
+    from sre_kb.pipeline.autopilot import run_autopilot
+    from sre_kb.workspace import RunLayout
+
+    if not oracle:
+        typer.echo(
+            "no --oracle configured (or SRE_KB_ORACLE unset): autopilot needs a programmatic "
+            "provider.\nUse the manual loop instead (sre-kb run, then sre-kb scan-worklist), or "
+            "point --oracle at a Copilot/Claude CLI."
+        )
+        raise typer.Exit(code=0)
+    cfg = {"llm": {"provider": "subprocess", "command": oracle, "timeout": timeout,
+                   **({"cache_dir": str(cache_dir)} if cache_dir else {})}}
+    client = make_provider(cfg)
+    result = run_autopilot(target, client, work_root=work_root, run_base=run_id, cycles=cycles)
+    for i, cycle in enumerate(result.cycles, 1):
+        typer.echo(f"cycle {i} — run {cycle.run_id}")
+        if not cycle.tasks:
+            typer.echo("  no LLM work — converged")
+            continue
+        for t in cycle.tasks:
+            typer.echo(f"  [{t['status']}] {t['task']}: {t['note']}")
+        typer.echo(f"  applied: {cycle.challenge_changed} challenge downgrade(s), "
+                   f"{cycle.confirm_outcomes} boundary call(s) re-ground")
+    typer.echo(f"drafts folded into the final run: {result.drafted_alerts} alert(s), "
+               f"{result.drafted_runbooks} runbook(s), {result.proposed_patterns} architecture "
+               f"pattern(s), {result.contract_routed} contract break(s) routed to review")
+    if result.narrative_note:
+        typer.echo(f"narrative: {result.narrative_note}")
+    final = RunLayout(Path(work_root), result.run_id)
+    typer.echo(f"converged KB: {final.kb}  (render/publish: sre-kb render --run {result.run_id})")
+
+
 @app.command("challenge-worklist")
 def challenge_worklist(
     run_id: str = typer.Option(..., "--run"),
@@ -758,6 +864,45 @@ def map_contracts_cmd(
         typer.echo(f"  report -> {report}")
 
 
+@app.command("map-architecture")
+def map_architecture_cmd(
+    target: str = typer.Option(..., "--target", help="Local path of the target repo."),
+    proposals: Path = typer.Option(
+        None, "--proposals",
+        help="Design-pattern proposals JSON (default: <target>/.sre/architecture-proposals.json)."
+    ),
+    service: str = typer.Option(None, "--service", help="Service name (default: target dir name)."),
+    report: Path = typer.Option(None, "--report", help="Write the re-grounding report JSON here."),
+) -> None:
+    """Tier-B map-architecture (coverage #2/#3): ingest the skill's design-pattern proposals and
+    re-ground each — locate the anchor verbatim, refute patterns the deterministic scan already
+    proves, and fold survivors into a needs-review Architecture artifact.
+
+    The engine never calls a model — it ingests proposals the skill already wrote (in the IDE, or
+    via worklist-run/autopilot through the provider seam). Nothing proposed can auto-verify.
+    """
+    from sre_kb.pipeline.architecture import run_map_architecture
+
+    result = run_map_architecture(target, proposals_path=proposals, service=service)
+    kept, dropped = result.kept(), result.dropped()
+    typer.echo(
+        f"map-architecture: {len(result.outcomes)} proposal(s) -> {len(kept)} routed to review, "
+        f"{len(dropped)} dropped"
+    )
+    for o in result.outcomes:
+        where = f" @ {o.path}:{o.lines[0]}-{o.lines[1]}" if o.lines else ""
+        typer.echo(f"  [{o.result:<11}] {o.proposal.pattern}{where}  — {o.note}")
+    if report is not None:
+        payload = [
+            {"pattern": o.proposal.pattern, "result": o.result, "path": o.path,
+             "lines": list(o.lines) if o.lines else None,
+             "rationale": o.proposal.rationale, "note": o.note}
+            for o in result.outcomes
+        ]
+        report.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        typer.echo(f"  report -> {report}")
+
+
 @app.command("generate-alerts")
 def generate_alerts_cmd(
     target: str = typer.Option(..., "--target", help="Local path of the target repo."),
@@ -839,6 +984,15 @@ def copilot_gap_validate_cmd(
         "--proposals",
         help="Real Copilot proposals JSON (default: <target>/.sre/gap-proposals.json).",
     ),
+    oracle: str = typer.Option(
+        None,
+        "--oracle",
+        envvar="SRE_KB_ORACLE",
+        help="Generate the proposals first through this LLM-oracle command (prompt on stdin), "
+        "then measure — the full loop in one command. Omit to measure a saved proposals file.",
+    ),
+    timeout: float = typer.Option(120.0, "--timeout", help="Oracle timeout (seconds)."),
+    cache_dir: Path = typer.Option(None, "--cache-dir", help="Prompt-hash response cache dir (reproducibility)."),
     service: str = typer.Option(None, "--service", help="Service name (default: target dir name)."),
     min_recall: float = typer.Option(1.0, "--min-recall", help="Minimum kept recall required."),
     min_kept_precision: float = typer.Option(
@@ -846,15 +1000,39 @@ def copilot_gap_validate_cmd(
     ),
     report: Path = typer.Option(None, "--report", help="Optional JSON report path."),
 ) -> None:
-    """Validate a saved real-Copilot gap-finder run against a truth set.
+    """Validate a gap-finder run against a truth set — the stage-2 accuracy measurement.
 
-    This does not invoke Copilot. Run Copilot in VS Code with the sre-gap-finder skill first,
-    save `.sre/gap-proposals.json`, then use this command to measure raw proposals and
-    post-grounding quality.
+    With `--oracle`, the engine builds the gap-finder prompt from its own scan, drives it through
+    the provider seam, writes the proposals, and then measures: the whole measurement recipe of
+    SCOPE-AND-COVERAGE §9 in one command, sweepable across a pilot set in CI. Without it, this
+    measures a saved proposals file (run Copilot in the IDE first, save `.sre/gap-proposals.json`).
     """
     import json
 
     from sre_kb.validation.copilot_gap import validate_copilot_gap_run
+
+    if oracle:
+        from sre_kb.collectors import scan as collect_facts
+        from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
+        from sre_kb.collectors.llm.gap_finder import PROPOSALS_REL
+        from sre_kb.llm.provider import make_provider
+        from sre_kb.pipeline.worklist_run import extract_json_object
+        from sre_kb.synth.gap_prompt import build_gap_context
+
+        root = Path(target).resolve()
+        ctx = ScanContext(root=root, repo=f"file://{root.name}", commit=LOCAL_COMMIT)
+        cfg = {"llm": {"provider": "subprocess", "command": oracle, "timeout": timeout,
+                       **({"cache_dir": str(cache_dir)} if cache_dir else {})}}
+        client = make_provider(cfg)
+        data = extract_json_object(client(build_gap_context(ctx, collect_facts(ctx))))
+        if data is None:
+            typer.echo("oracle reply did not parse to a proposals object — nothing to measure", err=True)
+            raise typer.Exit(code=2)
+        ppath = proposals or (root / PROPOSALS_REL)
+        ppath.parent.mkdir(parents=True, exist_ok=True)
+        ppath.write_text(json.dumps(data if isinstance(data, dict) else {"proposals": data}, indent=2),
+                         encoding="utf-8")
+        typer.echo(f"oracle proposals -> {ppath}")
 
     try:
         result = validate_copilot_gap_run(
@@ -926,22 +1104,44 @@ def estate(
 
 @app.command()
 def diff(
-    from_target: str = typer.Option(..., "--from", help="Base target repo path (older)."),
+    from_target: str = typer.Option(None, "--from", help="Base target repo path (older)."),
     to_target: str = typer.Option(..., "--to", help="Head target repo path (newer)."),
+    from_kb: Path = typer.Option(
+        None, "--from-kb",
+        help="Diff an existing KB tree (e.g. a published catalog/<service>/kb) against a fresh "
+        "scan of --to, instead of re-scanning a base target — the scheduled-drift mode.",
+    ),
+    fail_on_drift: bool = typer.Option(
+        False, "--fail-on-drift", help="Exit non-zero when anything drifted (a CI gate)."
+    ),
     work_root: str = typer.Option(".work", "--work-root"),
 ) -> None:
-    """Drift detection: scan two versions of a repo and diff the resulting KB."""
+    """Drift detection: diff the KB across two target versions (--from), or diff a published KB
+    tree against the target's current state (--from-kb)."""
     from sre_kb.drift import changelog_md, diff_kb
     from sre_kb.pipeline import run as run_pipeline
     from sre_kb.render import load_kb
 
-    base = run_pipeline(from_target, work_root=work_root, run_id="diff-base", to_stage="validate")
+    if (from_target is None) == (from_kb is None):
+        typer.echo("pass exactly one of --from / --from-kb", err=True)
+        raise typer.Exit(code=2)
+    if from_kb is not None and not from_kb.is_dir():
+        typer.echo(f"no such KB directory: {from_kb}", err=True)
+        raise typer.Exit(code=2)
+    if from_kb is not None:
+        base_docs = [yaml.safe_load(p.read_text(encoding="utf-8"))
+                     for p in sorted(from_kb.rglob("*.yaml"))]
+        base_label = str(from_kb)
+    else:
+        base = run_pipeline(from_target, work_root=work_root, run_id="diff-base", to_stage="validate")
+        base_docs, base_label = load_kb(base.root), from_target
     head = run_pipeline(to_target, work_root=work_root, run_id="diff-head", to_stage="validate")
-    d = diff_kb(load_kb(base.root), load_kb(head.root))
+    d = diff_kb(base_docs, load_kb(head.root))
     drift_dir = head.root / "drift"
     drift_dir.mkdir(exist_ok=True)
     changelog = drift_dir / "CHANGELOG.md"
-    changelog.write_text(changelog_md(d, from_target, to_target), encoding="utf-8")
+    changelog.write_text(changelog_md(d, base_label, to_target), encoding="utf-8")
+    drifted = bool(d.added or d.removed or d.changed)
     typer.echo(
         f"drift: +{len(d.added)} -{len(d.removed)} ~{len(d.changed)} "
         f"data-loss+{len(d.new_data_loss)}"
@@ -950,6 +1150,8 @@ def diff(
         for k in d.new_data_loss:
             typer.echo(f"  ⚠️ new data-loss risk: {k[0]}/{k[1]}")
     typer.echo(f"  changelog: {changelog}")
+    if fail_on_drift and drifted:
+        raise typer.Exit(code=1)
 
 
 def main() -> None:

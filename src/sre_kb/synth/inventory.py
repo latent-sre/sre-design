@@ -275,6 +275,47 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "properties": [f.attrs for f in config_facts],
         }, [config_facts[0].evidence], "verified", confidence(Signal.DIRECT), service))
 
+    # --- DeliveryPipeline (one per checked-in CI workflow; only what the file states) ---
+    for wf in fs.of("pipeline.workflow"):
+        a = wf.attrs
+        pipeline_spec = {"name": a["name"], "system": a["system"], "stages": a.get("stages", [])}
+        if a.get("branch"):
+            pipeline_spec["branch"] = a["branch"]
+        docs.append(emit("DeliveryPipeline", a["name"], pipeline_spec, [wf.evidence],
+                         "verified", confidence(Signal.DIRECT), service))
+
+    # --- SecurityPosture (app-scoped controls rolled up from byte-grounded facts) ---
+    sec_deps = sorted({f.attrs["name"] for f in fs.of("tech.dependency")
+                       if "security" in f.attrs["name"] or "oauth2" in f.attrs["name"]})
+    authz = fs.first("security.authz")
+    actuator = fs.first("config.actuator")
+    if sec_deps or authz or actuator:
+        controls: list[str] = []
+        open_risks: list[str] = []
+        sec_spec: dict = {}
+        sec_ev = []
+        if sec_deps:
+            controls.append("spring-security")
+            sec_spec["authn"] = "oauth2" if any("oauth2" in d for d in sec_deps) else "spring-security"
+            dep_fact = next(f for f in fs.of("tech.dependency") if f.attrs["name"] == sec_deps[0])
+            sec_ev.append(dep_fact.evidence)
+        if authz:
+            controls.append("authz-annotations")
+            sec_spec["authz"] = "role-based"
+            sec_ev.append(authz.evidence)
+        if actuator:
+            exposure = str(actuator.attrs.get("exposure", ""))
+            if "*" in exposure:
+                open_risks.append(f"management endpoints broadly exposed (exposure: {exposure})")
+            else:
+                controls.append("actuator-exposure-limited")
+            sec_ev.append(actuator.evidence)
+        sec_spec["controls"] = controls
+        if open_risks:
+            sec_spec["openRisks"] = open_risks
+        docs.append(emit("SecurityPosture", f"{service}-security", sec_spec, sec_ev,
+                         "verified", confidence(Signal.DERIVED), service))
+
     # --- FeatureFlag (coverage matrix #15: config blocks / @ConditionalOnProperty / flag-SDK calls) ---
     for ff in fs.of("feature.flag"):
         a = ff.attrs

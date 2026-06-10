@@ -233,13 +233,14 @@ collected** — these are joins in `build_estate`, not new collectors.
 
 A sweep of every kind's emit path against its schema found three classes of "empty".
 
-**Never emitted by the engine** (schema + registry row + golden fixture, no emit site):
+**Never emitted by the engine** (schema + registry row + golden fixture, no emit site) — all
+three now emit on this branch:
 
-| Kind | Path to filling it |
+| Kind | How it fills now |
 |---|---|
-| `DeliveryPipeline` | parse `cf push` out of checked-in CI files (§4.4) |
-| `SecurityPosture` | Tier-B skill only today; deterministic seeds exist (Spring Security config, auth annotations, actuator exposure) |
-| `Topology` (single-service) | **done on this branch** — emitted per run from binding/client facts (`synth/inventory.py`), rendered via a registry `topology` renderer to `diagrams/<service>-topology.mmd` |
+| `DeliveryPipeline` | new `common.delivery_pipeline` collector parses `.github/workflows/*.yml` (jobs → stages, push branches, `cf push` detection) — §4.4's first half; Concourse/other CI systems remain open |
+| `SecurityPosture` | rolled up deterministically from byte-grounded facts: security/oauth2 deps → `authn`, new `@PreAuthorize`/`@Secured`/`@RolesAllowed` detection → `authz`, actuator exposure → control or `openRisks` (a `*` exposure is a risk); judgment calls stay with the `sre-security-posture` skill |
+| `Topology` (single-service) | emitted per run from binding/client facts (`synth/inventory.py`), rendered via a registry `topology` renderer to `diagrams/<service>-topology.mmd` |
 
 **Hardcoded-empty fields where the engine already had the knowledge** — fixed on this branch:
 
@@ -266,8 +267,9 @@ yet), `ReadinessScore.evidence: []` (a roll-up, not a source fact), `crossRefs: 
 the Flow→Alert→Runbook→BlastRadius chain, and `metadata.labels`/`annotations` (free envelope
 slots — candidates for run id / criticality tier / org-space once §4.3 lands).
 
-Still open from the audit: the three never-emitted kinds above, `Topology.pcfSpaces` (waits
-on §4.3's org/space source), and parity for the new lossy-save signal in the .NET collector.
+Still open from the audit: `Topology.pcfSpaces` (waits on §4.3's org/space source), non-GitHub
+CI systems for `DeliveryPipeline`, and .NET parity for the new lossy-save, authz, and
+refresh-scope signals.
 
 The through-line: every increment keeps the engine's core contract — deterministic facts with
 byte provenance, LLM as pointer-generator behind the seam, downgrade-only gating — and most of

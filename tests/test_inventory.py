@@ -90,6 +90,63 @@ def test_interface_idempotency_matches_the_gap_signature(docs):
     assert post["retrySafe"] is False
 
 
+def test_security_posture_rolls_up_actuator_exposure(docs):
+    # The fixture limits actuator exposure (health,info,prometheus) — a control, not a risk.
+    spec = docs[("SecurityPosture", "order-service-security")]["spec"]
+    assert "actuator-exposure-limited" in spec["controls"]
+    assert "openRisks" not in spec
+
+
+def test_security_posture_and_delivery_pipeline_from_a_secured_repo(tmp_path):
+    """A secured service with a CI workflow fills the two formerly never-emitted kinds:
+    SecurityPosture from security deps + authz annotations + broad actuator exposure, and
+    DeliveryPipeline from the checked-in GitHub Actions workflow."""
+    repo = tmp_path / "svc"
+    (repo / "src/main/java/com/acme/vault").mkdir(parents=True)
+    (repo / "src/main/resources").mkdir(parents=True)
+    (repo / ".github/workflows").mkdir(parents=True)
+    (repo / "manifest.yml").write_text(
+        "applications:\n- name: vault-service\n", encoding="utf-8")
+    (repo / "pom.xml").write_text(
+        "<project>\n  <dependencies>\n    <dependency>\n"
+        "      <groupId>org.springframework.boot</groupId>\n"
+        "      <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>\n"
+        "    </dependency>\n  </dependencies>\n</project>\n", encoding="utf-8")
+    (repo / "src/main/resources/application.yml").write_text(
+        "management:\n  endpoints:\n    web:\n      exposure:\n        include: '*'\n",
+        encoding="utf-8")
+    (repo / "src/main/java/com/acme/vault/VaultController.java").write_text(
+        "package com.acme.vault;\n"
+        "@RestController\n@RequestMapping(\"/api/v1/vault\")\n"
+        "public class VaultController {\n"
+        "    @PreAuthorize(\"hasRole('ADMIN')\")\n"
+        "    @GetMapping(\"/{id}\")\n"
+        "    public Secret get(@PathVariable String id) { return null; }\n"
+        "}\n", encoding="utf-8")
+    (repo / ".github/workflows/deploy.yml").write_text(
+        "name: deploy\n"
+        "on:\n  push:\n    branches: [main]\n"
+        "jobs:\n"
+        "  build:\n    steps:\n    - run: mvn -B package\n"
+        "  deploy:\n    steps:\n    - run: cf push vault-service\n", encoding="utf-8")
+    r = run_pipeline(str(repo), work_root=str(tmp_path / "w"), run_id="sec", to_stage="validate")
+    out = {}
+    for p in (r.root / "kb").rglob("*.yaml"):
+        d = yaml.safe_load(p.read_text())
+        out[(d["kind"], d["metadata"]["name"])] = d
+
+    sec = out[("SecurityPosture", "vault-service-security")]["spec"]
+    assert sec["authn"] == "oauth2"
+    assert sec["authz"] == "role-based"
+    assert {"spring-security", "authz-annotations"} <= set(sec["controls"])
+    assert any("broadly exposed" in r for r in sec["openRisks"])  # exposure '*' is a risk
+
+    dp = out[("DeliveryPipeline", "deploy")]["spec"]
+    assert dp["system"] == "github-actions"
+    assert dp["stages"] == ["build", "deploy"]
+    assert dp["branch"] == "main"
+
+
 def test_derived_fields_from_a_guarded_refreshable_service(tmp_path):
     """One mini service exercises the other side of each derivation: a safe GET is idempotent,
     @RefreshScope flips ConfigManagement.refreshScope, and a save() in a logged-and-swallowed

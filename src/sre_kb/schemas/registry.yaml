@@ -82,7 +82,10 @@ kinds:
     prompt: messaging
     phase: P2
   ScheduledJob:     { schema: schemas/v1alpha1/ScheduledJob.schema.json,     phase: P2 }
-  DeliveryPipeline: { schema: schemas/v1alpha1/DeliveryPipeline.schema.json, phase: P2 }
+  DeliveryPipeline:
+    schema: schemas/v1alpha1/DeliveryPipeline.schema.json
+    collectors: [common.delivery_pipeline]
+    phase: P2
   Topology:
     schema: schemas/v1alpha1/Topology.schema.json
     phase: P2
@@ -125,4 +128,9 @@ kinds:
   # no infra-security fields to drop (the SCOPE §5 "trim to app controls" is already satisfied).
   # DrBackup, NetworkTopology, RateLimiting dropped (S1, SCOPE §5): platform-infra concerns an app
   # team doesn't own (DR/backup, platform networking) or already a resilience signature (rate-limit).
-  SecurityPosture:  { schema: schemas/v1alpha1/SecurityPosture.schema.json,  phase: P3 }
+  # Rolled up deterministically from byte-grounded facts (security deps, authz annotations,
+  # actuator exposure); the deeper judgment calls stay with the sre-security-posture skill.
+  SecurityPosture:
+    schema: schemas/v1alpha1/SecurityPosture.schema.json
+    collectors: [java_spring.annotations, java_spring.build, java_spring.config_props]
+    phase: P3

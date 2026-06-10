@@ -137,6 +137,30 @@ def topology_overlays(topology: dict, docs: list[dict]) -> tuple[dict[str, str],
     return tiers, lossy
 
 
+_SHARED_GROUP = "shared (co-tenant)"
+
+
+def _groups(nodes: dict[str, str], edges: list[dict]) -> dict[str, str] | None:
+    """Subgraph assignment for a multi-service topology: a non-service node touched by exactly
+    one service joins that service's cluster; one touched by several joins the shared
+    (co-tenant) cluster — the grouping that makes blast radius legible. Returns None for a
+    single-service topology (flat rendering, as before)."""
+    services = [n for n, t in nodes.items() if t == "service"]
+    if len(services) < 2:
+        return None
+    owners: dict[str, set[str]] = {}
+    for e in edges:
+        src, dst = e.get("from"), e.get("to")
+        if src in services and dst in nodes and dst not in services:
+            owners.setdefault(dst, set()).add(src)
+        elif dst in services and src in nodes and src not in services:
+            owners.setdefault(src, set()).add(dst)
+    group: dict[str, str] = {s: s for s in services}
+    for n, owning in owners.items():
+        group[n] = next(iter(owning)) if len(owning) == 1 else _SHARED_GROUP
+    return group
+
+
 def mermaid_topology(topology: dict, tiers: dict[str, str] | None = None,
                      lossy: set[str] | None = None) -> str:
     spec = topology.get("spec", {})
@@ -146,34 +170,47 @@ def mermaid_topology(topology: dict, tiers: dict[str, str] | None = None,
     def nid(name: str) -> str:
         return "n_" + re.sub(r"[^A-Za-z0-9]", "_", name)
 
-    out = ["graph LR"]
+    nodes = {n["name"]: n.get("type", "service")
+             for n in spec.get("nodes", [])
+             if n.get("name")}  # a node with no name can't be rendered; skip rather than KeyError
+    edges = [e for e in spec.get("edges", [])
+             if e.get("from") and e.get("to")]  # an edge missing an endpoint can't be drawn
+
+    node_lines: dict[str, str] = {}
+    class_lines: list[str] = []
     used_types: set[str] = set()
     used_tiers: set[str] = set()
-    for node in spec.get("nodes", []):
-        name = node.get("name")
-        if not name:
-            continue  # a node with no name can't be rendered; skip rather than KeyError
-        ntype = node.get("type", "service")
-        label = _SHAPE.get(ntype, '["{}"]').format(_mm(name))
-        out.append(f"  {nid(name)}{label}")
+    for name, ntype in nodes.items():
+        node_lines[name] = f"{nid(name)}{_SHAPE.get(ntype, '[\"{}\"]').format(_mm(name))}"
         tier = tiers.get(name)
         if ntype == "service" and tier in _TIER_STYLE:
-            out.append(f"  class {nid(name)} {tier}")
+            class_lines.append(f"  class {nid(name)} {tier}")
             used_tiers.add(tier)
         elif ntype in _CLASS_STYLE:
-            out.append(f"  class {nid(name)} {ntype}")
+            class_lines.append(f"  class {nid(name)} {ntype}")
             used_types.add(ntype)
+
+    out = ["graph LR"]
+    group = _groups(nodes, edges)
+    if group is None:
+        out += [f"  {line}" for line in node_lines.values()]
+    else:
+        clusters: dict[str, list[str]] = {}
+        for name in nodes:
+            clusters.setdefault(group.get(name, _SHARED_GROUP), []).append(name)
+        # Service clusters first (stable name order), the shared cluster last.
+        for cluster in sorted(clusters, key=lambda c: (c == _SHARED_GROUP, c)):
+            out.append(f'  subgraph sg_{re.sub(r"[^A-Za-z0-9]", "_", cluster)}["{_mm(cluster)}"]')
+            out += [f"    {node_lines[name]}" for name in clusters[cluster]]
+            out.append("  end")
+
     lossy_edges: list[int] = []
-    n_edges = 0
-    for e in spec.get("edges", []):
-        src, dst = e.get("from"), e.get("to")
-        if not src or not dst:
-            continue  # an edge missing an endpoint can't be drawn
+    for i, e in enumerate(edges):
         rel = _mm(e.get("relation", ""))
-        out.append(f"  {nid(src)} -->|{rel}| {nid(dst)}")
-        if dst in lossy:
-            lossy_edges.append(n_edges)
-        n_edges += 1
+        out.append(f"  {nid(e['from'])} -->|{rel}| {nid(e['to'])}")
+        if e["to"] in lossy:
+            lossy_edges.append(i)
+    out += class_lines
     for ntype in sorted(used_types):
         out.append(f"  classDef {ntype} {_CLASS_STYLE[ntype]}")
     for tier in sorted(used_tiers):

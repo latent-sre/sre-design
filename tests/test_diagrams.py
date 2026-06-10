@@ -174,3 +174,48 @@ def test_sequence_with_mismatched_sinks_never_mispairs():
     }
     out = mermaid_sequence(flow, known_targets={"inventory": "inventory"})
     assert "P_inventory" not in out and out.count("Downstream") == 2
+
+
+def test_multi_service_topology_groups_into_subgraphs():
+    """Estate topologies cluster each service with its exclusive resources; anything touched
+    by 2+ services lands in the shared (co-tenant) cluster — the drawing that makes blast
+    radius legible. Single-service topologies stay flat."""
+    topo = {"spec": {
+        "nodes": [{"type": "service", "name": "orders"},
+                  {"type": "service", "name": "billing"},
+                  {"type": "datastore", "name": "shared-db"},
+                  {"type": "datastore", "name": "orders-db"},
+                  {"type": "topic", "name": "order.created"}],
+        "edges": [{"from": "orders", "to": "shared-db", "relation": "binds"},
+                  {"from": "billing", "to": "shared-db", "relation": "binds"},
+                  {"from": "orders", "to": "orders-db", "relation": "binds"},
+                  {"from": "orders", "to": "order.created", "relation": "publishes"},
+                  {"from": "order.created", "to": "billing", "relation": "consumes"}],
+    }}
+    out = mermaid_topology(topo)
+    assert 'subgraph sg_orders["orders"]' in out
+    assert 'subgraph sg_billing["billing"]' in out
+    # The label passes through the Mermaid sanitizer, which strips the parens.
+    shared = out.split('subgraph sg_shared__co_tenant_["shared co-tenant"]')[1].split("end")[0]
+    assert "n_shared_db" in shared and "n_order_created" in shared
+    orders_cluster = out.split('subgraph sg_orders')[1].split("end")[0]
+    assert "n_orders_db" in orders_cluster
+
+    flat = mermaid_topology({"spec": {
+        "nodes": [{"type": "service", "name": "orders"},
+                  {"type": "datastore", "name": "orders-db"}],
+        "edges": [{"from": "orders", "to": "orders-db", "relation": "binds"}],
+    }})
+    assert "subgraph" not in flat
+
+
+def test_subgraph_titles_are_sanitized():
+    """Cluster titles come from scanned service names — breakout characters are defanged."""
+    topo = {"spec": {
+        "nodes": [{"type": "service", "name": 'svc"]; evil'},
+                  {"type": "service", "name": "other"}],
+        "edges": [],
+    }}
+    out = mermaid_topology(topo)
+    assert "subgraph" in out and '"]' not in out.replace('"]\n', "")  # label can't close early
+    assert "evil" in out  # kept as inert text

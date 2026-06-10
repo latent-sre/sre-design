@@ -9,6 +9,8 @@
 apiVersion: sre.kb/v1alpha1
 kind: SkillPipeline
 phases:
+  orchestrate:
+    - sre-autopilot
   classify:
     - sre-criticality
   map:

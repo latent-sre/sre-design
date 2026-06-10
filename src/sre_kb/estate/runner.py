@@ -11,7 +11,7 @@ import yaml
 from sre_kb.collectors import scan
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.config import load_config
-from sre_kb.estate.topology import build_estate, library_version_skew
+from sre_kb.estate.topology import build_estate, contract_change_blast, library_version_skew
 from sre_kb.render.diagrams import (
     TOPOLOGY_LEGEND,
     diagram_markdown,
@@ -73,7 +73,9 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
         roots[ctx.repo] = root
 
     docs = build_estate(services, tuple(internal_namespaces))
-    findings = library_version_skew(services, tuple(internal_namespaces))
+    topo_edges = next((d["spec"]["edges"] for d in docs if d["kind"] == "Topology"), [])
+    findings = (library_version_skew(services, tuple(internal_namespaces))
+                + contract_change_blast(services, topo_edges))
     layout.reset_kb()  # re-run under the same run-id must not leak stale estate artifacts
     by_status: dict[str, int] = {}
     records = []

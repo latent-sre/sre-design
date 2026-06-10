@@ -87,6 +87,35 @@ def _impacted_flows(res: str, ntype: str, owners: dict, fs_by_service: dict) -> 
     return impacted
 
 
+def contract_change_blast(services: list[dict], edges: list[dict]) -> list[dict]:
+    """Estate-level blast radius for breaking API changes (§5.5): a provider whose baseline
+    diff produced breaking `api.contract.change` facts impacts every scanned consumer with a
+    resolved `calls` edge to it — 'this change breaks services X, Y', not a single-repo note."""
+    names = {s["service"] for s in services}
+    consumers_of: dict[str, set[str]] = {}
+    for e in edges:
+        if e.get("relation") == "calls" and e.get("from") in names and e.get("to") in names:
+            consumers_of.setdefault(e["to"], set()).add(e["from"])
+    findings: list[dict] = []
+    for s in sorted(services, key=lambda s: s["service"]):
+        provider = s["service"]
+        breaking = [f for f in s["fs"].of("api.contract.change") if f.attrs.get("breaking")]
+        impacted = sorted(consumers_of.get(provider, ()))
+        if breaking and impacted:
+            changes = sorted(f"{f.attrs['changeType']} {f.attrs['ref']}" for f in breaking)
+            findings.append({
+                "type": "api-breaking-change-blast",
+                "severity": "high",
+                "provider": provider,
+                "impactedServices": impacted,
+                "changes": changes,
+                "detail": (f"{provider} has {len(breaking)} breaking API change(s) vs its "
+                           f"committed baseline ({'; '.join(changes)}) — scanned consumers "
+                           f"impacted: {', '.join(impacted)}."),
+            })
+    return findings
+
+
 def build_estate(services: list[dict],
                  internal_namespaces: tuple[str, ...] = ()) -> list[dict]:
     """services: [{"service": name, "ctx": ScanContext, "fs": FactSet}]. `internal_namespaces`
@@ -100,8 +129,11 @@ def build_estate(services: list[dict],
 
     # Pass 1: each service's PCF route hostnames, so a config-declared baseUrl pointing at
     # another scanned service resolves to a real service->service edge, not an external node.
+    # A provider with an ingested OpenAPI spec backs its resolved edges with that contract.
     route_owner: dict[str, str] = {}
+    has_contract: dict[str, bool] = {}
     for s in services:
+        has_contract[s["service"]] = bool(s["fs"].of("api.spec.endpoint"))
         app = s["fs"].first("pcf.app")
         for route in (app.attrs.get("routes") or []) if app else []:
             host = _host(route)
@@ -126,7 +158,10 @@ def build_estate(services: list[dict],
         for c in fs.of("config.client"):
             resolved = route_owner.get(_host(c.attrs.get("baseUrl")))
             if resolved and resolved != name:
-                edges.append({"from": name, "to": resolved, "relation": "calls"})
+                edge = {"from": name, "to": resolved, "relation": "calls"}
+                if has_contract.get(resolved):
+                    edge["contract"] = "openapi"  # the edge is backed by the provider's spec
+                edges.append(edge)
             else:
                 downstream = c.attrs.get("client", "downstream")
                 nodes.setdefault(downstream, "external")

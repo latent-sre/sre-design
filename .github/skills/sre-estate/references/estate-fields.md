@@ -22,7 +22,7 @@ spec:
   pcfSpaces: []
 ```
 
-Three joins make the edges real, not just declared:
+Four joins make the edges real, not just declared:
 
 - **`calls` edges resolve across repos** — a `clients.*.base-url` whose hostname matches
   another scanned service's PCF route becomes a `service -> service` edge; an unmatched
@@ -35,6 +35,10 @@ Three joins make the edges real, not just declared:
   edges, so "which repos does a change to this library blast into?" reads off the graph.
   When two services pin different versions, the estate report carries a
   `library-version-skew` finding.
+- **`calls` edges are contract-backed when the provider ships a spec** — a resolved
+  edge to a service with ingested OpenAPI endpoints carries `contract: openapi`, and a
+  provider whose baseline diff shows *breaking* changes raises an
+  `api-breaking-change-blast` finding naming every scanned consumer.
 
 ## Cross-service `BlastRadius`
 

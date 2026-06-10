@@ -205,3 +205,58 @@ def test_spa_connects_to_its_backend_with_zero_declaration(tmp_path):
     nodes = {n["name"]: n["type"] for n in topo["spec"]["nodes"]}
     assert nodes["shop-ui"] == "frontend"
     assert {"from": "shop-ui", "to": "orders", "relation": "calls"} in topo["spec"]["edges"]
+
+
+def test_breaking_contract_change_blasts_into_scanned_consumers(tmp_path):
+    """§5.5: a provider with a spec gets contract-backed calls edges, and its breaking
+    baseline-diff changes become an estate finding naming the impacted consumers."""
+    provider = tmp_path / "orders"
+    (provider / ".sre" / "api-baseline").mkdir(parents=True)
+    (provider / "manifest.yml").write_text(
+        "applications:\n- name: orders\n  routes:\n  - route: orders.apps.internal\n",
+        encoding="utf-8")
+    (provider / "openapi.yaml").write_text(
+        "openapi: 3.0.0\ninfo: {title: orders, version: 2.0.0}\npaths:\n"
+        "  /orders:\n    get: {operationId: list}\n",
+        encoding="utf-8")
+    (provider / ".sre" / "api-baseline" / "openapi.yaml").write_text(
+        "openapi: 3.0.0\ninfo: {title: orders, version: 1.0.0}\npaths:\n"
+        "  /orders:\n    get: {operationId: list}\n"
+        "  /orders/{id}:\n    delete: {operationId: remove}\n",  # removed -> breaking
+        encoding="utf-8")
+    consumer = tmp_path / "shop"
+    (consumer / "src/main/resources").mkdir(parents=True)
+    (consumer / "manifest.yml").write_text(
+        "applications:\n- name: shop\n", encoding="utf-8")
+    (consumer / "src/main/resources/application.yml").write_text(
+        "clients:\n  orders:\n    base-url: orders.apps.internal\n    timeout: 2s\n",
+        encoding="utf-8")
+    r = run_estate([str(provider), str(consumer)], work_root=str(tmp_path / "w"), run_id="api")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    assert {"from": "shop", "to": "orders", "relation": "calls",
+            "contract": "openapi"} in topo["spec"]["edges"]
+    blast = [f for f in (r.findings or []) if f["type"] == "api-breaking-change-blast"]
+    assert len(blast) == 1
+    assert blast[0]["provider"] == "orders"
+    assert blast[0]["impactedServices"] == ["shop"]
+    assert blast[0]["changes"] == ["operation-removed DELETE /orders/{}"]  # normPath ref
+
+
+def test_breaking_change_with_no_scanned_consumer_is_not_an_estate_finding(tmp_path):
+    """No resolved consumer -> the breaking change stays the provider's single-repo concern
+    (the Interface contract block), not estate noise."""
+    provider = tmp_path / "orders"
+    (provider / ".sre" / "api-baseline").mkdir(parents=True)
+    (provider / "manifest.yml").write_text("applications:\n- name: orders\n", encoding="utf-8")
+    (provider / "openapi.yaml").write_text(
+        "openapi: 3.0.0\ninfo: {title: o, version: 2.0.0}\npaths:\n  /a:\n    get: {}\n",
+        encoding="utf-8")
+    (provider / ".sre" / "api-baseline" / "openapi.yaml").write_text(
+        "openapi: 3.0.0\ninfo: {title: o, version: 1.0.0}\npaths:\n"
+        "  /a:\n    get: {}\n  /b:\n    get: {}\n",
+        encoding="utf-8")
+    lone = tmp_path / "lone"
+    lone.mkdir()
+    (lone / "manifest.yml").write_text("applications:\n- name: lone\n", encoding="utf-8")
+    r = run_estate([str(provider), str(lone)], work_root=str(tmp_path / "w"), run_id="noc")
+    assert [f for f in (r.findings or []) if f["type"] == "api-breaking-change-blast"] == []

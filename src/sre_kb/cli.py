@@ -290,7 +290,6 @@ def graduation_draft_cmd(
 @app.command()
 def run(
     target: str = typer.Option(..., "--target", help="Local path or git URL of the target repo."),
-    profile: str = typer.Option("java-spring-pcf", "--profile"),
     to_stage: str = typer.Option("validate", "--to-stage", help="scan | scaffold | validate"),
     work_root: str = typer.Option(".work", "--work-root"),
     run_id: str = typer.Option(None, "--run", help="Run id (default: timestamp)."),

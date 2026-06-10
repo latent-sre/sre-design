@@ -1,4 +1,4 @@
-# Base configuration for the sre-kb engine. Overlaid by --profile and env vars
+# Base configuration for the sre-kb engine. Overlaid by env vars
 # (prefix SRE_KB_, nested via __). Secrets come ONLY from env, never this file.
 
 paths:

@@ -479,7 +479,7 @@ offline e2e test exercises; `--from-stage validate` resumes after an enrichment
 session.
 
 ```
-sre-kb run     --target <path|git-url> [--profile java-spring-pcf] [--to-stage scan]
+sre-kb run     --target <path|git-url> [--to-stage scan]
 sre-kb scan    --run <id>            # deterministic facts + scaffold (no LLM)
 sre-kb validate --run <id>           # schema + provenance + crossref + gating
 sre-kb render  --run <id>            # Copilot projection + Backstage catalog

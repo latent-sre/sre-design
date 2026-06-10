@@ -15,19 +15,9 @@ import json
 
 from sre_kb.collectors.base import ScanContext, parse_error_fact
 from sre_kb.models.facts import Fact
-from sre_kb.util import find_line
+from sre_kb.util import dig_ci, find_line
 
 _DETECTOR = "dotnet_steeltoe.config"
-
-
-def _dig_ci(data: object, *keys: str) -> object:
-    """Case-insensitive nested lookup (.NET configuration semantics)."""
-    for key in keys:
-        if not isinstance(data, dict):
-            return None
-        data = next((v for k, v in data.items()
-                     if isinstance(k, str) and k.lower() == key), None)
-    return data
 
 
 def collect(ctx: ScanContext) -> list[Fact]:
@@ -42,7 +32,7 @@ def collect(ctx: ScanContext) -> list[Fact]:
         except (json.JSONDecodeError, ValueError) as exc:
             facts.append(parse_error_fact(ctx, rel, _DETECTOR, exc))
             continue
-        uri = _dig_ci(data, "spring", "cloud", "config", "uri")
+        uri = dig_ci(data, "spring", "cloud", "config", "uri")
         if isinstance(uri, str) and uri:
             ln = find_line(lines, uri) or find_line(lines, "uri") or 1
             facts.append(Fact(

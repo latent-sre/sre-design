@@ -26,6 +26,7 @@ from pathlib import Path
 
 import yaml
 
+from sre_kb.util import artifact_filename
 from sre_kb.collectors.base import ScanContext
 from sre_kb.collectors.llm.gap_finder import _name_in_text, locate
 from sre_kb.models.envelope import Evidence
@@ -339,7 +340,7 @@ def _emit_disabled_gap(layout, root: Path, gap: Fact, service: str) -> None:
         require_verified_provenance=cfg.get("require_verified_provenance", True))
     dest = layout.kb / doc["status"] / "ResiliencyGap"
     dest.mkdir(parents=True, exist_ok=True)
-    (dest / f"{doc['metadata']['name']}.yaml").write_text(
+    (dest / artifact_filename(doc['metadata']['name'])).write_text(
         yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
@@ -411,7 +412,7 @@ def regate_run(layout, target: str, verdicts: dict) -> list[ConfirmOutcome]:
                 {"claimId": o.claim_id, "result": o.result, "note": o.note})
             dest = layout.reports / "rejected" / kind
             dest.mkdir(parents=True, exist_ok=True)
-            (dest / f"{name}.yaml").write_text(
+            (dest / artifact_filename(name)).write_text(
                 yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8")
             path.unlink()
             break

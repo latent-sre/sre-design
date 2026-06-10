@@ -214,15 +214,10 @@ def confirm_gap(
     )
     # §3.3 flywheel trigger: crossing the threshold announces itself — a maintainer should not
     # have to remember to poll graduation-candidates for the moment a category becomes ready.
-    from sre_kb.config import load_config
+    from sre_kb.graduation import configured_threshold, time_to_graduate_message
 
-    threshold = int((load_config().get("graduation") or {}).get("confirmation_threshold", 5))
-    if not false_positive and cat.is_candidate(threshold):
-        typer.echo(
-            f"time to graduate: '{category}' has {cat.confirmed} confirmation(s) with zero "
-            f"false positives — run `sre-kb graduation-candidates --target {target}` for the "
-            "deterministic signature sketch"
-        )
+    if not false_positive and cat.is_candidate(configured_threshold()):
+        typer.echo(time_to_graduate_message(category, cat.confirmed, target))
 
 
 @app.command("graduation-candidates")
@@ -232,11 +227,10 @@ def graduation_candidates(
     """Show graduation status; for each promotion-ready category, draft the deterministic signature to
     review and merge (assisted promotion — the engine never edits its own rules)."""
     from sre_kb.collectors.llm.gap_finder import gap_categories, target_concerns
-    from sre_kb.config import load_config
-    from sre_kb.graduation import GraduationTracker, draft_signature
+    from sre_kb.graduation import GraduationTracker, configured_threshold, draft_signature
     from sre_kb.pipeline.confirm import confirm_emitted_categories
 
-    threshold = int((load_config().get("graduation") or {}).get("confirmation_threshold", 5))
+    threshold = configured_threshold()
     tracker = GraduationTracker.load(target)
     if not tracker.categories:
         typer.echo("no gap confirmations recorded yet")
@@ -276,12 +270,11 @@ def graduation_draft_cmd(
     hand. Advisory only — nothing is auto-applied, so the taxonomy→Tier-A promotion loop closes
     without the engine ever editing its own rules.
     """
-    from sre_kb.config import load_config
-    from sre_kb.graduation import GraduationTracker
+    from sre_kb.graduation import GraduationTracker, configured_threshold
     from sre_kb.llm.provider import make_provider
     from sre_kb.pipeline.graduation_draft import draft_candidates
 
-    threshold = int((load_config().get("graduation") or {}).get("confirmation_threshold", 5))
+    threshold = configured_threshold()
     if not GraduationTracker.load(target).candidates(threshold):
         typer.echo(f"no promotion-ready categories (threshold {threshold}) — nothing to draft")
         raise typer.Exit(code=0)
@@ -413,7 +406,6 @@ def findings(
     """Print a ranked SRE risk digest (data-loss, uncontained critical deps) for a run."""
     import json
 
-    from sre_kb.config import load_config
     from sre_kb.render import load_kb
     from sre_kb.render.project import service_name
     from sre_kb.reporting import collect_findings, graduation_findings, render_md, render_text
@@ -423,8 +415,9 @@ def findings(
     docs = load_kb(layout.root)
     found = collect_findings(docs)
     if target is not None:
-        threshold = int((load_config().get("graduation") or {}).get("confirmation_threshold", 5))
-        found += graduation_findings(target, threshold)
+        from sre_kb.graduation import configured_threshold
+
+        found += graduation_findings(target, configured_threshold())
     service = service_name(docs)
     if fmt == "json":
         typer.echo(json.dumps({"service": service, "runId": run_id, "findings": found}, indent=2))
@@ -818,17 +811,16 @@ def confirm_apply_cmd(
     if recorded:
         # §3.3 flywheel trigger, same as confirm-gap: a category these verdicts just made
         # promotion-ready announces itself instead of waiting to be polled.
-        from sre_kb.config import load_config
-        from sre_kb.graduation import GraduationTracker
+        from sre_kb.graduation import (
+            GraduationTracker,
+            configured_threshold,
+            time_to_graduate_message,
+        )
 
-        threshold = int((load_config().get("graduation") or {}).get("confirmation_threshold", 5))
         tracker = GraduationTracker.load(Path(tgt))
-        for cat in tracker.candidates(threshold):
+        for cat in tracker.candidates(configured_threshold()):
             if recorded.get(cat.category) == "confirmation":
-                typer.echo(
-                    f"  time to graduate: '{cat.category}' has {cat.confirmed} confirmation(s) "
-                    f"with zero false positives — run `sre-kb graduation-candidates --target {tgt}`"
-                )
+                typer.echo("  " + time_to_graduate_message(cat.category, cat.confirmed, tgt))
 
 
 @app.command("gap-finder")

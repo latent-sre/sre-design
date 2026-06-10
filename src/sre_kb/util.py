@@ -25,6 +25,39 @@ def dig(data: Any, *keys: str) -> Any:
     return cur
 
 
+def dig_ci(data: Any, *keys: str) -> Any:
+    """`dig` with case-insensitive key matching (.NET configuration semantics)."""
+    cur = data
+    for key in keys:
+        if not isinstance(cur, dict):
+            return None
+        cur = next((v for k, v in cur.items()
+                    if isinstance(k, str) and k.lower() == key.lower()), None)
+    return cur
+
+
+def url_host(value: Any) -> str:
+    """The bare hostname of a route/baseUrl/URL: scheme, path, and port stripped, lowercased.
+    Every consumer of a hostname join (the estate route<->baseUrl resolution, frontend client
+    naming) MUST normalize through this one function — an asymmetry silently breaks the join."""
+    rest = str(value or "").split("://", 1)[-1]
+    return rest.split("/", 1)[0].rsplit(":", 1)[0].strip().lower()
+
+
+def artifact_filename(name: object) -> str:
+    """Filesystem-safe `<name>.yaml` for an artifact write. A valid metadata.name
+    (^[a-z0-9][a-z0-9-]*$) passes through unchanged (slug is the identity on it); anything
+    else — notably a REJECTED doc whose very rejection may be a hostile name carrying path
+    separators — is slugged so the write can never escape its directory."""
+    return f"{slug(str(name))}.yaml"
+
+
+def first_url_arg(args: tuple[str, ...]) -> str | None:
+    """The first string-literal call argument that looks like a URL or path — the
+    consumer-side contract anchor every stack's http.egress collector captures identically."""
+    return next((a for a in args if a.startswith(("http://", "https://", "/"))), None)
+
+
 def parse_duration_ms(value: str | None) -> int | None:
     if value is None:
         return None

@@ -19,6 +19,22 @@ import yaml
 
 TRACKER_REL = ".sre/graduation-tracker.yaml"
 DEFAULT_THRESHOLD = 5
+
+
+def configured_threshold() -> int:
+    """The confirmation threshold from config (`graduation.confirmation_threshold`) — the one
+    accessor every CLI/report site uses, so the knob and its default live in one place."""
+    from sre_kb.config import load_config
+
+    return int((load_config().get("graduation") or {}).get("confirmation_threshold",
+                                                           DEFAULT_THRESHOLD))
+
+
+def time_to_graduate_message(category: str, confirmed: int, target) -> str:
+    """The §3.3 flywheel announcement, single-sourced so every channel says the same thing."""
+    return (f"time to graduate: '{category}' has {confirmed} confirmation(s) with zero "
+            f"false positives — run `sre-kb graduation-candidates --target {target}` for the "
+            "deterministic signature sketch")
 _MAX_ANCHORS = 5  # sample anchors kept per category, as evidence to seed the signature draft
 
 

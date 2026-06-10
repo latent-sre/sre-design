@@ -124,14 +124,14 @@ def _run_confirm(layout: RunLayout, provider) -> dict:
             "note": f"{len(verdicts)} verdict(s)"}
 
 
-def _write_proposals(target: Path, rel: str, task: str, data) -> dict:
+def _write_proposals(target: Path, rel: str, task: str, data, key: str = "proposals") -> dict:
     """Land a parsed proposals object where the manual loop would have written it."""
     out = target / rel
     out.parent.mkdir(parents=True, exist_ok=True)
-    doc = data if isinstance(data, dict) else {"proposals": data}
+    doc = data if isinstance(data, dict) else {key: data}
     out.write_text(json.dumps(doc, indent=2), encoding="utf-8")
-    n = len(doc.get("proposals") or [])
-    return {"task": task, "status": "written", "output": str(out), "note": f"{n} proposal(s)"}
+    n = len(doc.get(key) or [])
+    return {"task": task, "status": "written", "output": str(out), "note": f"{n} {key[:-1]}(s)"}
 
 
 def _run_draft_alerts(layout: RunLayout, provider, target: Path) -> dict:
@@ -256,12 +256,7 @@ def _run_narrate_diagrams(layout: RunLayout, provider, target: Path) -> dict:
     if data is None:
         return {"task": "narrate-diagrams", "status": "deferred",
                 "note": "unparseable reply — task left to the manual loop"}
-    out = target / PROPOSALS_REL
-    out.parent.mkdir(parents=True, exist_ok=True)
-    doc = data if isinstance(data, dict) else {"narrations": data}
-    out.write_text(json.dumps(doc, indent=2), encoding="utf-8")
-    return {"task": "narrate-diagrams", "status": "written", "output": str(out),
-            "note": f"{len(doc.get('narrations') or [])} narration(s)"}
+    return _write_proposals(target, PROPOSALS_REL, "narrate-diagrams", data, key="narrations")
 
 
 def run_scan_worklist(layout: RunLayout, worklist: dict, provider, *, target: Path) -> list[dict]:

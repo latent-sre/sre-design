@@ -8,7 +8,7 @@ import re
 
 from sre_kb.inventory_signatures import is_broker, is_datastore
 from sre_kb.synth.emit import emit
-from sre_kb.util import slug
+from sre_kb.util import slug, url_host
 
 _IP_HOST = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
 
@@ -73,13 +73,10 @@ def library_version_skew(services: list[dict],
     return findings
 
 
-def _host(value: object) -> str:
-    """The bare hostname of a route or baseUrl: scheme, path, and port stripped, lowercased.
-    Both sides of the route<->baseUrl join MUST normalize identically — Spring config commonly
-    omits the scheme (`base-url: callee.apps.internal`) and an internal route can carry a port
-    (`callee.apps.internal:8080`); either asymmetry silently breaks the join."""
-    rest = str(value or "").split("://", 1)[-1]
-    return rest.split("/", 1)[0].rsplit(":", 1)[0].strip().lower()
+# Both sides of the route<->baseUrl join MUST normalize identically — Spring config commonly
+# omits the scheme (`base-url: callee.apps.internal`) and an internal route can carry a port
+# (`callee.apps.internal:8080`); util.url_host is the single normalizer.
+_host = url_host
 
 
 def _impacted_flows(res: str, ntype: str, owners: dict, fs_by_service: dict) -> list[str]:
@@ -107,8 +104,10 @@ def _impacted_flows(res: str, ntype: str, owners: dict, fs_by_service: dict) -> 
     return impacted
 
 
-def _route_owners(services: list[dict]) -> dict[str, str]:
-    """hostname -> owning scanned service, from each service's PCF route declarations."""
+def route_owners(services: list[dict]) -> dict[str, str]:
+    """hostname -> owning scanned service, from each service's PCF route declarations.
+    Computed once per estate run (the runner passes it to every join) — the three joins must
+    never normalize differently."""
     out: dict[str, str] = {}
     for s in services:
         app = s["fs"].first("pcf.app")
@@ -119,13 +118,14 @@ def _route_owners(services: list[dict]) -> dict[str, str]:
     return out
 
 
-def ambiguous_call_edges(services: list[dict]) -> list[dict]:
+def ambiguous_call_edges(services: list[dict],
+                         route_owner: dict[str, str] | None = None) -> list[dict]:
     """Cross-repo edge candidates the deterministic join must NOT guess (§3.2/§5.6): an
     IP-literal baseUrl (it could be anything) and an unmatched hostname whose first label
     matches a scanned service's name (an alias suspicion). Each becomes a confirm-worklist
     item and an advisory finding — never an invented edge; the graph stays downgrade-only
     honest."""
-    route_owner = _route_owners(services)
+    route_owner = route_owners(services) if route_owner is None else route_owner
     by_slug = {slug(s["service"]): s["service"] for s in services}
     items: list[dict] = []
     for s in services:
@@ -207,7 +207,8 @@ def _consumer_paths(fs, provider: str, route_owner: dict[str, str],
     return out
 
 
-def contract_change_blast(services: list[dict], edges: list[dict]) -> list[dict]:
+def contract_change_blast(services: list[dict], edges: list[dict],
+                          route_owner: dict[str, str] | None = None) -> list[dict]:
     """Estate-level blast radius for breaking API changes (§5.5): a provider whose baseline
     diff produced breaking `api.contract.change` facts impacts every scanned consumer with a
     resolved `calls` edge to it — 'this change breaks services X, Y', not a single-repo note.
@@ -215,7 +216,7 @@ def contract_change_blast(services: list[dict], edges: list[dict]) -> list[dict]
     endpoint is additionally labeled `preciselyImpacted`."""
     names = {s["service"] for s in services}
     fs_by_service = {s["service"]: s["fs"] for s in services}
-    route_owner = _route_owners(services)
+    route_owner = route_owners(services) if route_owner is None else route_owner
     consumers_of: dict[str, set[str]] = {}
     providers_of: dict[str, set[str]] = {}
     for e in edges:
@@ -270,7 +271,7 @@ def build_estate(services: list[dict],
     # Pass 1: each service's PCF route hostnames, so a config-declared baseUrl pointing at
     # another scanned service resolves to a real service->service edge, not an external node.
     # A provider with an ingested OpenAPI spec backs its resolved edges with that contract.
-    route_owner = _route_owners(services)
+    route_owner = route_owners(services)
     has_contract = {s["service"]: bool(s["fs"].of("api.spec.endpoint")) for s in services}
 
     for s in services:

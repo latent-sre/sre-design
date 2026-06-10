@@ -5,7 +5,9 @@ from sre_kb.graduation.state import (
     TRACKER_REL,
     ConfirmedCategory,
     GraduationTracker,
+    configured_threshold,
     draft_signature,
+    time_to_graduate_message,
 )
 
 __all__ = [
@@ -13,5 +15,7 @@ __all__ = [
     "TRACKER_REL",
     "ConfirmedCategory",
     "GraduationTracker",
+    "configured_threshold",
     "draft_signature",
+    "time_to_graduate_message",
 ]

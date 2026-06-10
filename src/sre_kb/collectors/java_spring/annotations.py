@@ -11,7 +11,7 @@ from __future__ import annotations
 from sre_kb.collectors.base import ScanContext
 from sre_kb.collectors.java_spring.flow_builder import SAVE_METHODS
 from sre_kb.models.facts import Fact, Symbol
-from sre_kb.util import fqn, swallow_level
+from sre_kb.util import first_url_arg, fqn, swallow_level
 
 _MAPPING = {
     "@GetMapping": "GET", "@PostMapping": "POST", "@PutMapping": "PUT",
@@ -104,8 +104,7 @@ def collect(ctx: ScanContext) -> list[Fact]:
                         attrs = {"class": tfqn}
                         # A literal URL/path argument is the consumer-side contract anchor the
                         # OpenAPI estate join needs (NEXT-INCREMENTS §5.5 residual).
-                        url = next((a for a in c.str_args
-                                    if a.startswith(("http://", "https://", "/"))), None)
+                        url = first_url_arg(c.str_args)
                         if url:
                             attrs["url"] = url
                         facts.append(Fact(

@@ -414,3 +414,25 @@ def test_near_name_client_key_never_draws_a_lookalike_external_node(tmp_path):
     assert "Orders_Service" not in names  # no lookalike node
     items = __import__("json").loads((r.root / "confirm" / "edge-calls.json").read_text())["items"]
     assert items[0]["candidate"] == "orders-service"  # routed to confirmation instead
+
+
+def test_hostile_binding_name_yields_a_contained_slugged_artifact(tmp_path):
+    """A hostile binding name with path separators must never become a path: emit() slugs
+    metadata.name at the source, and artifact_filename() is the backstop on every artifact
+    write (incl. the rejected-doc spill, where the name may be hostile precisely because
+    validation failed on it)."""
+    from sre_kb.util import artifact_filename
+
+    for svc in ("a", "b"):
+        d = tmp_path / svc
+        d.mkdir()
+        (d / "manifest.yml").write_text(
+            f"applications:\n- name: {svc}\n  services:\n  - ../../pwn\n", encoding="utf-8")
+    r = run_estate([str(tmp_path / "a"), str(tmp_path / "b")],
+                   work_root=str(tmp_path / "w"), run_id="hostile")
+    files = [p.relative_to(r.root) for p in r.root.rglob("*.yaml")]
+    assert files and all(".." not in p.parts for p in files)   # nothing traversed
+    assert any(p.name == "pwn-cotenancy.yaml" for p in files)  # slugged, contained
+    # the write-time backstop holds even for a name that skipped emit()'s slugging
+    assert artifact_filename("../../pwn") == "pwn.yaml"
+    assert artifact_filename("../../../etc/passwd") == "etc-passwd.yaml"

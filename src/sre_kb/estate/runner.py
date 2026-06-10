@@ -17,6 +17,7 @@ from sre_kb.estate.topology import (
     build_estate,
     contract_change_blast,
     library_version_skew,
+    route_owners,
 )
 from sre_kb.render.diagrams import (
     TOPOLOGY_LEGEND,
@@ -25,7 +26,7 @@ from sre_kb.render.diagrams import (
     topology_overlays,
 )
 from sre_kb.tiers import AST
-from sre_kb.util import slug
+from sre_kb.util import artifact_filename, slug
 from sre_kb.validation.gating import final_status
 from sre_kb.validation.provenance import verify_evidence_roots
 from sre_kb.validation.report import write_report
@@ -80,11 +81,12 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
 
     docs = build_estate(services, tuple(internal_namespaces))
     topo_edges = next((d["spec"]["edges"] for d in docs if d["kind"] == "Topology"), [])
+    route_owner = route_owners(services)  # computed once; every join normalizes identically
     findings = (library_version_skew(services, tuple(internal_namespaces))
-                + contract_change_blast(services, topo_edges))
+                + contract_change_blast(services, topo_edges, route_owner))
     # §3.2/§5.6: ambiguous baseUrls (IP literals, alias-suspect hostnames) are never guessed
     # into edges — they become confirm-worklist items plus advisory findings.
-    ambiguous = ambiguous_call_edges(services)
+    ambiguous = ambiguous_call_edges(services, route_owner)
     if ambiguous:
         confirm_dir = layout.root / "confirm"
         confirm_dir.mkdir(parents=True, exist_ok=True)
@@ -119,7 +121,7 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
         d["status"] = status
         out = (layout.reports / "rejected" if status == "rejected" else layout.kb_dir(status)) / d["kind"]
         out.mkdir(parents=True, exist_ok=True)
-        _dump(out / f"{d['metadata']['name']}.yaml", d)
+        _dump(out / artifact_filename(d['metadata']['name']), d)
         by_status[status] = by_status.get(status, 0) + 1
         records.append(
             {"artifact": f"{d['kind']}/{d['metadata']['name']}", "status": status,

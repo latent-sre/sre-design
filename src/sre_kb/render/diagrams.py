@@ -9,6 +9,7 @@ import re
 # syntax — render-integrity, not RCE. It lives in `render.templating` (registered there as the
 # `mermaid` Jinja filter too) so the sanitizer has exactly one definition across templates and Python.
 from sre_kb.render.templating import mermaid as _mm
+from sre_kb.util import slug
 
 _PARTICIPANT = {
     "http-egress": "Downstream",
@@ -22,8 +23,6 @@ def known_http_clients(docs: list[dict]) -> dict[str, str]:
     """slug -> display name for the configured HTTP clients (Dependency `type: http`) — the
     targets every sequence diagram (projection, runbook, Copilot instructions) names instead
     of the `Downstream` catch-all, so the same flow never renders two different casts."""
-    from sre_kb.util import slug
-
     return {slug(d["spec"]["name"]): d["spec"]["name"] for d in docs
             if d.get("kind") == "Dependency" and (d.get("spec") or {}).get("type") == "http"}
 
@@ -34,8 +33,6 @@ def mermaid_sequence(flow: dict, known_targets: dict[str, str] | None = None) ->
     live on the index-parallel `sinks` list, so pairing applies only when the deriver built
     steps and sinks in one ordered walk (the `_lossy_sink` guard); otherwise every step keeps
     its generic participant rather than mispairing."""
-    from sre_kb.util import slug
-
     spec = flow.get("spec", {})
     trigger = spec.get("trigger", {})
     service = (flow.get("metadata") or {}).get("service", "service")
@@ -51,16 +48,15 @@ def mermaid_sequence(flow: dict, known_targets: dict[str, str] | None = None) ->
                 return "P_" + re.sub(r"[^A-Za-z0-9]", "_", target), known_targets[target]
         return _PARTICIPANT.get(step.get("kind", ""), "Dependency"), None
 
+    pairs = [peer_of(step, sink) for step, sink in zip(steps, paired)]
     out = ["sequenceDiagram", "  actor Client", f"  participant SVC as {_mm(service)}"]
     declared: set[str] = set()
-    for step, sink in zip(steps, paired):
-        pid, label = peer_of(step, sink)
+    for pid, label in pairs:
         if label is not None and pid not in declared:
             declared.add(pid)
             out.append(f"  participant {pid} as {_mm(label)}")
     out.append(f"  Client->>SVC: {_mm(trigger.get('method', ''))} {_mm(trigger.get('path', ''))}".rstrip())
-    for step, sink in zip(steps, paired):
-        peer, _ = peer_of(step, sink)
+    for step, (peer, _) in zip(steps, pairs):
         out.append(f"  SVC->>{peer}: {_mm(step.get('name', 'step'))}")
         notes = []
         for fm in step.get("failureModes", []):
@@ -126,10 +122,13 @@ def topology_overlays(topology: dict, docs: list[dict]) -> tuple[dict[str, str],
     slug, channel) while topology nodes carry the platform binding name, so attribution is a
     direct (slug) match or — when exactly one topology node has the matching type — the sole
     node the write can be going to (the same rule the estate co-tenancy join uses)."""
-    from sre_kb.util import slug
-
     nodes = {n.get("name"): n.get("type", "service")
              for n in (topology.get("spec") or {}).get("nodes", []) if n.get("name")}
+    # One pass over the (small) node set up front, instead of a slug scan per BlastRadius doc.
+    by_slug = {slug(n): n for n in nodes}
+    by_type: dict[str, list[str]] = {}
+    for n, ntype in nodes.items():
+        by_type.setdefault(ntype, []).append(n)
     tiers: dict[str, str] = {}
     lossy: set[str] = set()
     for d in docs:
@@ -140,15 +139,19 @@ def topology_overlays(topology: dict, docs: list[dict]) -> tuple[dict[str, str],
                 tiers[svc] = spec["tier"]
         elif d.get("kind") == "BlastRadius" and (spec.get("stateful") or {}).get("dataLossRisk"):
             node = spec.get("node") or {}
-            target = slug(str(node.get("name")))
-            direct = next((n for n in nodes if slug(n) == target), None)
-            of_type = [n for n, t in nodes.items() if t == node.get("type")]
+            direct = by_slug.get(slug(str(node.get("name"))))
+            of_type = by_type.get(node.get("type"), [])
             if direct:
                 lossy.add(direct)
             elif len(of_type) == 1:
                 lossy.add(of_type[0])
     return tiers, lossy
 
+
+# Markdown filename stem per diagram-bearing kind — owned HERE so the renderers
+# (render/project.py) and the narration ingest (pipeline/diagram_narration.py) can never
+# drift apart on what a diagram's file is called.
+DIAGRAM_FILE_STEM = {"Flow": "{}", "Topology": "{}-topology", "Architecture": "{}-architecture"}
 
 _SHARED_GROUP = "shared (co-tenant)"
 

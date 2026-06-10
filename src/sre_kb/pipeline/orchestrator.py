@@ -41,6 +41,7 @@ from sre_kb.validation.report import write_report
 from sre_kb.validation.safety import lint_doc
 from sre_kb.validation.structural import validate_doc
 from sre_kb.validation.substance import check_substance
+from sre_kb.util import artifact_filename
 from sre_kb.workspace import RunLayout
 
 STAGES = ("scan", "scaffold", "validate", "render", "publish")
@@ -191,7 +192,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         # premature write here so the same file isn't written twice (stale spec then final).
         if d.get("kind") != "ReadinessScore":
             out = _dest_dir(layout, status, d["kind"])
-            _dump_yaml(out / f"{d['metadata']['name']}.yaml", d)
+            _dump_yaml(out / artifact_filename(d['metadata']['name']), d)
         by_status[status] = by_status.get(status, 0) + 1
         by_tier[s["tier"]] = by_tier.get(s["tier"], 0) + 1
         rec = {
@@ -214,7 +215,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         if d.get("kind") == "ReadinessScore":
             d["spec"] = readiness_spec(fs, others, fs.of("budget.finding"))
             _dump_yaml(
-                _dest_dir(layout, d["status"], "ReadinessScore") / f"{d['metadata']['name']}.yaml", d
+                _dest_dir(layout, d["status"], "ReadinessScore") / artifact_filename(d["metadata"]["name"]), d
             )
 
     timings["validateMs"] = int((time.perf_counter() - t0) * 1000)

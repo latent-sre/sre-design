@@ -10,6 +10,7 @@ import yaml
 from sre_kb.render.catalog import catalog_info
 from sre_kb.render.copilot import copilot_instructions, runbook_markdown
 from sre_kb.render.diagrams import (
+    DIAGRAM_FILE_STEM,
     TOPOLOGY_LEGEND,
     architecture_caption,
     diagram_markdown,
@@ -46,10 +47,11 @@ def service_name(docs: list[dict]) -> str:
 
 
 def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
+    stem = DIAGRAM_FILE_STEM["Flow"].format(doc["metadata"]["name"])
     name = doc["metadata"]["name"]
     src = mermaid_sequence(doc, known_targets=known_http_clients(docs))
-    (proj / "diagrams" / f"{name}.mmd").write_text(src, encoding="utf-8")
-    (proj / "diagrams" / f"{name}.md").write_text(
+    (proj / "diagrams" / f"{stem}.mmd").write_text(src, encoding="utf-8")
+    (proj / "diagrams" / f"{stem}.md").write_text(
         diagram_markdown(f"{name} — flow", src), encoding="utf-8"
     )
 
@@ -62,20 +64,22 @@ def _render_runbook(doc: dict, proj: Path, flows: dict[str, dict], docs: list[di
 
 
 def _render_topology(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
+    stem = DIAGRAM_FILE_STEM["Topology"].format(doc["metadata"]["name"])
     name = doc["metadata"]["name"]
     tiers, lossy = topology_overlays(doc, docs)
     src = mermaid_topology(doc, tiers=tiers, lossy=lossy)
-    (proj / "diagrams" / f"{name}-topology.mmd").write_text(src, encoding="utf-8")
-    (proj / "diagrams" / f"{name}-topology.md").write_text(
+    (proj / "diagrams" / f"{stem}.mmd").write_text(src, encoding="utf-8")
+    (proj / "diagrams" / f"{stem}.md").write_text(
         diagram_markdown(f"{name} — topology", src, TOPOLOGY_LEGEND), encoding="utf-8"
     )
 
 
 def _render_architecture(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
+    stem = DIAGRAM_FILE_STEM["Architecture"].format(doc["metadata"]["name"])
     name = doc["metadata"]["name"]
     src = mermaid_architecture(doc)
-    (proj / "diagrams" / f"{name}-architecture.mmd").write_text(src, encoding="utf-8")
-    (proj / "diagrams" / f"{name}-architecture.md").write_text(
+    (proj / "diagrams" / f"{stem}.mmd").write_text(src, encoding="utf-8")
+    (proj / "diagrams" / f"{stem}.md").write_text(
         diagram_markdown(f"{name} — architecture", src, architecture_caption(doc)),
         encoding="utf-8")
 

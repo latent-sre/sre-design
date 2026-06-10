@@ -57,10 +57,11 @@ the suggested sequencing. Companion docs: [`DESIGN.md`](DESIGN.md) (architecture
    — and Copilot working inside it — validates `apiVersion`/`kind` documents against the real
    JSON Schema as it types. That is the strongest form of "schema reference for skills": the
    skill no longer describes the shape; the IDE enforces it.
-6. **Schema evolution story.** Before any `v1alpha1 → v1beta1` bump, support
-   `deprecated: true` markers and field aliasing in the validator so a rename gets a
-   soft-deprecation window. The apiVersion triangle is already lock-stepped
-   (`test_schema_governance.py:53`); evolution is the missing half.
+6. **Schema evolution story** — **done.** A renamed spec field keeps its old property
+   declared with `deprecated: true` + `x-renamed-to: <newName>`; the validator
+   canonicalizes old → new (new wins when both are set) so old documents stay valid for one
+   apiVersion, and every deprecated-field use surfaces as a warning in
+   `DocResult.warnings` / `validate-kb` output — warned, never failing.
 
 ## 2. Diagram ("drawings") rendering
 
@@ -93,12 +94,11 @@ visual encoding; no grouping; output is bare `.mmd` that GitHub won't render inl
 4. **Estate subgraphs** — **done** (pre-§4.3 form). A topology with 2+ services clusters
    each service with its exclusive resources and puts anything touched by several services
    in a shared (co-tenant) cluster. Still open: group by org/space once §4.3 lands.
-5. **Architecture context diagram.** A C4-style context view rendered from the
-   `Architecture` artifact (components + patterns) — same Mermaid pipeline, new projector.
-6. **(Tier-B, cheap) Diagram narration.** Add a worklist task where the LLM writes the
-   one-paragraph "what this drawing shows / what to worry about" caption from the artifact
-   JSON (closed-world input, pointer-generator rules, advisory rendering). Drawings are the
-   one projection with no prose today.
+5. **Architecture context diagram** — **done.** The `Architecture` artifact has a registry
+   renderer: the service as a boundary subgraph, components clustered per detected layer,
+   and only the edges the component types assert (Client → web handlers; inter-component
+   calls are never invented). Patterns/style tags render as the wrapper caption.
+6. **(Tier-B, cheap) Diagram narration** — **done** (`narrate-diagrams`, see §3.2).
 
 ## 3. AI integration after the "LLM gate"
 
@@ -118,14 +118,17 @@ through that seam, not rebuilding trust machinery.
    estate-wide fan-out, and drift-triggered re-scans — with `CachingProvider`
    (`provider.py:121-150`) keeping CI replayable. This is the single highest-leverage AI
    item; everything below rides on the same worklist.
-2. **New Tier-B worklist tasks** (each reuses the existing untrusted-framed context packs and
-   re-grounding):
-   - *PCF deployment review* — judgment calls over `pcf.app` facts: single-instance critical
-     app, `health-check-type: port` on an HTTP service, missing `disk_quota`, env-var config
-     that belongs in a service binding (pairs with §4).
-   - *Cross-repo edge confirmation* — ambiguous estate matches (IP baseUrls, aliased
-     hostnames) go to the confirm loop instead of being guessed (pairs with §5.6).
-   - *Diagram narration* (§2.6).
+2. **New Tier-B worklist tasks** — **done**, on the existing trust spine:
+   - *PCF deployment review* (`review-pcf` task → `sre-kb pcf-review` ingest): the provider
+     judges which manifests deserve attention; the engine re-derives every accepted check
+     from the manifest bytes (`pipeline/pcf_review.py`) and refutes what they disprove.
+     Survivors are advisory findings in `.sre/pcf-review.json`.
+   - *Cross-repo edge confirmation*: IP-literal baseUrls and alias-suspect hostnames/client
+     keys are never guessed into edges — each becomes a `confirm/edge-calls.json` item plus
+     a `possible-call-edge` advisory finding in the estate report (§5.6).
+   - *Diagram narration* (`narrate-diagrams` task → `sre-kb narrate-diagrams` ingest):
+     captions apply only to diagrams the run rendered, sanitized to one plain paragraph,
+     always labeled advisory in the projection markdown (§2.6).
 3. **Close the graduation flywheel** — **done** (per-target form). Crossing the
    confirmation threshold with zero false positives announces itself: `confirm-gap` and
    `confirm-apply` echo a time-to-graduate message the moment a category becomes ready, and
@@ -209,20 +212,21 @@ collected** — these are joins in `build_estate`, not new collectors.
    dependencies matching the `estate.internal_namespaces` allowlist into `library` nodes
    with `uses-library` edges, and the estate report carries a `library-version-skew`
    finding when services pin different versions. Still open: go.mod/csproj version capture.
-4. **SPA → backend edges.** Extend the Node collector to read what frontends already declare:
-   `proxy` in package.json, vite/webpack devServer proxies, `.env` `*_API_URL` vars, axios
-   `baseURL` constants — emit them as `config.client`-equivalent facts so SPAs flow through
-   increment 1 unchanged. Add a `frontend` node type to `Topology` + `_SHAPE`. A SPA repo and
-   its API repo then connect with zero manual declaration.
-5. **OpenAPI contract join.** Match a provider's spec endpoints (`api.spec.endpoint`) against
-   consumers' `http.egress` paths → contract-backed edges; estate-level blast radius for a
-   breaking change becomes "this `api.contract.change` impacts services X, Y" instead of a
-   single-repo finding.
-6. **Tier-B confirm for ambiguous matches.** IP-literal baseUrls, aliased hostnames, and
-   wildcard routes don't get guessed — they become confirm-worklist items (the existing
-   precision gate, §3.2), keeping the estate graph downgrade-only honest.
-7. **Transitive impact.** With real edges from 1–2, fold the estate graph (bounded depth) so
-   `BlastRadius.impactedServices` includes A→B→C reach, not just direct neighbors.
+4. **SPA → backend edges** — **done.** The `node_express.frontend` collector reads CRA
+   `proxy`, vite/webpack devServer proxy targets, `.env` `*_API_URL` vars, and absolute
+   axios `baseURL` constants into `config.client` facts, so SPAs flow through increment 1
+   unchanged; frontend repos render as a `frontend` node type. A SPA and its API repo
+   connect with zero manual declaration.
+5. **OpenAPI contract join** — **done** (provider-keyed form). A resolved `calls` edge to a
+   provider with ingested OpenAPI endpoints carries `contract: openapi`, and breaking
+   baseline-diff changes raise an estate `api-breaking-change-blast` finding naming every
+   scanned consumer. Path-level matching against consumers' `http.egress` stays open —
+   egress facts carry no paths today.
+6. **Tier-B confirm for ambiguous matches** — **done** (see §3.2: `confirm/edge-calls.json`
+   + `possible-call-edge` findings; the graph stays downgrade-only honest).
+7. **Transitive impact** — **done.** Co-tenancy `BlastRadius` walks resolved `calls` edges
+   against their direction (bounded depth 3): `impactedServices` includes the A→B→C reach,
+   with the transitive subset labeled `indirectServices`.
 
 ## 6. Suggested sequencing
 

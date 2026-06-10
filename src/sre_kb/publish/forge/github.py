@@ -9,6 +9,7 @@ without a token or network; the defaults shell out to `git` and urllib.
 from __future__ import annotations
 
 import base64
+import contextvars
 import json
 import os
 import re
@@ -25,6 +26,11 @@ from sre_kb.publish.manifest import merge_tree
 
 _GIT_USER = ["-c", "user.email=sre-kb@users.noreply.github.com", "-c", "user.name=sre-kb"]
 _GIT_TIMEOUT_S = 300  # bound each git subprocess so a stalled clone/push can't hang the engine in CI
+
+# A branch ref reaches `git checkout -b`/`push` as an argv token: a leading `-` would be parsed as a
+# git option (arg-injection) and `..`/control chars are not valid ref content. The CLI doesn't expose
+# `--branch` today, but the Forge seam is public API, so the guard lives at the boundary.
+_SAFE_BRANCH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 
 
 def parse_repo(spec: str) -> tuple[str, str]:
@@ -49,31 +55,44 @@ def _redact(cmd: list[str]) -> list[str]:
     return out
 
 
+def _check_branch(branch: str) -> None:
+    if ".." in branch or not _SAFE_BRANCH.match(branch):
+        raise ForgePublishError(f"unsafe branch name: {branch!r}")
+
+
+# The git auth config is carried per-context, not mutated into the process-global os.environ:
+# a global mutation races any concurrent/in-process caller and could leak the auth header into an
+# unrelated git invocation. _default_run reads this and applies it to each git child's own `env=`.
+_GIT_AUTH_ENV: contextvars.ContextVar[dict[str, str] | None] = contextvars.ContextVar(
+    "git_auth_env", default=None
+)
+
+
 @contextmanager
 def _git_auth_env(token: str):
     """Provide git HTTPS auth via env-injected config (GIT_CONFIG_*), so the token is never
     on the `git` command line where `ps` could read it. git >= 2.31 reads these keys."""
     header = "Authorization: Basic " + base64.b64encode(f"x-access-token:{token}".encode()).decode()
-    keys = {
-        "GIT_CONFIG_COUNT": "1",
-        "GIT_CONFIG_KEY_0": "http.https://github.com/.extraheader",
-        "GIT_CONFIG_VALUE_0": header,
-    }
-    saved = {k: os.environ.get(k) for k in keys}
-    os.environ.update(keys)
+    reset = _GIT_AUTH_ENV.set(
+        {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "http.https://github.com/.extraheader",
+            "GIT_CONFIG_VALUE_0": header,
+        }
+    )
     try:
         yield
     finally:
-        for k, v in saved.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
+        _GIT_AUTH_ENV.reset(reset)
 
 
 def _default_run(cmd: list[str]) -> str:
+    auth = _GIT_AUTH_ENV.get()
+    env = {**os.environ, **auth} if auth else None  # scope auth to the git child, not the parent
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=_GIT_TIMEOUT_S)  # noqa: S603
+        res = subprocess.run(  # noqa: S603
+            cmd, capture_output=True, text=True, timeout=_GIT_TIMEOUT_S, env=env
+        )
     except subprocess.TimeoutExpired:
         raise ForgePublishError(
             f"git timed out after {_GIT_TIMEOUT_S}s: {' '.join(_redact(cmd))}"
@@ -129,6 +148,7 @@ class GitHubForge:
         token = self._token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
         if not token:
             raise ForgePublishError("set GITHUB_TOKEN to publish live (or use --dry-run)")
+        _check_branch(branch)
         owner, repo = parse_repo(sre_repo)
         if self._allowed is not None and f"{owner}/{repo}".lower() not in self._allowed:
             raise ForgePublishError(

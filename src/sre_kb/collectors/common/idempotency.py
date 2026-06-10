@@ -21,12 +21,12 @@ from sre_kb.models.facts import Fact, FactSet, Symbol
 from sre_kb.signatures import fires
 from sre_kb.util import slug
 
-_MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
+MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 _LANG = {".java": "java", ".cs": "csharp", ".py": "python",
          ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript", ".go": "go"}
 
 
-def _scope_text(ctx: ScanContext, rel: str, line: int) -> str:
+def scope_text(ctx: ScanContext, rel: str, line: int) -> str:
     """The idempotency-search scope for a handler at `line`: its enclosing type, or — when the handler
     is a free function or the file can't be parsed into a type — the whole file (the conservative
     fallback, so a guard anywhere nearby refutes the absence)."""
@@ -43,10 +43,10 @@ def collect_gaps(ctx: ScanContext, fs: FactSet) -> list[Fact]:
     """Tier-A `missing-idempotency` gaps for mutating routes with no idempotency guard in scope."""
     gaps: list[Fact] = []
     for ep in fs.of("rest.endpoint"):
-        if ep.attrs.get("method") not in _MUTATING:
+        if ep.attrs.get("method") not in MUTATING:
             continue
         rel = ep.evidence.path
-        if fires("idempotency", _scope_text(ctx, rel, ep.evidence.lines.start)):
+        if fires("idempotency", scope_text(ctx, rel, ep.evidence.lines.start)):
             continue  # an idempotency guard is in scope — not a gap
         route = f"{ep.attrs.get('method')} {ep.attrs.get('path', '/')}"
         gaps.append(Fact(

@@ -42,6 +42,13 @@ def collect(ctx: ScanContext) -> list[Fact]:
                         Symbol(handler, "method"),
                     ))
 
+            if "@RefreshScope" in t.annotations:
+                facts.append(Fact(
+                    "config.refreshscope", {"class": tfqn},
+                    ctx.evidence(rel, t.start, t.start, "java_spring.annotations"),
+                    Symbol(tfqn, "class"),
+                ))
+
             if t.kind == "interface" and any("JpaRepository" in s for s in t.supertypes):
                 facts.append(Fact(
                     "db.repository", {"name": t.name},

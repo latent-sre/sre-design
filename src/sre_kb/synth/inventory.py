@@ -8,6 +8,7 @@ its `engine`); its infra fields (backup/RPO/RTO) are platform-DR an app team doe
 from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
+from sre_kb.collectors.common.idempotency import MUTATING, scope_text
 from sre_kb.collectors.common.openapi import normalize_path
 from sre_kb.inventory_signatures import (
     StackSig,
@@ -21,6 +22,7 @@ from sre_kb.inventory_signatures import (
 )
 from sre_kb.models.facts import FactSet
 from sre_kb.scoring.confidence import Signal, confidence
+from sre_kb.signatures import fires
 from sre_kb.synth.emit import emit
 
 
@@ -165,8 +167,19 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
                          for e in endpoints}
 
         def _endpoint(e):
-            ep = {"method": e.attrs.get("method"), "path": e.attrs.get("path"),
-                  "handler": e.attrs.get("handler"), "idempotent": None, "retrySafe": None}
+            # Safe methods are idempotent by HTTP semantics; mutating ones iff an idempotency
+            # guard fires in the handler's scope (the same Tier-A signature the gap collector
+            # uses, so Interface and `missing-idempotency` gaps can never disagree).
+            method = e.attrs.get("method")
+            if method in {"GET", "HEAD", "OPTIONS"}:
+                idem = True
+            elif method in MUTATING:
+                idem = fires("idempotency",
+                             scope_text(ctx, e.evidence.path, e.evidence.lines.start))
+            else:
+                idem = None
+            ep = {"method": method, "path": e.attrs.get("path"),
+                  "handler": e.attrs.get("handler"), "idempotent": idem, "retrySafe": idem}
             if spec_eps:  # only assert documented/undocumented when a spec was ingested
                 key = (e.attrs.get("method"), normalize_path(str(e.attrs.get("path", "/"))))
                 ep["documented"] = key in spec_keys
@@ -220,10 +233,15 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
     config_facts = fs.of("config.slo", "config.client", "config.timelimiter", "config.actuator")
     if config_facts:
         profiles = (app.attrs.get("env") or {}).get("SPRING_PROFILES_ACTIVE") if app else None
+        # Sources are the files the config facts actually cite, plus the manifest env block
+        # when one exists — not a hardcoded list.
+        sources = sorted({f.evidence.path for f in config_facts})
+        if app and app.attrs.get("env"):
+            sources.append("pcf-manifest-env")
         docs.append(emit("ConfigManagement", service, {
-            "sources": ["application.yml", "pcf-manifest-env"],
+            "sources": sources,
             "profiles": [profiles] if profiles else [],
-            "refreshScope": False,
+            "refreshScope": bool(fs.first("config.refreshscope")),
             "properties": [f.attrs for f in config_facts],
         }, [config_facts[0].evidence], "verified", confidence(Signal.DIRECT), service))
 

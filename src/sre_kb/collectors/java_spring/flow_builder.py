@@ -93,9 +93,16 @@ def collect(ctx: ScanContext, fs: FactSet) -> list[Fact]:
             if call.method in _SAVE:
                 repo = _match_repo(repos, rtype)
                 if repo:
+                    # A save inside a logged-and-swallowed catch is silent write loss — the same
+                    # data-loss signal the publish branch carries, on the db sink.
+                    if call.swallow:
+                        fmodes = [{"mode": "db-unavailable", "surfacedAs": "logged-and-swallowed",
+                                   "dataLossRisk": True}]
+                    else:
+                        fmodes = [{"mode": "db-unavailable", "surfacedAs": "http-500"}]
                     raw.append({
                         "line": call.line, "name": "persist", "kind": "db-write",
-                        "failureModes": [{"mode": "db-unavailable", "surfacedAs": "http-500"}],
+                        "failureModes": fmodes,
                         "refs": [], "sink": {"type": "db", "target": slug(repo.attrs["name"])},
                     })
                     continue

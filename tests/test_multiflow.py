@@ -31,3 +31,11 @@ def test_shared_dependency_aggregates_impacted_flows(tmp_path):
     docs = _kb(tmp_path)
     br = docs[("BlastRadius", "account-repository")]
     assert set(br["spec"]["impactedFlows"]) == {"open-account", "close-account"}  # not just the first
+
+
+def test_catalog_entry_provides_every_endpoint(tmp_path):
+    docs = _kb(tmp_path)
+    entry = next(d for (kind, _), d in docs.items() if kind == "ServiceCatalogEntry")
+    assert entry["spec"]["providesApis"] == [
+        "/api/v1/accounts/close", "/api/v1/accounts/open",
+    ]  # all detected endpoints, not just the first flow's trigger

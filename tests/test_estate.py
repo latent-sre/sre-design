@@ -44,6 +44,13 @@ def test_cotenancy_blast_radius_for_shared_db(docs):
     assert co["spec"]["severityHint"] == "critical"
 
 
+def test_cotenancy_impacted_flows_join_each_tenants_flows(docs):
+    # order-service binds one datastore, so its db-sink flow attributes to the shared postgres;
+    # billing-service is read-only (no flow steps), so it contributes services but no flows.
+    co = docs[("BlastRadius", "orders-postgres-cotenancy")]
+    assert co["spec"]["impactedFlows"] == ["order-service/create-order"]
+
+
 def test_unshared_resources_are_not_cotenancy(docs):
     assert ("BlastRadius", "order-kafka-cotenancy") not in docs
     assert ("BlastRadius", "billing-kafka-cotenancy") not in docs

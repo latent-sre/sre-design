@@ -229,6 +229,46 @@ collected** — these are joins in `build_estate`, not new collectors.
 | Needs a decision | §3.1 (provider approval), §4.3 (snapshot convention + redaction shape), §1.5 (publish-tree addition) | Org sign-off or convention design before code |
 | Larger | §5.4, §5.5, §2.5, §3.2, §5.7, §1.6 | New collectors/projectors; build on the above |
 
+## 7. Empty-artifact audit
+
+A sweep of every kind's emit path against its schema found three classes of "empty".
+
+**Never emitted by the engine** (schema + registry row + golden fixture, no emit site):
+
+| Kind | Path to filling it |
+|---|---|
+| `DeliveryPipeline` | parse `cf push` out of checked-in CI files (§4.4) |
+| `SecurityPosture` | Tier-B skill only today; deterministic seeds exist (Spring Security config, auth annotations, actuator exposure) |
+| `Topology` (single-service) | only `sre-kb estate` emits one; derivable from the same binding/client facts in a plain run |
+
+**Hardcoded-empty fields where the engine already had the knowledge** — fixed on this branch:
+
+- Estate co-tenancy `BlastRadius.impactedFlows` was `[]`; now joined from each tenant's
+  `flow.flow` sinks (direct slug match, or the sole binding of the sink's type)
+  (`estate/topology.py:_impacted_flows`).
+- `Interface.endpoints[].idempotent`/`retrySafe` were always `null`; now derived — safe
+  methods by HTTP semantics, mutating methods via the same Tier-A `idempotency` signature the
+  gap collector fires, so the Interface and `missing-idempotency` gaps cannot disagree
+  (`synth/inventory.py`).
+- `ServiceCatalogEntry.providesApis` carried only the first flow's trigger path; now every
+  detected `rest.endpoint` path (`synth/scaffold.py`).
+- `ConfigManagement.sources` was a constant list and `refreshScope` a hardcoded `False`; now
+  the files the config facts actually cite (+ `pcf-manifest-env` only when an env block
+  exists) and a real `@RefreshScope` detection (`config.refreshscope` fact,
+  `collectors/java_spring/annotations.py`).
+- Datastore `BlastRadius.stateful.dataLossRisk` was hardcoded `False`; the missing upstream
+  signal landed too — a `save()` inside a logged-and-swallowed catch now marks the flow's
+  db-write step lossy (`flow_builder.py`), and the BlastRadius derives from it
+  (`synth/scaffold.py:_lossy_sink`).
+
+**Empty by design** (not gaps): `Alert.sloRef: null` on log-pattern alerts (no SLO exists
+yet), `ReadinessScore.evidence: []` (a roll-up, not a source fact), `crossRefs: []` outside
+the Flow→Alert→Runbook→BlastRadius chain, and `metadata.labels`/`annotations` (free envelope
+slots — candidates for run id / criticality tier / org-space once §4.3 lands).
+
+Still open from the audit: the three never-emitted kinds above, `Topology.pcfSpaces` (waits
+on §4.3's org/space source), and parity for the new lossy-save signal in the .NET collector.
+
 The through-line: every increment keeps the engine's core contract — deterministic facts with
 byte provenance, LLM as pointer-generator behind the seam, downgrade-only gating — and most of
 the cross-repo and PCF picture turns out to be *joins over facts already collected*, which is

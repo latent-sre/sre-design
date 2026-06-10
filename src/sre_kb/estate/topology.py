@@ -111,7 +111,10 @@ def build_estate(services: list[dict],
     for s in services:
         name = s["service"]
         fs = s["fs"]
-        nodes[name] = "service"
+        # A scanned repo whose stack is a frontend framework renders as `frontend`: the SPA
+        # connects to its API repo through the same baseUrl join, but the drawing should say
+        # which side the user sits on.
+        nodes[name] = "frontend" if fs.first("tech.frontend") else "service"
         app = fs.first("pcf.app")
         if app:
             topo_evidence.append(app.evidence)

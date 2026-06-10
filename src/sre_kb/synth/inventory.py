@@ -243,7 +243,8 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
     pubs = fs.of("message.egress")
     cons = fs.of("message.consumer")
     if bindings or clients or pubs or cons:
-        topo_nodes: list[dict] = [{"type": "service", "name": service}]
+        own_type = "frontend" if fs.first("tech.frontend") else "service"
+        topo_nodes: list[dict] = [{"type": own_type, "name": service}]
         topo_edges: list[dict] = []
         seen_nodes = {service}
         for sb in bindings:

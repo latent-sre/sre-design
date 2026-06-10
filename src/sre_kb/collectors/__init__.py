@@ -29,6 +29,7 @@ from sre_kb.collectors.java_spring import (
 from sre_kb.collectors.go_net import endpoints as go_endpoints
 from sre_kb.collectors.go_net import go_mod as go_mod_collector
 from sre_kb.collectors.node_express import endpoints as node_endpoints
+from sre_kb.collectors.node_express import frontend as node_frontend
 from sre_kb.collectors.node_express import package_json as node_package_json
 from sre_kb.collectors.python_fastapi import endpoints as python_endpoints
 from sre_kb.flow import budget_check
@@ -59,6 +60,7 @@ _FILE_COLLECTORS: list[CollectorProtocol] = [
     # Node.js (self-gating: no package.json / no *.js -> emit nothing)
     node_package_json.collect,
     node_endpoints.collect,
+    node_frontend.collect,
     # Go (self-gating: no go.mod / no *.go -> emit nothing)
     go_mod_collector.collect,
     go_endpoints.collect,

@@ -181,3 +181,27 @@ def test_same_version_everywhere_is_lineage_without_skew(tmp_path):
     topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
     assert any(n["type"] == "library" for n in topo["spec"]["nodes"])
     assert not r.findings
+
+
+def test_spa_connects_to_its_backend_with_zero_declaration(tmp_path):
+    """§5.4: a React repo declaring its API via vite proxy resolves to a real
+    frontend -> service edge through the same route<->baseUrl join, and the SPA's node
+    renders as `frontend`."""
+    spa = tmp_path / "shop-ui"
+    spa.mkdir()
+    (spa / "package.json").write_text(
+        '{"name": "shop-ui", "dependencies": {"react": "^18.0.0"}}', encoding="utf-8")
+    (spa / "vite.config.ts").write_text(
+        "export default { server: { proxy: {"
+        " '/api': { target: 'http://orders.apps.internal' } } } }\n",
+        encoding="utf-8")
+    api = tmp_path / "orders"
+    api.mkdir()
+    (api / "manifest.yml").write_text(
+        "applications:\n- name: orders\n  routes:\n  - route: orders.apps.internal\n",
+        encoding="utf-8")
+    r = run_estate([str(spa), str(api)], work_root=str(tmp_path / "w"), run_id="spa")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    nodes = {n["name"]: n["type"] for n in topo["spec"]["nodes"]}
+    assert nodes["shop-ui"] == "frontend"
+    assert {"from": "shop-ui", "to": "orders", "relation": "calls"} in topo["spec"]["edges"]

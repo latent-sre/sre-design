@@ -16,7 +16,7 @@ node with more than one attached service.
 ```yaml
 kind: Topology
 spec:
-  nodes: [ { type: service|datastore|broker|topic|resource|library|external, name: orders-postgres }, ... ]
+  nodes: [ { type: service|frontend|datastore|broker|topic|resource|library|external, name: orders-postgres }, ... ]
   edges: [ { from: order-service, to: orders-postgres, relation: binds }, ... ]
   # relation: binds | calls | publishes | consumes | uses-library
   pcfSpaces: []

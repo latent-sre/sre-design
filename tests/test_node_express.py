@@ -163,3 +163,67 @@ def test_static_prefix_and_parenthesized_paths_are_still_routes():
               "app.post('/api/' + version, (req, res) => res.send('ok'));")
     paths = [list(r.annotations.values())[0][""] for r in m.types[0].methods]
     assert paths == ["/health", "/api/"]
+
+
+# --- §5.4 SPA -> backend edges -----------------------------------------------------------------
+def _spa(tmp_path, extra_pkg=""):
+    (tmp_path / "package.json").write_text(
+        '{"name": "shop-ui", "dependencies": {"react": "^18.0.0"}%s}' % extra_pkg,
+        encoding="utf-8")
+
+
+def test_frontend_framework_detected(tmp_path):
+    from sre_kb.collectors.node_express import frontend
+
+    _spa(tmp_path)
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    facts = frontend.collect(ctx)
+    fe = [f for f in facts if f.type == "tech.frontend"]
+    assert len(fe) == 1 and fe[0].attrs["framework"] == "react"
+
+
+def test_package_json_proxy_and_env_api_urls_become_client_facts(tmp_path):
+    from sre_kb.collectors.node_express import frontend
+
+    _spa(tmp_path, ', "proxy": "http://orders.apps.internal"')
+    (tmp_path / ".env").write_text(
+        "VITE_BILLING_API_URL=https://billing.apps.internal/api\nUNRELATED=x\n",
+        encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    clients = {f.attrs["client"]: f.attrs for f in frontend.collect(ctx)
+               if f.type == "config.client"}
+    assert clients["orders"]["baseUrl"] == "http://orders.apps.internal"
+    assert clients["billing"]["baseUrl"] == "https://billing.apps.internal/api"
+    assert all(a["source"] == "frontend" for a in clients.values())
+
+
+def test_vite_proxy_and_axios_baseurl_become_client_facts(tmp_path):
+    from sre_kb.collectors.node_express import frontend
+
+    _spa(tmp_path)
+    (tmp_path / "vite.config.ts").write_text(
+        "export default {\n  server: {\n    proxy: {\n"
+        "      '/api': { target: 'http://orders.apps.internal', changeOrigin: true },\n"
+        "      '/pay': 'https://billing.apps.internal'\n    }\n  }\n}\n",
+        encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "http.ts").write_text(
+        "export const api = axios.create({ baseURL: 'http://inventory.apps.internal/v1' })\n"
+        "export const local = axios.create({ baseURL: '/relative' })\n",
+        encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    clients = {f.attrs["client"]: f.attrs["baseUrl"] for f in frontend.collect(ctx)
+               if f.type == "config.client"}
+    assert clients["orders"] == "http://orders.apps.internal"
+    assert clients["billing"] == "https://billing.apps.internal"
+    assert clients["inventory"] == "http://inventory.apps.internal/v1"
+    assert "/relative" not in clients.values()  # no cross-repo signal in a relative URL
+
+
+def test_non_frontend_repo_emits_no_frontend_facts(tmp_path):
+    from sre_kb.collectors.node_express import frontend
+
+    (tmp_path / "package.json").write_text(
+        '{"name": "api", "dependencies": {"express": "^4.0.0"}}', encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    assert [f for f in frontend.collect(ctx) if f.type == "tech.frontend"] == []

@@ -65,6 +65,7 @@ def mermaid_sequence(flow: dict, known_targets: dict[str, str] | None = None) ->
 
 _SHAPE = {
     "service": '["{}"]',
+    "frontend": '[/"{}"\\]',
     "datastore": '[("{}")]',
     "broker": '[/"{}"/]',
     "topic": '(["{}"])',
@@ -79,6 +80,7 @@ _SHAPE = {
 # strings reach a Mermaid class/style line.
 _CLASS_STYLE = {
     "service": "fill:#e8f0fe,stroke:#1a73e8",
+    "frontend": "fill:#fce8e6,stroke:#c5221f",
     "datastore": "fill:#e6f4ea,stroke:#188038",
     "broker": "fill:#fef7e0,stroke:#f9ab00",
     "topic": "fill:#fef7e0,stroke:#f9ab00,stroke-dasharray: 3 3",
@@ -99,7 +101,8 @@ _TIER_STYLE = {
 
 _LOSSY_EDGE_STYLE = "stroke:#d93025,stroke-width:2px,stroke-dasharray:4 2"
 
-TOPOLOGY_LEGEND = ("Legend: rectangle = service · rounded = datastore · trapezoid = broker · "
+TOPOLOGY_LEGEND = ("Legend: rectangle = service · slanted rectangle = frontend (SPA) · "
+                   "rounded = datastore · trapezoid = broker · "
                    "stadium (dashed) = topic · double rectangle = other bound resource · "
                    "round-edged rectangle = internal library · hexagon = external. "
                    "A red/amber service border marks criticality tier0/tier1; a red dashed "
@@ -145,7 +148,7 @@ def _groups(nodes: dict[str, str], edges: list[dict]) -> dict[str, str] | None:
     one service joins that service's cluster; one touched by several joins the shared
     (co-tenant) cluster — the grouping that makes blast radius legible. Returns None for a
     single-service topology (flat rendering, as before)."""
-    services = [n for n, t in nodes.items() if t == "service"]
+    services = [n for n, t in nodes.items() if t in ("service", "frontend")]
     if len(services) < 2:
         return None
     owners: dict[str, set[str]] = {}

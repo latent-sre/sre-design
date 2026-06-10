@@ -41,7 +41,10 @@ the suggested sequencing. Companion docs: [`DESIGN.md`](DESIGN.md) (architecture
    skeleton-drift and doc-drift classes instead of testing around them.
 2. **Reverse contract test (cheap stopgap until 1).** Parse dotted `spec.*` paths quoted in
    `.github/skills/**/*.md` and assert each resolves to a property chain in that kind's
-   schema. Complements `test_skill_contract.py`'s forward check.
+   schema. Complements `test_skill_contract.py`'s forward check. *Measured on this branch:*
+   only two kind-qualified mentions exist across all skill docs (the rest are bare `spec.x`
+   that regex can't attribute to a kind) — so this is folded into increment 1, where the
+   generated references make the check structural instead of textual.
 3. **Govern or remove the registry `prompt:` field.** Either make the engine resolve it to
    `.github/prompts/<key>.prompt.md` (and add a governance test that every non-null key has a
    file), or drop the dead keys. Today it is unvalidated metadata that reads like a contract.

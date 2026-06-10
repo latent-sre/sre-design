@@ -17,6 +17,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from sre_kb.render.diagrams import DIAGRAM_FILE_STEM
 from sre_kb.workspace import RunLayout
 
 # Conventional location of the skill's output inside the (untrusted) target repo.
@@ -25,8 +26,9 @@ PROPOSALS_REL = ".sre/diagram-narrations.json"
 _MAX_CHARS = 600
 _BANNER = "> **Narration (LLM, advisory)** — verify against the drawing: "
 
-# Diagram-bearing kinds -> the markdown file their renderer writes (render/project.py).
-_DIAGRAM_FILE = {"Flow": "{}.md", "Topology": "{}-topology.md", "Architecture": "{}-architecture.md"}
+# Diagram-bearing kinds -> the markdown file their renderer writes. Derived from the
+# renderer-owned stem map so the two sides cannot drift.
+_DIAGRAM_FILE = {kind: stem + ".md" for kind, stem in DIAGRAM_FILE_STEM.items()}
 
 
 @dataclass

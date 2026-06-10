@@ -98,7 +98,10 @@ def copilot_instructions(service: str, docs: list[dict]) -> str:
     return out.rstrip("\n") + "\n"
 
 
-def runbook_markdown(runbook: dict, flow: dict | None) -> str:
+def runbook_markdown(runbook: dict, flow: dict | None,
+                     known_targets: dict[str, str] | None = None) -> str:
+    """`known_targets` keeps the embedded flow diagram's cast identical to the projection's
+    (same named participants), so an operator can match the runbook to the flow drawing."""
     spec = runbook.get("spec", {})
     name = runbook["metadata"]["name"]
     out = render(
@@ -113,7 +116,8 @@ def runbook_markdown(runbook: dict, flow: dict | None) -> str:
         # Diagnosis items may be {"step": ...} dicts or plain strings (hand/LLM-authored).
         diagnosis=[d.get("step", "") if isinstance(d, dict) else d for d in spec.get("diagnosis", [])],
         remediation=spec.get("remediation", []),
-        flow_diagram=mermaid_sequence(flow) if flow is not None else None,
+        flow_diagram=mermaid_sequence(flow, known_targets=known_targets)
+        if flow is not None else None,
     )
     # A flow appends a trailing-newline section; the no-flow form ends on the last list item with no
     # trailing newline (parity with the prior renderer).

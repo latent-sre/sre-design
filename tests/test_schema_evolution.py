@@ -93,3 +93,22 @@ def test_kb_tree_results_carry_deprecation_warnings(schema_root, tmp_path):
 def test_unknown_fields_still_fail_aliasing_never_papers_over(schema_root):
     errors = validate_doc(_doc({"maxLatencyMs": 5, "typoField": 1}), schema_root=schema_root)
     assert any("typoField" in e for e in errors)  # additionalProperties still enforced
+
+
+def test_load_kb_canonicalizes_renamed_fields_for_every_reader(schema_root, tmp_path, monkeypatch):
+    """§1.6's promise holds downstream: a doc written against the OLD field name reads
+    canonically from load_kb, so renderers/findings see the new name — not just validation."""
+    import yaml
+
+    from sre_kb.render import load_kb
+    from sre_kb.validation import structural
+
+    monkeypatch.setattr(
+        structural, "_spec_properties",
+        lambda kind, root=None: {"timeoutMs": {"deprecated": True,
+                                               "x-renamed-to": "maxLatencyMs"}})
+    kb = tmp_path / "run" / "kb" / "verified" / "Widget"
+    kb.mkdir(parents=True)
+    (kb / "w.yaml").write_text(yaml.safe_dump(_doc({"timeoutMs": 250})), encoding="utf-8")
+    [doc] = load_kb(tmp_path / "run")
+    assert doc["spec"] == {"maxLatencyMs": 250}

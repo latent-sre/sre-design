@@ -259,3 +259,27 @@ def test_architecture_sanitizes_untrusted_component_names():
     out = mermaid_architecture(arch)
     assert ";" not in out and '"];' not in out  # cannot close the label and start a directive
     assert "pwn" in out                          # kept as inert label text, just defanged
+
+
+def test_orphan_nodes_render_outside_every_cluster():
+    """A node touched by no service must not be drawn in the shared (co-tenant) cluster —
+    that would assert a tenancy that doesn't exist."""
+    topo = {"spec": {
+        "nodes": [{"type": "service", "name": "a"}, {"type": "service", "name": "b"},
+                  {"type": "topic", "name": "orphan.topic"}],
+        "edges": [],
+    }}
+    out = mermaid_topology(topo)
+    assert "n_orphan_topic" in out
+    assert "shared co-tenant" not in out  # no shared cluster at all here
+    # the orphan sits at top level: its node line is not indented as a subgraph member
+    assert '\n  n_orphan_topic(["orphan.topic"])' in out
+
+
+def test_path_hits_prefix_form_matches_mid_path_wildcards():
+    from sre_kb.estate.topology import _path_hits
+
+    assert _path_hits("/tenants/{}/orders/{}", "/tenants/main/orders/")
+    assert _path_hits("/orders/{}", "/orders/")
+    assert not _path_hits("/tenants/{}/orders/{}", "/payments/main/orders/")
+    assert not _path_hits("/orders/{}", "/orders")  # the list endpoint is not the template

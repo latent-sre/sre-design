@@ -68,11 +68,21 @@ def _service_entries(app: dict) -> list[tuple[str, dict | None]]:
 
 def collect(ctx: ScanContext) -> list[Fact]:
     facts: list[Fact] = []
-    # Base manifest first, env variants after: `fs.first("pcf.app")` (service identity, the
+    all_rels = sorted(ctx.rel(p) for p in ctx.files("manifest*.yml"))
+    # A `-<suffix>` manifest is an ENV variant only when a base manifest.yml sits beside it;
+    # standalone manifest-api.yml / manifest-worker.yml is the per-app convention, not
+    # environments named "api"/"worker".
+    base_dirs = {rel.rsplit("/", 1)[0] if "/" in rel else ""
+                 for rel in all_rels if rel.rsplit("/", 1)[-1] == "manifest.yml"}
+
+    def env_for(rel: str) -> str | None:
+        rel_dir = rel.rsplit("/", 1)[0] if "/" in rel else ""
+        return _env_of(rel) if rel_dir in base_dirs else None
+
+    # Base manifests first, env variants after: `fs.first("pcf.app")` (service identity, the
     # Deployment roll-up) must keep reading the unsuffixed manifest, not whichever variant
     # happens to sort first.
-    rels = sorted((ctx.rel(p) for p in ctx.files("manifest*.yml")),
-                  key=lambda r: (_env_of(r) is not None, r))
+    rels = sorted(all_rels, key=lambda r: (env_for(r) is not None, r))
     for rel in rels:
         lines = ctx.read_lines(rel)
         data, err = load_yaml_mapping(ctx, rel, "common.manifest_pcf")
@@ -80,7 +90,7 @@ def collect(ctx: ScanContext) -> list[Fact]:
             facts.append(err)
         if data is None:
             continue
-        env_name = _env_of(rel)
+        env_name = env_for(rel)
         variables, vars_err = _vars_for(ctx, rel, env_name, "common.manifest_pcf")
         if vars_err is not None:
             facts.append(vars_err)

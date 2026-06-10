@@ -254,3 +254,20 @@ def test_configmanagement_includes_declared_external_sources(tmp_path):
     cm = next(d["spec"] for d in docs_ if d["kind"] == "ConfigManagement")
     assert "configserver:http://config.internal:8888" in cm["sources"]
     assert "src/main/resources/application.yml" in cm["sources"]
+
+
+def test_multi_app_manifest_emits_one_deployment_per_app(tmp_path):
+    """Two applications in one manifest must yield two Deployment docs — the old
+    service-keyed naming silently overwrote the first with the second."""
+    from sre_kb.collectors import scan
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.synth.inventory import inventory_docs
+
+    (tmp_path / "manifest.yml").write_text(
+        "applications:\n- name: api\n  instances: 2\n- name: worker\n  instances: 4\n",
+        encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    docs_ = inventory_docs(scan(ctx), ctx, "api")
+    deps = {d["metadata"]["name"]: d["spec"] for d in docs_ if d["kind"] == "Deployment"}
+    assert deps["api"]["instances"] == 2
+    assert deps["worker"]["instances"] == 4

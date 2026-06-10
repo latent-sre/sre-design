@@ -374,3 +374,65 @@ def test_breaking_change_blast_labels_path_level_hits(tmp_path):
     assert blast["impactedServices"] == ["audit", "shop"]   # the resolved lower bound
     assert blast["preciselyImpacted"] == ["shop"]           # only the code-level path hit
     assert "shop" in blast["detail"]
+
+
+def test_estate_cli_internal_namespace_flag_reaches_the_join(tmp_path):
+    """§5.3's on-switch: the estate command's --internal-namespace flag must reach
+    build_estate (the config default is empty, so without a flag the feature was dead)."""
+    from typer.testing import CliRunner
+
+    from sre_kb.cli import app
+
+    _lib_repo(tmp_path / "a", "svc-a", "1.0.0")
+    _lib_repo(tmp_path / "b", "svc-b", "2.0.0")
+    r = CliRunner().invoke(app, ["estate", "--target", str(tmp_path / "a"),
+                                 "--target", str(tmp_path / "b"),
+                                 "--work-root", str(tmp_path / "w"), "--run", "cli-ns",
+                                 "--internal-namespace", "com.acme*"])
+    assert r.exit_code == 0, r.output
+    assert "library-version-skew" in r.output
+
+
+def test_near_name_client_key_never_draws_a_lookalike_external_node(tmp_path):
+    """A client KEY that slug-matches a scanned service ('Orders_Service' vs
+    'orders-service') with an unresolved baseUrl must not draw a lookalike external node
+    beside the real service — same slug normalization as the confirm-item detection."""
+    caller = tmp_path / "caller"
+    (caller / "src/main/resources").mkdir(parents=True)
+    (caller / "manifest.yml").write_text("applications:\n- name: caller\n", encoding="utf-8")
+    (caller / "src/main/resources/application.yml").write_text(
+        "clients:\n  Orders_Service:\n    base-url: orders.internal.acme\n    timeout: 2s\n",
+        encoding="utf-8")
+    callee = tmp_path / "orders-service"
+    callee.mkdir()
+    (callee / "manifest.yml").write_text(
+        "applications:\n- name: orders-service\n  routes:\n  - route: orders-service.apps.internal\n",
+        encoding="utf-8")
+    r = run_estate([str(caller), str(callee)], work_root=str(tmp_path / "w"), run_id="near")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    names = {n["name"] for n in topo["spec"]["nodes"]}
+    assert "Orders_Service" not in names  # no lookalike node
+    items = __import__("json").loads((r.root / "confirm" / "edge-calls.json").read_text())["items"]
+    assert items[0]["candidate"] == "orders-service"  # routed to confirmation instead
+
+
+def test_hostile_binding_name_yields_a_contained_slugged_artifact(tmp_path):
+    """A hostile binding name with path separators must never become a path: emit() slugs
+    metadata.name at the source, and artifact_filename() is the backstop on every artifact
+    write (incl. the rejected-doc spill, where the name may be hostile precisely because
+    validation failed on it)."""
+    from sre_kb.util import artifact_filename
+
+    for svc in ("a", "b"):
+        d = tmp_path / svc
+        d.mkdir()
+        (d / "manifest.yml").write_text(
+            f"applications:\n- name: {svc}\n  services:\n  - ../../pwn\n", encoding="utf-8")
+    r = run_estate([str(tmp_path / "a"), str(tmp_path / "b")],
+                   work_root=str(tmp_path / "w"), run_id="hostile")
+    files = [p.relative_to(r.root) for p in r.root.rglob("*.yaml")]
+    assert files and all(".." not in p.parts for p in files)   # nothing traversed
+    assert any(p.name == "pwn-cotenancy.yaml" for p in files)  # slugged, contained
+    # the write-time backstop holds even for a name that skipped emit()'s slugging
+    assert artifact_filename("../../pwn") == "pwn.yaml"
+    assert artifact_filename("../../../etc/passwd") == "etc-passwd.yaml"

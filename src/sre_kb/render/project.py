@@ -10,9 +10,11 @@ import yaml
 from sre_kb.render.catalog import catalog_info
 from sre_kb.render.copilot import copilot_instructions, runbook_markdown
 from sre_kb.render.diagrams import (
+    DIAGRAM_FILE_STEM,
     TOPOLOGY_LEGEND,
     architecture_caption,
     diagram_markdown,
+    known_http_clients,
     mermaid_architecture,
     mermaid_sequence,
     mermaid_topology,
@@ -23,9 +25,16 @@ from sre_kb.workspace import RunLayout
 
 
 def load_kb(run_root: Path) -> list[dict]:
+    """Load the run's validated KB tree, canonicalizing schema-evolution aliases on the way
+    in (§1.6): a doc written against a renamed field's old name reads identically to a new
+    one everywhere downstream — renderers, findings, narrations — not just in validation."""
+    from sre_kb.validation.structural import canonicalize_doc
+
     docs: list[dict] = []
     for p in sorted((run_root / "kb").rglob("*.yaml")):
-        docs.append(yaml.safe_load(p.read_text(encoding="utf-8")))
+        doc = yaml.safe_load(p.read_text(encoding="utf-8"))
+        canonical, _ = canonicalize_doc(doc) if isinstance(doc, dict) else (doc, [])
+        docs.append(canonical)
     return docs
 
 
@@ -38,16 +47,11 @@ def service_name(docs: list[dict]) -> str:
 
 
 def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
-    from sre_kb.util import slug
-
+    stem = DIAGRAM_FILE_STEM["Flow"].format(doc["metadata"]["name"])
     name = doc["metadata"]["name"]
-    # Configured HTTP clients are known downstreams: name them in the sequence diagram
-    # instead of collapsing every egress into the generic `Downstream` participant.
-    known = {slug(d["spec"]["name"]): d["spec"]["name"] for d in docs
-             if d.get("kind") == "Dependency" and (d.get("spec") or {}).get("type") == "http"}
-    src = mermaid_sequence(doc, known_targets=known)
-    (proj / "diagrams" / f"{name}.mmd").write_text(src, encoding="utf-8")
-    (proj / "diagrams" / f"{name}.md").write_text(
+    src = mermaid_sequence(doc, known_targets=known_http_clients(docs))
+    (proj / "diagrams" / f"{stem}.mmd").write_text(src, encoding="utf-8")
+    (proj / "diagrams" / f"{stem}.md").write_text(
         diagram_markdown(f"{name} — flow", src), encoding="utf-8"
     )
 
@@ -55,25 +59,27 @@ def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict], docs: list[di
 def _render_runbook(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
     related = flows.get(doc["spec"].get("relatedFlow"))
     (proj / "runbooks" / f"{doc['metadata']['name']}.md").write_text(
-        runbook_markdown(doc, related), encoding="utf-8"
+        runbook_markdown(doc, related, known_targets=known_http_clients(docs)), encoding="utf-8"
     )
 
 
 def _render_topology(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
+    stem = DIAGRAM_FILE_STEM["Topology"].format(doc["metadata"]["name"])
     name = doc["metadata"]["name"]
     tiers, lossy = topology_overlays(doc, docs)
     src = mermaid_topology(doc, tiers=tiers, lossy=lossy)
-    (proj / "diagrams" / f"{name}-topology.mmd").write_text(src, encoding="utf-8")
-    (proj / "diagrams" / f"{name}-topology.md").write_text(
+    (proj / "diagrams" / f"{stem}.mmd").write_text(src, encoding="utf-8")
+    (proj / "diagrams" / f"{stem}.md").write_text(
         diagram_markdown(f"{name} — topology", src, TOPOLOGY_LEGEND), encoding="utf-8"
     )
 
 
 def _render_architecture(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
+    stem = DIAGRAM_FILE_STEM["Architecture"].format(doc["metadata"]["name"])
     name = doc["metadata"]["name"]
     src = mermaid_architecture(doc)
-    (proj / "diagrams" / f"{name}-architecture.mmd").write_text(src, encoding="utf-8")
-    (proj / "diagrams" / f"{name}-architecture.md").write_text(
+    (proj / "diagrams" / f"{stem}.mmd").write_text(src, encoding="utf-8")
+    (proj / "diagrams" / f"{stem}.md").write_text(
         diagram_markdown(f"{name} — architecture", src, architecture_caption(doc)),
         encoding="utf-8")
 

@@ -98,3 +98,18 @@ def test_malformed_proposals_file_self_gates(tmp_path):
     (tmp_path / ".sre").mkdir()
     (tmp_path / ".sre" / "runbook-proposals.json").write_text("{ not json", encoding="utf-8")
     assert run_generate_runbooks(str(tmp_path)).outcomes == []
+
+
+def test_runbook_diagram_names_the_same_participants_as_the_projection():
+    """The runbook's embedded flow diagram and the projection diagram must show the same
+    cast: known HTTP clients are named in both, not Downstream in one and named in the other."""
+    from sre_kb.render.copilot import runbook_markdown
+
+    flow = {"metadata": {"service": "orders", "name": "create-order"},
+            "spec": {"trigger": {"method": "POST", "path": "/orders"},
+                     "steps": [{"id": "s0", "kind": "http-egress", "name": "call-inventory"}],
+                     "sinks": [{"type": "http", "target": "inventory"}]}}
+    runbook = {"metadata": {"name": "rb"}, "spec": {"relatedFlow": "create-order"}}
+    md = runbook_markdown(runbook, flow, known_targets={"inventory": "inventory"})
+    assert "participant P_inventory as inventory" in md
+    assert "Downstream" not in md

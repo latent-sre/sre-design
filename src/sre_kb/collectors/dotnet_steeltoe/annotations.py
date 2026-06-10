@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
-from sre_kb.util import fqn, swallow_level
+from sre_kb.util import first_url_arg, fqn, swallow_level
 
 _HTTP = {"[HttpGet]": "GET", "[HttpPost]": "POST", "[HttpPut]": "PUT", "[HttpDelete]": "DELETE", "[HttpPatch]": "PATCH"}
 _AUTHZ = ("[Authorize]",)  # the C# counterpart of @PreAuthorize/@Secured/@RolesAllowed
@@ -95,8 +95,7 @@ def collect(ctx: ScanContext) -> list[Fact]:
                     if "HttpClient" in rtype or "httpclient" in c.receiver.lower():
                         if c.method.endswith("Async"):
                             attrs = {"class": tfqn}
-                            url = next((a for a in c.str_args
-                                        if a.startswith(("http://", "https://", "/"))), None)
+                            url = first_url_arg(c.str_args)
                             if url:
                                 attrs["url"] = url
                             facts.append(Fact(

@@ -81,8 +81,14 @@ def _snapshot_findings(docs: list[dict]) -> list[dict]:
     common = {"severity": "info", "impactedFlows": [],
               "artifact": f"Deployment/{pcf['metadata']['name']}",
               "evidence": _first_evidence(pcf), "tier": "ast"}
-    has_snapshot = any(d.get("kind") == "Topology" and (d.get("spec") or {}).get("pcfSpaces")
-                       for d in docs)
+    # A snapshot proves itself two ways: populated pcfSpaces (org/space present), or a
+    # Dependency carrying snapshot-only fields (plan/managed) — a snapshot without org/space
+    # still types the bindings and must not trigger the "missing" nudge.
+    has_snapshot = any(
+        (d.get("kind") == "Topology" and (d.get("spec") or {}).get("pcfSpaces"))
+        or (d.get("kind") == "Dependency"
+            and ("managed" in (d.get("spec") or {}) or (d.get("spec") or {}).get("plan")))
+        for d in docs)
     if not has_snapshot:
         return [{
             "type": "missing-cf-env-snapshot",
@@ -197,13 +203,14 @@ def graduation_findings(target_root, threshold: int) -> list[dict]:
 
     from sre_kb.graduation import TRACKER_REL, GraduationTracker
 
+    from sre_kb.graduation import time_to_graduate_message
+
     return [{
         "type": "graduation-ready",
         "severity": "info",
         "title": f"gap category '{cat.category}' is ready to graduate to Tier-A",
-        "detail": (f"{cat.confirmed} reviewer confirmation(s), zero false positives — run "
-                   "`sre-kb graduation-candidates` for the deterministic signature sketch and "
-                   "merge it by hand; the LLM stops being asked about this category."),
+        "detail": time_to_graduate_message(cat.category, cat.confirmed, target_root)
+        + " — merge it by hand; the LLM stops being asked about this category.",
         "impactedFlows": [],
         "artifact": f"GraduationTracker/{cat.category}",
         "evidence": TRACKER_REL,

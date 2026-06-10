@@ -17,7 +17,7 @@ import re
 
 from sre_kb.collectors.base import ScanContext
 from sre_kb.models.facts import Fact, Symbol
-from sre_kb.util import find_line, slug
+from sre_kb.util import find_line, slug, url_host
 
 _DETECTOR = "node_express.frontend"
 
@@ -50,8 +50,8 @@ _AXIOS_BASEURL = re.compile(r"""baseURL\s*[:=]\s*['"]([^'"]+)['"]""")
 def _client_name(url: str, fallback: str) -> str:
     """A stable client name for a declared backend URL: the hostname's first label when the
     URL carries one, else the caller's fallback (env-var stem, proxy route)."""
-    host = url.split("://", 1)[-1].split("/", 1)[0].rsplit(":", 1)[0]
-    label = host.split(".", 1)[0]
+    # util.url_host is the estate join's normalizer — the two sides must not diverge.
+    label = url_host(url).split(".", 1)[0]
     return slug(label) if label and not label.replace(".", "").isdigit() else slug(fallback)
 
 
@@ -126,6 +126,8 @@ def collect(ctx: ScanContext) -> list[Fact]:
         for path in ctx.files("*.js", "*.jsx", "*.ts", "*.tsx"):
             rel = ctx.rel(path)
             text = ctx.read_text(rel)
+            if "baseURL" not in text:
+                continue  # skip the regex over ~all files in a large frontend repo
             for m in _AXIOS_BASEURL.finditer(text):
                 url = m.group(1)
                 if not url.startswith(("http://", "https://")):

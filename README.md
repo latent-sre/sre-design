@@ -137,9 +137,3 @@ the wheel as package data, so a disconnected runner (e.g. PCF) installs with no 
 make offline-wheel
 pip install --no-index --find-links dist/wheels sre-kb
 ```
-
-### Dev container
-
-VS Code / Codespaces can also open this repo in the included dev container. It uses Python 3.13
-(also the supported floor) and runs `pip install -e ".[dev]"` after creation,
-so `pytest -q` and `ruff check src tests` work from a clean container without local Python setup.

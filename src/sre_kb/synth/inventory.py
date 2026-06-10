@@ -114,10 +114,11 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "patterns": patterns, "styleTags": ["layered"],
         }, arch_ev, "verified", confidence(Signal.DERIVED), service))  # composed from components
 
-    # --- Deployment (infra + capacity) ---
-    if app:
-        a = app.attrs
-        docs.append(emit("Deployment", service, {
+    # --- Deployment (infra + capacity; one per manifest, so env variants keep their own contract) ---
+    for app_f in fs.of("pcf.app"):
+        a = app_f.attrs
+        env_name = a.get("environment")
+        dep_spec = {
             "hosting": "PCF",
             "instances": a.get("instances"),
             "memory": a.get("memory"),
@@ -128,7 +129,13 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "buildpacks": a.get("buildpacks", []),
             "healthCheck": a.get("healthCheck", {}),
             "profiles": (a.get("env") or {}).get("SPRING_PROFILES_ACTIVE"),
-        }, [app.evidence], "verified", confidence(Signal.DIRECT), service))
+            "processes": a.get("processes", []),
+            "sidecars": a.get("sidecars", []),
+        }
+        if env_name:
+            dep_spec["environment"] = env_name
+        docs.append(emit("Deployment", f"{service}-{env_name}" if env_name else service, dep_spec,
+                         [app_f.evidence], "verified", confidence(Signal.DIRECT), service))
 
     # --- Dependency (runtime service deps: bindings + downstream HTTP) ---
     # S1: a datastore/broker binding folds into Dependency (app binds X), carrying its `engine` — the

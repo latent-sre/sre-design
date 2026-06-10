@@ -224,6 +224,9 @@ The app's deployment contract with the platform (PCF manifest): instances, memor
 | `buildpacks` | array |  |  |
 | `healthCheck` | object |  |  |
 | `profiles` | string or array or null |  |  |
+| `processes` | array |  |  |
+| `sidecars` | array |  |  |
+| `environment` | string |  |  |
 
 ## Dependency
 

@@ -14,6 +14,7 @@ from sre_kb.collectors.common import criticality, manifest_pcf, slo_catalog
 from sre_kb.collectors.common import cf_env, delivery_pipeline, feature_flags, openapi
 from sre_kb.collectors.dotnet_steeltoe import annotations as dotnet_annotations
 from sre_kb.collectors.dotnet_steeltoe import build as dotnet_build
+from sre_kb.collectors.dotnet_steeltoe import config as dotnet_config
 from sre_kb.collectors.dotnet_steeltoe import resiliency as dotnet_resiliency
 from sre_kb.collectors.java_spring import (
     annotations,
@@ -55,6 +56,7 @@ _FILE_COLLECTORS: list[CollectorProtocol] = [
     # .NET / Steeltoe (self-gating: no *.cs/*.csproj -> emit nothing)
     dotnet_build.collect,
     dotnet_annotations.collect,
+    dotnet_config.collect,
     dotnet_resiliency.collect,
     # Python / FastAPI (self-gating: no *.py -> emit nothing)
     python_endpoints.collect,

@@ -51,12 +51,12 @@ the suggested sequencing. Companion docs: [`DESIGN.md`](DESIGN.md) (architecture
 4. **Single-source the shared references** — **done.** Canonical copies live in
    `.github/skills/_shared/`; `tools/lint_skills.py` verifies every bundled copy is
    byte-identical and `--sync` propagates an edit to all bundling skills.
-5. **Ship schema references *to the consumer*, not just the author.** The published PR tree
-   already carries the KB YAML; add a generated `yaml.schemas` mapping
-   (`.vscode/settings.json` fragment) plus `$id`s on the schemas so the target repo's editor
-   — and Copilot working inside it — validates `apiVersion`/`kind` documents against the real
-   JSON Schema as it types. That is the strongest form of "schema reference for skills": the
-   skill no longer describes the shape; the IDE enforces it.
+5. **Ship schema references *to the consumer*, not just the author** — **done** (was
+   already implemented in the publish path): `_generated_editor_settings()` stages a
+   `.vscode/settings.json` at the published repo root mapping every kind's *vendored*
+   schema (`.sre/schemas/...`) to `catalog/*/kb/**/<Kind>/*.yaml`, so the reviewer's editor
+   — and Copilot inside it — validates artifacts against the exact schema version they were
+   written with.
 6. **Schema evolution story** — **done.** A renamed spec field keeps its old property
    declared with `deprecated: true` + `x-renamed-to: <newName>`; the validator
    canonicalizes old → new (new wins when both are set) so old documents stay valid for one
@@ -91,9 +91,10 @@ visual encoding; no grouping; output is bare `.mmd` that GitHub won't render inl
    sink target matches a configured client (Dependency `type: http`) renders as a named
    participant instead of the `Downstream` catch-all, under the same index-parallel
    steps/sinks guard as `_lossy_sink`.
-4. **Estate subgraphs** — **done** (pre-§4.3 form). A topology with 2+ services clusters
-   each service with its exclusive resources and puts anything touched by several services
-   in a shared (co-tenant) cluster. Still open: group by org/space once §4.3 lands.
+4. **Estate subgraphs** — **done.** A topology with 2+ services clusters each service with
+   its exclusive resources and puts anything touched by several services in a shared
+   (co-tenant) cluster; with §4.3 snapshots present, services cluster by org/space instead
+   ("everything in acme/prod fails together").
 5. **Architecture context diagram** — **done.** The `Architecture` artifact has a registry
    renderer: the service as a boundary subgraph, components clustered per detected layer,
    and only the edges the component types assert (Client → web handlers; inter-component
@@ -111,13 +112,12 @@ through that seam, not rebuilding trust machinery.
 
 ### Increments
 
-1. **Land a programmatic provider.** `VertexProvider` is a named, deferred slot
-   (`llm/provider.py:100-118`) with a written business case
-   ([`VERTEX-LLM-PROVIDER-CASE.md`](VERTEX-LLM-PROVIDER-CASE.md)). Approving it (or any
-   sanctioned CLI via `SubprocessProvider`) unlocks scheduled `autopilot` runs in CI,
-   estate-wide fan-out, and drift-triggered re-scans — with `CachingProvider`
-   (`provider.py:121-150`) keeping CI replayable. This is the single highest-leverage AI
-   item; everything below rides on the same worklist.
+1. **Land a programmatic provider** — **decided: no.** The org standardizes on VS Code
+   Copilot + GitHub; no programmatic provider (Vertex or CLI) will be wired. The LLM seam
+   stays the manual file exchange (`scan-worklist.json` in the IDE), which every Tier-B task
+   — including the new ones below — already speaks. `worklist-run`/`autopilot` remain in the
+   codebase as the transport for a future provider but are dormant by this decision; with an
+   interactive provider they defer the whole worklist to the manual loop by design.
 2. **New Tier-B worklist tasks** — **done**, on the existing trust spine:
    - *PCF deployment review* (`review-pcf` task → `sre-kb pcf-review` ingest): the provider
      judges which manifests deserve attention; the engine re-derives every accepted check
@@ -164,24 +164,20 @@ integration required.
    entries and the legacy `spring.cloud.config.uri` emit line-cited `config.source` facts,
    and `ConfigManagement.sources` lists those external sources alongside the citing files.
    Still open: Steeltoe connector config (.NET parity).
-3. **A redacted `cf env` snapshot convention — `.sre/cf-env.json`.** Developers can run
-   `cf env <app>` themselves. Define a checked-in, *credential-stripped* shape: from
-   `VCAP_SERVICES` keep label/plan/tags/name per binding (never `credentials`); from
-   `VCAP_APPLICATION` keep `organization_name`/`space_name`. This single file:
-   - upgrades `Dependency` artifacts from bare names to typed, planned services;
-   - finally populates `Topology.pcfSpaces` and gives estate diagrams real grouping (§2.4);
-   - distinguishes managed vs user-provided services.
-   Guardrails: the existing fail-closed secret-scan gate and `detect-secrets` baseline cover
-   the file; stamp snapshot-derived facts with a freshness/source marker (they drift from
-   live state — which is exactly what `sre-kb diff` is for). The gap-finder can flag a
-   missing or stale snapshot as a finding, making adoption self-propelling.
+3. **A redacted `cf env` snapshot convention — `.sre/cf-env.json`** — **done.** The
+   `common.cf_env` collector accepts the redacted shape or pasted `cf env` JSON, reading
+   ONLY the allowlisted fields (label/plan/tags/name per binding, org/space — never
+   `credentials`, which cannot reach a fact). Effects, all landed: `Dependency` artifacts
+   upgrade to typed, planned services (the broker label classifies what name heuristics
+   can't; managed vs user-provided distinguished); `Topology.pcfSpaces` populates per
+   service and estate-wide; estate drawings cluster by org/space. Snapshot facts carry a
+   `capturedAt` freshness marker. Still open: a finding for a missing/stale snapshot.
 4. **Pipeline files as deployment evidence.** Parse `cf push` invocations out of checked-in
    CI definitions (GitHub workflows, Concourse, etc.) → org/space/manifest per environment,
    and populate the `DeliveryPipeline` kind, which today has a schema but no collector.
-5. **Fix the scope statement either way.** If 3 lands, `SCOPE-AND-COVERAGE.md` §2 becomes
-   true; if it's rejected, reword "service bindings (VCAP)" to "declared service names
-   (manifest)". Platform-state sources (autoscaler API, network policies, broker SLAs) stay
-   explicitly out of scope — listed, so the boundary is a decision rather than an accident.
+5. **Fix the scope statement either way** — **done.** §2 of `SCOPE-AND-COVERAGE.md` now
+   states the manifest depth and the snapshot source truthfully, and lists live platform
+   APIs (autoscaler, network policies, broker SLAs) as explicitly out of scope.
 
 ## 5. Cross-repo linkage — relating software across repositories
 
@@ -275,8 +271,12 @@ yet), `ReadinessScore.evidence: []` (a roll-up, not a source fact), `crossRefs: 
 the Flow→Alert→Runbook→BlastRadius chain, and `metadata.labels`/`annotations` (free envelope
 slots — candidates for run id / criticality tier / org-space once §4.3 lands).
 
-Still open from the audit: `Topology.pcfSpaces` (waits on §4.3's org/space source) and .NET
-parity for the new lossy-save, authz, and refresh-scope signals. **Decided:** CI is GitHub
+From the audit, since closed: `Topology.pcfSpaces` (populated by §4.3's snapshot) and .NET
+parity — `[Authorize]` → `security.authz`, swallowed `SaveChanges` → `swallowed.db.failure`,
+Steeltoe `spring:cloud:config:uri` → `config.source`, and csproj/go.mod dependency versions.
+Refresh-scope stays Java-only by design (Steeltoe reloads via config providers, not an
+annotation). `http.egress` facts now carry literal `url` arguments across all five stacks —
+the consumer-side anchor §5.5's path-level join needs (the join itself remains open). **Decided:** CI is GitHub
 Actions only, so `common.delivery_pipeline`'s GitHub-only scope is the design, not a gap.
 Within that scope, deploy detection covers `cf push` in `run:` steps and cloudfoundry
 marketplace actions in `uses:`; a bespoke action that hides cf entirely stays undetected

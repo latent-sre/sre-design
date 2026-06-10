@@ -31,13 +31,13 @@ _FRAMEWORKS: tuple[tuple[str, str], ...] = (
 
 # A require line inside a block (or after `require `): `<module-path> v<version>`, optionally
 # trailing ` // indirect`. The module path is everything up to the first whitespace.
-_REQUIRE = re.compile(r"^(?P<mod>[^\s]+)\s+v\S+(?P<tail>.*)$")
+_REQUIRE = re.compile(r"^(?P<mod>[^\s]+)\s+(?P<version>v\S+)(?P<tail>.*)$")
 
 
-def _direct_requires(lines: list[str]) -> list[tuple[str, int]]:
-    """(module path, 1-based line) for each *direct* require in a go.mod — block or single-line form,
-    skipping `// indirect` transitive deps."""
-    out: list[tuple[str, int]] = []
+def _direct_requires(lines: list[str]) -> list[tuple[str, str, int]]:
+    """(module path, version, 1-based line) for each *direct* require in a go.mod — block or
+    single-line form, skipping `// indirect` transitive deps."""
+    out: list[tuple[str, str, int]] = []
     in_block = False
     for i, raw in enumerate(lines, 1):
         line = raw.strip()
@@ -57,7 +57,7 @@ def _direct_requires(lines: list[str]) -> list[tuple[str, int]]:
             continue
         m = _REQUIRE.match(body)
         if m and "// indirect" not in m.group("tail"):
-            out.append((m.group("mod"), i))
+            out.append((m.group("mod"), m.group("version"), i))
     return out
 
 
@@ -81,7 +81,7 @@ def collect(ctx: ScanContext) -> list[Fact]:
         rel = ctx.rel(path)
         lines = ctx.read_lines(rel)
         requires = _direct_requires(lines)
-        modules = {m for m, _ in requires}
+        modules = {m for m, _, _ in requires}
 
         if not runtime_done:
             ln = find_line(lines, "module ") or 1
@@ -102,12 +102,12 @@ def collect(ctx: ScanContext) -> list[Fact]:
                 ))
             runtime_done = True
 
-        for mod, ln in requires:
+        for mod, version, ln in requires:
             if mod in seen:
                 continue
             seen.add(mod)
             facts.append(Fact(
-                "tech.dependency", {"name": mod},
+                "tech.dependency", {"name": mod, "version": version},
                 ctx.evidence(rel, ln, ln, "go_net.go_mod"),
                 Symbol(mod, "dependency"),
             ))

@@ -101,8 +101,15 @@ def collect(ctx: ScanContext) -> list[Fact]:
                             Symbol(tfqn, "class"),
                         ))
                     if c.receiver == "restTemplate" or "RestTemplate" in rtype:
+                        attrs = {"class": tfqn}
+                        # A literal URL/path argument is the consumer-side contract anchor the
+                        # OpenAPI estate join needs (NEXT-INCREMENTS §5.5 residual).
+                        url = next((a for a in c.str_args
+                                    if a.startswith(("http://", "https://", "/"))), None)
+                        if url:
+                            attrs["url"] = url
                         facts.append(Fact(
-                            "http.egress", {"class": tfqn},
+                            "http.egress", attrs,
                             ctx.evidence(rel, c.line, c.line, "java_spring.annotations"),
                             Symbol(tfqn, "class"),
                         ))

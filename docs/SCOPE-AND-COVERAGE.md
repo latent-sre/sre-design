@@ -242,6 +242,11 @@ step (`sre-kb worklist-run --oracle '<llm-cli>'` automates the same exchange, an
 4. Measure: `sre-kb copilot-gap-validate --target <service> --truth <service>/.sre/gap-truth.json
    --report .work/gap-validation.json`.
 
+With a programmatic provider, steps 1–2 fold into the measurement itself:
+`sre-kb copilot-gap-validate --target <service> --truth … --oracle '<llm-cli>'` builds the prompt,
+generates the proposals, and measures them in one command — sweepable across the pilot set in CI
+(the stage-2 floors of §3 become a matrix job, not a manual campaign).
+
 The report separates **raw proposal quality** from **post-grounding quality**: proposal
 recall/precision, kept recall/precision, grounded rate, missed-expected, proposed controls, and
 false-positive survivors. Archive the proposals + truth + report together so a claim is reproducible.

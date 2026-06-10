@@ -454,8 +454,9 @@ loaded by other engineers' Copilot). Poison in → trusted out, at incident time
   is a deployment concern.
 - **SRE repo = aggregate weakness map + alert control** → access control + audit;
   no monitoring change auto-applied; ✓ the engine generates a **root-level CI gate** (KB
-  validation + fail-closed `secret-scan`) + CODEOWNERS + PR template into the target, so its own
-  CI treats the incoming KB as untrusted (needs the published engine to run).
+  validation + fail-closed `secret-scan`) + a **scheduled drift workflow** (inert until
+  configured) + CODEOWNERS + PR template into the target, so its own CI treats the incoming
+  KB as untrusted (needs the published engine to run).
 - **Generated skills as a backdoor / RCE** → ✓ consumer skills instruction-only (no
   executable `scripts/`), least-privilege `tools`.
 - **Untrusted-repo review without engine credentials** → ✓ read-only `sre-target-scan` agent
@@ -504,16 +505,19 @@ sre-kb publish --run <id> --sre-repo <git-url> --forge github [--dry-run]
 sre-kb worklist-run --run <id> --oracle '<llm-cli>'   # run the whole LLM worklist programmatically
 sre-kb autopilot --target <path> --oracle '<llm-cli>'  # converge scan → LLM → apply → re-scan
 sre-kb validate-kb <dir>             # standalone validate an existing KB tree
-sre-kb diff    --from <commit> --to <commit>   # P2: drift — diff the KB across commits
+sre-kb diff    --from <path> | --from-kb <kb-dir>  --to <path> [--fail-on-drift]  # drift
 sre-kb schema list|show <kind>
 ```
 
 `scan` and `validate` are exactly the commands the Copilot agent invokes from the
 `sre-analyst` agent / `sre-*` skills — same CLI, human-run or agent-run.
 
-**Drift detection (P2):** `sre-kb diff` re-scans a newer commit and diffs the KB
-against the prior snapshot → a changelog (added/changed/removed artifacts, new
-blast-radius/SLO findings, newly swallowed failures) and an **update PR**, so the KB
+**Drift detection:** `sre-kb diff` re-scans a newer commit and diffs the KB against
+the prior snapshot — or, with `--from-kb`, diffs a **published** `catalog/<service>/kb`
+tree against the target's current state — into a changelog (added/changed/removed
+artifacts, new blast-radius/SLO findings, newly swallowed failures); `--fail-on-drift`
+makes it a CI gate. The published repo carries a generated **scheduled drift workflow**
+(inert until its target-repo sentinel is configured) that runs exactly this, so the KB
 stays live instead of a one-time snapshot. The provenance `excerptHash` makes drift
 exact: if a cited line moved or changed, the artifact is flagged automatically.
 

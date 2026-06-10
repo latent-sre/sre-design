@@ -111,6 +111,81 @@ jobs:
 """
 
 
+def _generated_drift_workflow(pip_args: str = "") -> str:
+    """The scheduled living-KB loop: re-scan the source repo and diff this published KB against it
+    (`sre-kb diff --from-kb`), so staleness is a red scheduled run instead of silent rot. Ships
+    inert: until the operator replaces the TARGET_REPO sentinel (and, for a private target, wires
+    the checkout token) every run is a configuration no-op, never a false failure. When the
+    optional SRE_KB_ORACLE secret is set, the LLM loop (`sre-kb autopilot`) runs first, so the
+    drift check sees a converged KB — without it the re-scan is deterministic-only."""
+    return f"""name: drift-sre-kb
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"  # weekly; replace to taste
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # The dev repo this KB was scanned from (owner/repo). Until replaced, the job exits as a no-op.
+  TARGET_REPO: REPLACE_ME__target_repo
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check configuration
+        id: cfg
+        run: |
+          if [[ "$TARGET_REPO" == REPLACE_ME__* ]]; then
+            echo "::notice::drift-sre-kb is not configured yet — set TARGET_REPO (and a checkout token for a private target)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v5
+        if: steps.cfg.outputs.skip != 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        if: steps.cfg.outputs.skip != 'true'
+        with:
+          repository: ${{{{ env.TARGET_REPO }}}}
+          path: .drift-target
+          persist-credentials: false
+          # token: ${{{{ secrets.SRE_KB_TARGET_TOKEN }}}}  # uncomment for a private target
+      - uses: actions/setup-python@v6
+        if: steps.cfg.outputs.skip != 'true'
+        with:
+          python-version: "3.13"
+      - name: Install pinned engine
+        if: steps.cfg.outputs.skip != 'true'
+        run: python -m pip install {pip_args}"$(cat .sre/version)"
+      - name: LLM loop (optional — runs only when an oracle is configured)
+        if: steps.cfg.outputs.skip != 'true'
+        env:
+          SRE_KB_ORACLE: ${{{{ secrets.SRE_KB_ORACLE }}}}
+        run: |
+          if [ -n "$SRE_KB_ORACLE" ]; then
+            sre-kb autopilot --target .drift-target --cache-dir .sre-llm-cache
+          else
+            echo "::notice::SRE_KB_ORACLE not set — deterministic re-scan only."
+          fi
+      - name: Diff the published KB against the target's current state
+        if: steps.cfg.outputs.skip != 'true'
+        run: |
+          shopt -s nullglob
+          drifted=0
+          for kb in catalog/*/kb; do
+            sre-kb diff --from-kb "$kb" --to .drift-target --fail-on-drift || drifted=1
+            for log in .work/diff-head/drift/CHANGELOG.md; do
+              [ -f "$log" ] && cat "$log" >> "$GITHUB_STEP_SUMMARY"
+            done
+          done
+          exit "$drifted"
+"""
+
+
 def _generated_pr_template() -> str:
     return """# SRE KB update
 
@@ -162,6 +237,8 @@ def _stage_repo_root_hardening(pr_root: Path, publish_cfg: dict | None = None) -
     _write_file(pr_root / ".github" / "CODEOWNERS", "* REPLACE_ME__owning_team\n")
     _write_file(pr_root / ".github" / "workflows" / "validate-sre-kb.yml",
                 _generated_validate_workflow(pip_args))
+    _write_file(pr_root / ".github" / "workflows" / "drift-sre-kb.yml",
+                _generated_drift_workflow(pip_args))
     _write_file(pr_root / ".github" / "pull_request_template.md", _generated_pr_template())
     _write_file(pr_root / ".vscode" / "settings.json", _generated_editor_settings())
 

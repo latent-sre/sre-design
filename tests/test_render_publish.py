@@ -52,6 +52,10 @@ def test_pr_tree_structure(result):
     assert (root / ".sre" / "schemas" / "v1alpha1" / "Flow.schema.json").exists()
     wf = (root / ".github" / "workflows" / "validate-sre-kb.yml").read_text()
     assert "catalog/*/kb" in wf  # validate step targets the catalog layout, not a root-level kb/
+    # the scheduled drift loop ships inert: a sentinel target the config guard turns into a no-op
+    drift = (root / ".github" / "workflows" / "drift-sre-kb.yml").read_text()
+    assert "REPLACE_ME__target_repo" in drift and "skip=true" in drift
+    assert "sre-kb diff --from-kb" in drift and "--fail-on-drift" in drift
     # ...and they must NOT be nested under the service dir (the regression this guards against)
     assert not (base / ".github" / "CODEOWNERS").exists()
     assert not (base / ".github" / "workflows").exists()

@@ -44,6 +44,15 @@ Four joins make the edges real, not just declared:
   provider whose baseline diff shows *breaking* changes raises an
   `api-breaking-change-blast` finding naming every scanned consumer.
 
+## Confirming ambiguous edges
+
+An estate run writes `confirm/edge-calls.json` when a baseUrl is ambiguous (an IP literal, or a
+hostname/client key that resembles a scanned service without matching its routes). Each item
+carries a self-contained `prompt`: answer `affirm` (genuinely external) or `dispute` followed by
+the scanned service it actually targets, citing the evidence line. Verdicts are advisory — the
+engine never draws the edge from a verdict alone; a confirmed alias is a naming gap to fix in the
+target's config/routes, after which the next estate run resolves the edge deterministically.
+
 ## Cross-service `BlastRadius`
 
 Like the single-service `BlastRadius`, but populated across repos: `impactedServices` and

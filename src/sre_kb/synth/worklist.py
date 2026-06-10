@@ -156,8 +156,7 @@ def build_scan_worklist(
                 "id": "review-pcf",
                 "mode": "discover",
                 "title": f"Judge {pcf_apps} PCF manifest(s) for deployment-review attention",
-                "skill": "PCF deployment review (the prompt embeds the check vocabulary; the "
-                         "engine re-derives every accepted check from the manifest bytes)",
+                "skill": ".github/skills/sre-pcf-review/SKILL.md",
                 "reads": ["facts/facts.jsonl"],  # the pcf.app facts (relative to the run root)
                 "writeTo": ".sre/pcf-review-proposals.json",  # relative to the target repo
                 "writeToBase": "target",
@@ -170,8 +169,7 @@ def build_scan_worklist(
                 "id": "narrate-diagrams",
                 "mode": "discover",
                 "title": f"Write advisory captions for {diagrams} drawing(s)",
-                "skill": "diagram narration (closed-world artifact JSON; rendered clearly "
-                         "labeled advisory, never a fact source)",
+                "skill": ".github/skills/sre-narrate-diagrams/SKILL.md",
                 "reads": ["kb/"],  # the diagram-bearing artifacts (relative to the run root)
                 "writeTo": ".sre/diagram-narrations.json",  # relative to the target repo
                 "writeToBase": "target",

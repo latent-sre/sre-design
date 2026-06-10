@@ -1,5 +1,9 @@
 # Business case: approve Google Vertex AI as a programmatic LLM provider for the SRE engine
 
+> **Decision (2026-06): not pursued.** The org standardizes on VS Code Copilot +
+> GitHub; the LLM seam stays the manual file exchange and no programmatic provider is
+> wired (NEXT-INCREMENTS §3.1). Kept for the record should that decision be revisited.
+
 Date: 2026-06-09
 Status: **draft for approval** — the engine works today on enterprise GitHub Copilot (IDE-only); this
 case requests an *additional, automatable* endpoint to lift the adoption ceiling.

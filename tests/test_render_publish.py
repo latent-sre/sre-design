@@ -36,6 +36,20 @@ def test_runbook_embeds_mermaid(result):
     assert "```mermaid" in runbooks[0].read_text()
 
 
+def test_single_service_topology_renders(result):
+    mmd = (result.projections / "diagrams" / "order-service-topology.mmd").read_text()
+    assert mmd.startswith("graph LR")
+    assert "orders-postgres" in mmd  # the bound datastore is drawn without an estate sweep
+    assert "classDef datastore" in mmd  # typed nodes carry the engine's fixed styling
+
+
+def test_diagrams_get_github_renderable_wrappers(result):
+    topo_md = (result.projections / "diagrams" / "order-service-topology.md").read_text()
+    assert "```mermaid" in topo_md and "Legend:" in topo_md
+    flow_md = (result.projections / "diagrams" / "create-order.md").read_text()
+    assert "```mermaid" in flow_md
+
+
 def test_pr_tree_structure(result):
     # per-service content lives under the Backstage catalog path
     base = result.pr / "catalog" / "order-service"

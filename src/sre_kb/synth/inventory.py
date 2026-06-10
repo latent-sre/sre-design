@@ -8,6 +8,7 @@ its `engine`); its infra fields (backup/RPO/RTO) are platform-DR an app team doe
 from __future__ import annotations
 
 from sre_kb.collectors.base import ScanContext
+from sre_kb.collectors.common.idempotency import MUTATING, scope_text
 from sre_kb.collectors.common.openapi import normalize_path
 from sre_kb.inventory_signatures import (
     StackSig,
@@ -21,6 +22,7 @@ from sre_kb.inventory_signatures import (
 )
 from sre_kb.models.facts import FactSet
 from sre_kb.scoring.confidence import Signal, confidence
+from sre_kb.signatures import fires
 from sre_kb.synth.emit import emit
 
 
@@ -165,8 +167,19 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
                          for e in endpoints}
 
         def _endpoint(e):
-            ep = {"method": e.attrs.get("method"), "path": e.attrs.get("path"),
-                  "handler": e.attrs.get("handler"), "idempotent": None, "retrySafe": None}
+            # Safe methods are idempotent by HTTP semantics; mutating ones iff an idempotency
+            # guard fires in the handler's scope (the same Tier-A signature the gap collector
+            # uses, so Interface and `missing-idempotency` gaps can never disagree).
+            method = e.attrs.get("method")
+            if method in {"GET", "HEAD", "OPTIONS"}:
+                idem = True
+            elif method in MUTATING:
+                idem = fires("idempotency",
+                             scope_text(ctx, e.evidence.path, e.evidence.lines.start))
+            else:
+                idem = None
+            ep = {"method": method, "path": e.attrs.get("path"),
+                  "handler": e.attrs.get("handler"), "idempotent": idem, "retrySafe": idem}
             if spec_eps:  # only assert documented/undocumented when a spec was ingested
                 key = (e.attrs.get("method"), normalize_path(str(e.attrs.get("path", "/"))))
                 ep["documented"] = key in spec_keys
@@ -216,16 +229,106 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
         docs.append(emit("Interface", service, interface_spec, ev, "verified",
                          confidence(Signal.DIRECT), service))
 
+    # --- Topology (single-service): the app-centric graph the estate run merges; emitting it
+    # per run means one service's bindings/downstreams are drawable without an estate sweep ---
+    bindings = fs.of("pcf.service-binding")
+    clients = fs.of("config.client")
+    pubs = fs.of("message.egress")
+    cons = fs.of("message.consumer")
+    if bindings or clients or pubs or cons:
+        topo_nodes: list[dict] = [{"type": "service", "name": service}]
+        topo_edges: list[dict] = []
+        seen_nodes = {service}
+        for sb in bindings:
+            res = sb.attrs["name"]
+            if res not in seen_nodes:
+                seen_nodes.add(res)
+                topo_nodes.append({
+                    "type": "datastore" if is_datastore(res) else "broker" if is_broker(res) else "resource",
+                    "name": res,
+                })
+            topo_edges.append({"from": service, "to": res, "relation": "binds"})
+        for c in clients:
+            downstream = c.attrs.get("client", "downstream")
+            if downstream not in seen_nodes:
+                seen_nodes.add(downstream)
+                topo_nodes.append({"type": "external", "name": downstream})
+            topo_edges.append({"from": service, "to": downstream, "relation": "calls"})
+        for facts, edge_of in ((pubs, lambda ch: {"from": service, "to": ch, "relation": "publishes"}),
+                               (cons, lambda ch: {"from": ch, "to": service, "relation": "consumes"})):
+            for f in facts:
+                channel = f.attrs.get("channel")
+                if not channel:
+                    continue
+                if channel not in seen_nodes:
+                    seen_nodes.add(channel)
+                    topo_nodes.append({"type": "topic", "name": channel})
+                edge = edge_of(channel)
+                if edge not in topo_edges:
+                    topo_edges.append(edge)
+        topo_ev = [(bindings or clients or pubs or cons)[0].evidence]
+        docs.append(emit("Topology", service, {
+            "nodes": topo_nodes,
+            "edges": topo_edges,
+            "pcfSpaces": [],
+        }, topo_ev, "verified", confidence(Signal.DIRECT), service))
+
     # --- ConfigManagement ---
     config_facts = fs.of("config.slo", "config.client", "config.timelimiter", "config.actuator")
     if config_facts:
         profiles = (app.attrs.get("env") or {}).get("SPRING_PROFILES_ACTIVE") if app else None
+        # Sources are the files the config facts actually cite, plus the manifest env block
+        # when one exists — not a hardcoded list.
+        sources = sorted({f.evidence.path for f in config_facts})
+        if app and app.attrs.get("env"):
+            sources.append("pcf-manifest-env")
         docs.append(emit("ConfigManagement", service, {
-            "sources": ["application.yml", "pcf-manifest-env"],
+            "sources": sources,
             "profiles": [profiles] if profiles else [],
-            "refreshScope": False,
+            "refreshScope": bool(fs.first("config.refreshscope")),
             "properties": [f.attrs for f in config_facts],
         }, [config_facts[0].evidence], "verified", confidence(Signal.DIRECT), service))
+
+    # --- DeliveryPipeline (one per checked-in CI workflow; only what the file states) ---
+    for wf in fs.of("pipeline.workflow"):
+        a = wf.attrs
+        pipeline_spec = {"name": a["name"], "system": a["system"], "stages": a.get("stages", [])}
+        if a.get("branch"):
+            pipeline_spec["branch"] = a["branch"]
+        docs.append(emit("DeliveryPipeline", a["name"], pipeline_spec, [wf.evidence],
+                         "verified", confidence(Signal.DIRECT), service))
+
+    # --- SecurityPosture (app-scoped controls rolled up from byte-grounded facts) ---
+    sec_deps = sorted({f.attrs["name"] for f in fs.of("tech.dependency")
+                       if "security" in f.attrs["name"] or "oauth2" in f.attrs["name"]})
+    authz = fs.first("security.authz")
+    actuator = fs.first("config.actuator")
+    if sec_deps or authz or actuator:
+        controls: list[str] = []
+        open_risks: list[str] = []
+        sec_spec: dict = {}
+        sec_ev = []
+        if sec_deps:
+            controls.append("spring-security")
+            sec_spec["authn"] = "oauth2" if any("oauth2" in d for d in sec_deps) else "spring-security"
+            dep_fact = next(f for f in fs.of("tech.dependency") if f.attrs["name"] == sec_deps[0])
+            sec_ev.append(dep_fact.evidence)
+        if authz:
+            controls.append("authz-annotations")
+            sec_spec["authz"] = "role-based"
+            sec_ev.append(authz.evidence)
+        if actuator:
+            exposure = str(actuator.attrs.get("exposure", ""))
+            if "*" in exposure:
+                open_risks.append(f"management endpoints broadly exposed (exposure: {exposure})")
+            else:
+                controls.append("actuator-exposure-limited")
+            sec_ev.append(actuator.evidence)
+        sec_spec["controls"] = controls
+        if open_risks:
+            sec_spec["openRisks"] = open_risks
+        docs.append(emit("SecurityPosture", f"{service}-security", sec_spec, sec_ev,
+                         "verified", confidence(Signal.DERIVED), service))
 
     # --- FeatureFlag (coverage matrix #15: config blocks / @ConditionalOnProperty / flag-SDK calls) ---
     for ff in fs.of("feature.flag"):

@@ -9,7 +9,12 @@ import yaml
 
 from sre_kb.render.catalog import catalog_info
 from sre_kb.render.copilot import copilot_instructions, runbook_markdown
-from sre_kb.render.diagrams import mermaid_sequence
+from sre_kb.render.diagrams import (
+    TOPOLOGY_LEGEND,
+    diagram_markdown,
+    mermaid_sequence,
+    mermaid_topology,
+)
 from sre_kb.registry import renderer_for
 from sre_kb.workspace import RunLayout
 
@@ -30,8 +35,11 @@ def service_name(docs: list[dict]) -> str:
 
 
 def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict]) -> None:
-    (proj / "diagrams" / f"{doc['metadata']['name']}.mmd").write_text(
-        mermaid_sequence(doc), encoding="utf-8"
+    name = doc["metadata"]["name"]
+    src = mermaid_sequence(doc)
+    (proj / "diagrams" / f"{name}.mmd").write_text(src, encoding="utf-8")
+    (proj / "diagrams" / f"{name}.md").write_text(
+        diagram_markdown(f"{name} — flow", src), encoding="utf-8"
     )
 
 
@@ -42,10 +50,20 @@ def _render_runbook(doc: dict, proj: Path, flows: dict[str, dict]) -> None:
     )
 
 
+def _render_topology(doc: dict, proj: Path, flows: dict[str, dict]) -> None:
+    name = doc["metadata"]["name"]
+    src = mermaid_topology(doc)
+    (proj / "diagrams" / f"{name}-topology.mmd").write_text(src, encoding="utf-8")
+    (proj / "diagrams" / f"{name}-topology.md").write_text(
+        diagram_markdown(f"{name} — topology", src, TOPOLOGY_LEGEND), encoding="utf-8"
+    )
+
+
 # Per-kind projection renderers, keyed by the registry's `renderer` field. Adding a projecting kind =
 # declare `renderer: <name>` in the registry + add a handler here; test_registry_governance keeps the
 # two in lock-step. Whole-KB projections (copilot-instructions, catalog-info) are not per-kind.
-_PROJECTION_RENDERERS = {"diagram": _render_diagram, "runbook": _render_runbook}
+_PROJECTION_RENDERERS = {"diagram": _render_diagram, "runbook": _render_runbook,
+                         "topology": _render_topology}
 
 
 def render_projections(layout: RunLayout, docs: list[dict] | None = None) -> Path:

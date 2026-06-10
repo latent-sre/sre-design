@@ -416,17 +416,28 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
             "riskRationale": risk.rationale,
         }, [cb_f.evidence], "verified", confidence(Signal.DERIVED, len(impacted)), service))
 
+    def _lossy_sink(node_slug: str) -> bool:
+        """A flow step writing to `node_slug` whose failure is logged-and-swallowed: data loss.
+        Steps and sinks are parallel lists (built from the same ordered walk)."""
+        return any(
+            slug(str(sink.get("target"))) == node_slug
+            and any(fm.get("dataLossRisk") for fm in step.get("failureModes", []))
+            for ff in flows
+            for step, sink in zip(ff.attrs.get("steps", []), ff.attrs.get("sinks", []))
+        )
+
     for repo_f in repos:
         node = slug(repo_f.attrs["name"])
         impacted = _flows_touching(node)
         if not impacted:
             continue
-        risk = assess_risk(impacted_flows=len(impacted), data_loss=False, contained=False)
+        data_loss = _lossy_sink(node)
+        risk = assess_risk(impacted_flows=len(impacted), data_loss=data_loss, contained=False)
         docs.append(_doc("BlastRadius", node, {
             "node": {"type": "datastore", "name": node},
             "impactedFlows": impacted,
             "containment": [],
-            "stateful": {"dataLossRisk": False},
+            "stateful": {"dataLossRisk": data_loss},
             "dependencyCriticality": risk.criticality,
             "severityHint": risk.severity,
             "riskRationale": risk.rationale,
@@ -618,7 +629,10 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
                 {
                     "type": "service",
                     "lifecycle": "production",
-                    "providesApis": [flow.attrs["trigger"]["path"]] if flow else [],
+                    # Every detected endpoint path, not just the first flow's trigger — the
+                    # catalog projection prefixes each with `api:{service}`.
+                    "providesApis": sorted({str(e.attrs.get("path") or "/")
+                                            for e in fs.of("rest.endpoint")}),
                     "dependsOn": app.attrs.get("services", []),
                 },
                 [app.evidence],

@@ -12,7 +12,7 @@ from sre_kb.collectors import scan
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.config import load_config
 from sre_kb.estate.topology import build_estate
-from sre_kb.render.diagrams import mermaid_topology
+from sre_kb.render.diagrams import TOPOLOGY_LEGEND, diagram_markdown, mermaid_topology
 from sre_kb.util import slug
 from sre_kb.validation.gating import final_status
 from sre_kb.validation.provenance import verify_evidence_roots
@@ -91,7 +91,10 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
     if topo:
         diagrams = layout.root / "projections" / "diagrams"
         diagrams.mkdir(parents=True, exist_ok=True)
-        (diagrams / "topology.mmd").write_text(mermaid_topology(topo), encoding="utf-8")
+        src = mermaid_topology(topo)
+        (diagrams / "topology.mmd").write_text(src, encoding="utf-8")
+        (diagrams / "topology.md").write_text(
+            diagram_markdown("estate — topology", src, TOPOLOGY_LEGEND), encoding="utf-8")
 
     svc_names = [s["service"] for s in services]
     report_path = layout.reports / "estate_report.json"

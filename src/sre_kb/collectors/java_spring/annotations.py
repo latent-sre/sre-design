@@ -16,6 +16,7 @@ _MAPPING = {
     "@GetMapping": "GET", "@PostMapping": "POST", "@PutMapping": "PUT",
     "@DeleteMapping": "DELETE", "@PatchMapping": "PATCH",
 }
+_AUTHZ = ("@PreAuthorize", "@Secured", "@RolesAllowed")
 
 
 def collect(ctx: ScanContext) -> list[Fact]:
@@ -41,6 +42,24 @@ def collect(ctx: ScanContext) -> list[Fact]:
                         ctx.evidence(rel, m.start, m.name_line, "java_spring.annotations"),
                         Symbol(handler, "method"),
                     ))
+
+            for owner, anns, line in [(tfqn, t.annotations, t.start)] + [
+                (fqn(ns, t.name, m.name), m.annotations, m.start) for m in t.methods
+            ]:
+                ann = next((a for a in _AUTHZ if a in anns), None)
+                if ann:
+                    facts.append(Fact(
+                        "security.authz", {"annotation": ann, "target": owner},
+                        ctx.evidence(rel, line, line, "java_spring.annotations"),
+                        Symbol(owner, "annotation"),
+                    ))
+
+            if "@RefreshScope" in t.annotations:
+                facts.append(Fact(
+                    "config.refreshscope", {"class": tfqn},
+                    ctx.evidence(rel, t.start, t.start, "java_spring.annotations"),
+                    Symbol(tfqn, "class"),
+                ))
 
             if t.kind == "interface" and any("JpaRepository" in s for s in t.supertypes):
                 facts.append(Fact(

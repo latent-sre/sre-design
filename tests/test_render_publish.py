@@ -36,6 +36,12 @@ def test_runbook_embeds_mermaid(result):
     assert "```mermaid" in runbooks[0].read_text()
 
 
+def test_single_service_topology_renders(result):
+    mmd = (result.projections / "diagrams" / "order-service-topology.mmd").read_text()
+    assert mmd.startswith("graph LR")
+    assert "orders-postgres" in mmd  # the bound datastore is drawn without an estate sweep
+
+
 def test_pr_tree_structure(result):
     # per-service content lives under the Backstage catalog path
     base = result.pr / "catalog" / "order-service"

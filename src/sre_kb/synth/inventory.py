@@ -229,6 +229,36 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
         docs.append(emit("Interface", service, interface_spec, ev, "verified",
                          confidence(Signal.DIRECT), service))
 
+    # --- Topology (single-service): the app-centric graph the estate run merges; emitting it
+    # per run means one service's bindings/downstreams are drawable without an estate sweep ---
+    bindings = fs.of("pcf.service-binding")
+    clients = fs.of("config.client")
+    if bindings or clients:
+        topo_nodes: list[dict] = [{"type": "service", "name": service}]
+        topo_edges: list[dict] = []
+        seen_nodes = {service}
+        for sb in bindings:
+            res = sb.attrs["name"]
+            if res not in seen_nodes:
+                seen_nodes.add(res)
+                topo_nodes.append({
+                    "type": "datastore" if is_datastore(res) else "broker" if is_broker(res) else "resource",
+                    "name": res,
+                })
+            topo_edges.append({"from": service, "to": res, "relation": "binds"})
+        for c in clients:
+            downstream = c.attrs.get("client", "downstream")
+            if downstream not in seen_nodes:
+                seen_nodes.add(downstream)
+                topo_nodes.append({"type": "external", "name": downstream})
+            topo_edges.append({"from": service, "to": downstream, "relation": "calls"})
+        topo_ev = [(bindings[0] if bindings else clients[0]).evidence]
+        docs.append(emit("Topology", service, {
+            "nodes": topo_nodes,
+            "edges": topo_edges,
+            "pcfSpaces": [],
+        }, topo_ev, "verified", confidence(Signal.DIRECT), service))
+
     # --- ConfigManagement ---
     config_facts = fs.of("config.slo", "config.client", "config.timelimiter", "config.actuator")
     if config_facts:

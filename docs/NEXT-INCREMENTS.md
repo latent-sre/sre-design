@@ -239,7 +239,7 @@ A sweep of every kind's emit path against its schema found three classes of "emp
 |---|---|
 | `DeliveryPipeline` | parse `cf push` out of checked-in CI files (§4.4) |
 | `SecurityPosture` | Tier-B skill only today; deterministic seeds exist (Spring Security config, auth annotations, actuator exposure) |
-| `Topology` (single-service) | only `sre-kb estate` emits one; derivable from the same binding/client facts in a plain run |
+| `Topology` (single-service) | **done on this branch** — emitted per run from binding/client facts (`synth/inventory.py`), rendered via a registry `topology` renderer to `diagrams/<service>-topology.mmd` |
 
 **Hardcoded-empty fields where the engine already had the knowledge** — fixed on this branch:
 

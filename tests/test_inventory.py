@@ -68,6 +68,19 @@ def test_configmanagement(docs):
     assert spec["refreshScope"] is False  # no @RefreshScope anywhere in the fixture
 
 
+def test_single_service_topology(docs):
+    # The app-centric graph the estate run merges, now emitted per run: the service, its
+    # bound resources, and config-declared downstreams.
+    spec = docs[("Topology", "order-service")]["spec"]
+    nodes = {n["name"]: n["type"] for n in spec["nodes"]}
+    assert nodes["order-service"] == "service"
+    assert nodes["orders-postgres"] == "datastore"
+    assert nodes["order-kafka"] == "broker"
+    assert nodes["inventory"] == "external"
+    assert {"from": "order-service", "to": "orders-postgres", "relation": "binds"} in spec["edges"]
+    assert {"from": "order-service", "to": "inventory", "relation": "calls"} in spec["edges"]
+
+
 def test_interface_idempotency_matches_the_gap_signature(docs):
     # POST /api/v1/orders has no idempotency guard in scope — the same Tier-A signature that
     # emits the missing-idempotency gap drives the Interface fields, so they cannot disagree.

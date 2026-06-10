@@ -83,7 +83,10 @@ kinds:
     phase: P2
   ScheduledJob:     { schema: schemas/v1alpha1/ScheduledJob.schema.json,     phase: P2 }
   DeliveryPipeline: { schema: schemas/v1alpha1/DeliveryPipeline.schema.json, phase: P2 }
-  Topology:         { schema: schemas/v1alpha1/Topology.schema.json,         phase: P2 }
+  Topology:
+    schema: schemas/v1alpha1/Topology.schema.json
+    phase: P2
+    renderer: topology   # -> projections/diagrams/<name>-topology.mmd (Mermaid graph)
   FeatureFlag:
     schema: schemas/v1alpha1/FeatureFlag.schema.json
     collectors: [common.feature_flags]

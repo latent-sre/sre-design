@@ -166,32 +166,90 @@ def ambiguous_call_edges(services: list[dict]) -> list[dict]:
     return items
 
 
+def _path_hits(changed: str, consumer: str) -> bool:
+    """Does a changed endpoint path (normPath, `{}` templates) match a consumer-side URL
+    literal? Conservative by design: an equal-length segment match where `{}` matches any
+    one segment, or the classic string-concat prefix (`"/orders/" + id` — the literal ends
+    with `/` and covers everything but a final `{}` segment). Anything fuzzier would invent
+    impact."""
+    changed_segs = [s for s in changed.split("/") if s]
+    literal = consumer.split("?", 1)[0]
+    consumer_segs = [s for s in literal.split("/") if s]
+    if literal.endswith("/") and consumer_segs:
+        return changed_segs[:-1] == consumer_segs and changed_segs[-1:] == ["{}"]
+    return len(changed_segs) == len(consumer_segs) and all(
+        c == "{}" or c == u for c, u in zip(changed_segs, consumer_segs))
+
+
+def _consumer_paths(fs, provider: str, route_owner: dict[str, str],
+                    sole_provider: str | None) -> set[str]:
+    """The egress URL paths a consumer's code aims at `provider`: absolute URLs attributed by
+    their hostname, relative paths only when `provider` is the consumer's sole resolved
+    callee (the same sole-candidate rule the lossy-sink attribution uses)."""
+    out: set[str] = set()
+    for f in fs.of("http.egress"):
+        url = f.attrs.get("url")
+        if not url:
+            continue
+        if url.startswith(("http://", "https://")):
+            if route_owner.get(_host(url)) != provider:
+                continue
+            rest = url.split("://", 1)[1]
+            path = "/" + rest.split("/", 1)[1] if "/" in rest else "/"
+        elif sole_provider == provider:
+            path = url
+        else:
+            continue
+        out.add(path)
+    return out
+
+
 def contract_change_blast(services: list[dict], edges: list[dict]) -> list[dict]:
     """Estate-level blast radius for breaking API changes (§5.5): a provider whose baseline
     diff produced breaking `api.contract.change` facts impacts every scanned consumer with a
-    resolved `calls` edge to it — 'this change breaks services X, Y', not a single-repo note."""
+    resolved `calls` edge to it — 'this change breaks services X, Y', not a single-repo note.
+    When consumers' code carries literal egress URLs, the subset whose paths hit a changed
+    endpoint is additionally labeled `preciselyImpacted`."""
     names = {s["service"] for s in services}
+    fs_by_service = {s["service"]: s["fs"] for s in services}
+    route_owner = _route_owners(services)
     consumers_of: dict[str, set[str]] = {}
+    providers_of: dict[str, set[str]] = {}
     for e in edges:
         if e.get("relation") == "calls" and e.get("from") in names and e.get("to") in names:
             consumers_of.setdefault(e["to"], set()).add(e["from"])
+            providers_of.setdefault(e["from"], set()).add(e["to"])
     findings: list[dict] = []
     for s in sorted(services, key=lambda s: s["service"]):
         provider = s["service"]
         breaking = [f for f in s["fs"].of("api.contract.change") if f.attrs.get("breaking")]
         impacted = sorted(consumers_of.get(provider, ()))
-        if breaking and impacted:
-            changes = sorted(f"{f.attrs['changeType']} {f.attrs['ref']}" for f in breaking)
-            findings.append({
-                "type": "api-breaking-change-blast",
-                "severity": "high",
-                "provider": provider,
-                "impactedServices": impacted,
-                "changes": changes,
-                "detail": (f"{provider} has {len(breaking)} breaking API change(s) vs its "
-                           f"committed baseline ({'; '.join(changes)}) — scanned consumers "
-                           f"impacted: {', '.join(impacted)}."),
-            })
+        if not (breaking and impacted):
+            continue
+        changes = sorted(f"{f.attrs['changeType']} {f.attrs['ref']}" for f in breaking)
+        changed_paths = {str(f.attrs["ref"]).split(" ", 1)[1] for f in breaking
+                         if " " in str(f.attrs["ref"])}
+        precise = []
+        for consumer in impacted:
+            sole = next(iter(providers_of[consumer])) if len(providers_of.get(consumer, ())) == 1 else None
+            paths = _consumer_paths(fs_by_service[consumer], provider, route_owner, sole)
+            if any(_path_hits(ch, p) for ch in changed_paths for p in paths):
+                precise.append(consumer)
+        finding = {
+            "type": "api-breaking-change-blast",
+            "severity": "high",
+            "provider": provider,
+            "impactedServices": impacted,
+            "changes": changes,
+            "detail": (f"{provider} has {len(breaking)} breaking API change(s) vs its "
+                       f"committed baseline ({'; '.join(changes)}) — scanned consumers "
+                       f"impacted: {', '.join(impacted)}."),
+        }
+        if precise:
+            finding["preciselyImpacted"] = precise
+            finding["detail"] += (f" Code-level path evidence confirms the hit for: "
+                                  f"{', '.join(precise)}.")
+        findings.append(finding)
     return findings
 
 

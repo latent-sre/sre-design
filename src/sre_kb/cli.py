@@ -1,12 +1,13 @@
 """`sre-kb` command-line interface.
 
 All subcommands are implemented: `run`/`scan`/`render`/`publish` (the deterministic pipeline),
-`validate-kb`, `findings`, `estate`, `diff`, `scan-worklist`, `challenge-worklist`/`challenge-apply`,
-`gap-finder`, `secret-scan`, and `schema`. There is no separate `validate` subcommand — validation is the
-default `--to-stage` of `run`. The engine never calls an LLM — enrichment happens in VS Code via
-Copilot between `scan` and the validate stage. `scan-worklist` is the single front door for that
-manual loop (one manifest of every discover/confirm task); the LLM challenge oracle runs out-of-process
-(worklist → Copilot → `challenge-apply`).
+`validate-kb`, `findings`, `estate`, `diff`, `scan-worklist`/`worklist-run`,
+`challenge-worklist`/`challenge-apply`, `gap-finder`, `secret-scan`, and `schema`. There is no separate
+`validate` subcommand — validation is the default `--to-stage` of `run`. The engine embeds no LLM —
+enrichment runs through the `LLMProvider` seam between `scan` and the validate stage: by default
+Copilot in VS Code via the manual file exchange (`scan-worklist` is its single front door — one
+manifest of every discover/confirm task), or `worklist-run --oracle` drives the same tasks through a
+programmatic provider end-to-end.
 """
 
 from __future__ import annotations
@@ -443,6 +444,72 @@ def scan_worklist_cmd(
         typer.echo(f"      writeTo: {base}/{task['writeTo']}")
         typer.echo(f"      ingest:  {task['ingest']}")
     typer.echo(f"{len(data['tasks'])} task(s) for the LLM half — see {path}")
+    typer.echo("run them in the IDE, or automate: sre-kb worklist-run --run "
+               f"{run_id} --oracle '<llm-cli>'")
+
+
+@app.command("worklist-run")
+def worklist_run_cmd(
+    run_id: str = typer.Option(..., "--run"),
+    oracle: str = typer.Option(
+        None,
+        "--oracle",
+        envvar="SRE_KB_ORACLE",
+        help="External LLM-oracle command (e.g. 'copilot -p'). Prompt is fed on stdin. "
+        "If unset, the worklist stays deferred to the manual IDE loop.",
+    ),
+    timeout: float = typer.Option(120.0, "--timeout", help="Per-prompt oracle timeout (seconds)."),
+    cache_dir: Path = typer.Option(None, "--cache-dir", help="Prompt-hash response cache dir (reproducibility)."),
+    target: str = typer.Option(None, "--target", help="Scanned repo (default: from the worklist)."),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Drive the whole scan worklist (discover + confirm + challenge) through a programmatic LLM
+    provider — the automated counterpart of the manual IDE file exchange.
+
+    Each task's output lands in the exact file the manual loop would have written, so the same
+    deterministic ingest gates re-ground everything: proposals on the next `sre-kb run`, verdicts
+    via `challenge-apply` / `confirm-apply` (printed per task). The engine embeds no model; the
+    provider is the operator-configured `--oracle` through the `LLMProvider` seam, and a provider
+    can never assert a verdict the engine trusts.
+    """
+    import json
+
+    from sre_kb.llm.provider import make_provider
+    from sre_kb.pipeline.worklist_run import run_scan_worklist
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    wpath = layout.root / "scan-worklist.json"
+    if not wpath.exists():
+        typer.echo("no scan worklist (run not validated yet)")
+        raise typer.Exit(code=0)
+    worklist = json.loads(wpath.read_text())
+    if not worklist["tasks"]:
+        typer.echo("the scan worklist is empty — nothing for the LLM half to do")
+        raise typer.Exit(code=0)
+    if not oracle:
+        typer.echo(
+            "no --oracle configured (or SRE_KB_ORACLE unset): worklist deferred to the manual loop.\n"
+            f"Run the tasks in the IDE (sre-kb scan-worklist --run {run_id}), or point --oracle at "
+            "a Copilot/Claude CLI to run them end-to-end."
+        )
+        raise typer.Exit(code=0)
+
+    tgt = Path(target or worklist["target"])
+    cfg = {"llm": {"provider": "subprocess", "command": oracle, "timeout": timeout,
+                   **({"cache_dir": str(cache_dir)} if cache_dir else {})}}
+    client = make_provider(cfg)
+    summaries = run_scan_worklist(layout, worklist, client, target=tgt)
+    for s in summaries:
+        line = f"  [{s['status']}] {s['task']}: {s['note']}"
+        if s.get("output"):
+            line += f" → {s['output']}"
+        typer.echo(line)
+    ingests = [s["ingest"] for s in summaries if s["status"] == "written"]
+    if ingests:
+        typer.echo("ingest (deterministic, re-grounds every output):")
+        for cmd in ingests:
+            typer.echo(f"  {cmd}")
 
 
 @app.command("challenge-worklist")

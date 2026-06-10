@@ -14,103 +14,49 @@ Two halves, confirmed with the user:
   repo, extracts facts with hard provenance (file/line/commit/excerpt-hash),
   scaffolds schema-tagged YAML artifacts, **validates** them, renders Copilot
   skills, and opens the PR.
-- **GitHub Copilot in VS Code** — the *LLM* half, and the **only approved LLM**.
-  There is **no external LLM API** (no OpenAI/Anthropic/Azure SDK anywhere).
-  Copilot's agent mode does all synthesis, driven by the **Agent Skills / custom
-  agent / prompt files this repo ships**. LLM-neutrality is automatic: Copilot's model picker
-  (GPT / Claude / Gemini) is model-agnostic and we pin no model.
+- **An LLM behind the `LLMProvider` seam** — the *judgment* half. The load-bearing
+  rule is the trust invariant, not the transport: **the LLM is a pointer-generator,
+  never a fact source** — it cites verbatim bytes; the engine re-grounds every output
+  deterministically and gates it (downgrade-only). Transports plug into one seam
+  (`llm/provider.py`): **GitHub Copilot in VS Code** is the default (file-exchange;
+  the engine embeds no model), driven by the **Agent Skills / custom agent / prompt
+  files this repo ships**; a **subprocess oracle** (any CLI via `--oracle`) and
+  approved API providers (e.g. Vertex — see
+  [`VERTEX-LLM-PROVIDER-CASE.md`](VERTEX-LLM-PROVIDER-CASE.md)) run the same worklist
+  tasks programmatically. LLM-neutral throughout: no pinned model or vendor.
 
 Backbone = **YAML artifacts with `apiVersion` + `kind`** (Kubernetes/Backstage
 style), each validated against a JSON Schema. The KB-as-YAML is the single source
 of truth; Copilot skills, the Backstage catalog, and dashboards are *projections*.
 
 **Three neutralities:** repo-neutral (pluggable per-language collectors) ·
-LLM-neutral (Copilot, no pinned model/vendor) · SCM-neutral (a `Forge` seam;
-GitHub implemented first because that is the company SCM).
+LLM-neutral (the `LLMProvider` seam; no pinned model/vendor) · SCM-neutral (a `Forge`
+seam; GitHub implemented first because that is the company SCM).
 
-**On-prem reality:** VMs (physical) + **PCF / Pivotal Cloud Foundry**, *not* cloud.
-So `manifest.yml`, buildpacks, routes, service bindings (VCAP), Spring Cloud
-Config, Eureka, Actuator, Micrometer, Resilience4j/Hystrix are first-class signals.
-Java/Spring Boot is the first-class collector; .NET (Steeltoe)/Node/Python follow.
+**First deployment profile: on-prem VMs + PCF / Pivotal Cloud Foundry.** There,
+`manifest.yml`, buildpacks, routes, service bindings (VCAP), Spring Cloud Config,
+Eureka, Actuator, Micrometer, Resilience4j/Hystrix are first-class signals. The
+platform is a profile, not the architecture: collectors are registry-driven
+(`config/profiles/*`), so Kubernetes or cloud deployment descriptors are additional
+profiles, not a redesign. Collectors ship for Java/Spring, .NET/Steeltoe,
+Python/FastAPI, Node/Express, and Go.
 
-**Confirmed decisions:** Copilot = the LLM (no API seam) · first vertical slice =
-**Flow → Alert → Runbook** · publish to **company GitHub** (neutral Forge) ·
-generated alerts/runbooks target **Splunk**, **Prometheus+Grafana**,
-**AppDynamics**, **Wavefront** (now **VMware Aria Operations for Applications**,
-a.k.a. Tanzu Observability under Broadcom), and **ThousandEyes** (Cisco;
-network/synthetic).
+**Confirmed decisions:** the LLM is a pointer-generator behind the `LLMProvider` seam,
+never a fact source · first vertical slice = **Flow → Alert → Runbook** · publish to
+**company GitHub** (neutral Forge) · alert/runbook backends are **pluggable render
+adapters defined as data** (`alert-backends.md`), not architecture — currently
+shipped: **Splunk** SPL, **Prometheus+Grafana** PromQL, **AppDynamics** health rules,
+**Wavefront / VMware Aria Operations for Applications** ts(), and **ThousandEyes**;
+adding a backend is a new adapter, not a design change.
 
 ---
 
-## Implementation status (June 2026)
+## Implementation status
 
-The design below is the full intent; this section records what is **built and tested
-offline** today (ruff-clean). The vertical slice and the items earlier marked
-"deferred to P3/P4" are now implemented. The forward roadmap — trust tiers and fenced LLM
-(Tier-B) collectors — lives in [`HYBRID-PLAN.md`](HYBRID-PLAN.md), the **single source of truth for
-live status** (§8 the tracker, §9 the rolling reassessment); this summary is high-level — when it and
-§8 disagree, §8 wins.
-
-- **Engine** — deterministic `scan → scaffold → validate` for **28** `kind`s. Collectors:
-  **Java/Spring on PCF**, **.NET/Steeltoe on PCF**, **Python/FastAPI**, **Node/Express**, and
-  **Go** — same normalized facts → same KB across stacks, proving repo-neutrality. Code structure
-  is read from a **tree-sitter AST** (Java, C#, Python, JavaScript, Go — `parsing/code_model.py`),
-  not line regexes — per-class scoping and receiver→field-type correlation. FastAPI/Express/gin
-  emit REST endpoints + egress from the AST; Node/Go also carry a config-parsed tech-stack slice
-  (`package.json`/`go.mod`). Confidence is signal-derived and BlastRadius risk is computed from impacted
-  -flow breadth + containment, not type-keyed constants.
-- **Trust tiers** — every `Evidence` carries a `source_tier` (`ast` deterministic | `llm`),
-  rolled up per artifact and surfaced in the validation report. Tier-B refutation/judgment
-  proposals stay fenced to `needs-review`; confirmation probes can graduate only when a
-  deterministic engine rule fires on the located bytes.
-- **Validation** — 5 layers: structural (schema), provenance (excerpt hash **+ repo-root
-  path confinement**), **status-aware** cross-ref (a verified artifact can't depend on an
-  unverified one), gating, and an **adversarial challenge pass** (deterministic grounding +
-  an LLM hook; monotonic downgrade-only). Nothing is silently dropped.
-- **Copilot driver** — split **authoring** vs **consumer**. Authoring: the `sre-analyst` +
-  read-only `sre-target-scan` agents and the `sre-flow-analysis`, `sre-blast-radius`,
-  `sre-prr-review`, `sre-estate`, `sre-criticality`, `sre-gap-finder`,
-  `sre-observability-coverage`, `sre-security-posture`, `sre-generate-slos`, and
-  `sre-generate-dashboards` skills that build the KB. Consumer: the `sre-oncall` agent +
-  `sre-incident-response` skill that use a *published* KB during an incident (read-only). The
-  challenge loop is automatable end-to-end: the engine emits a worklist, `sre-kb
-  challenge-run --oracle '<llm-cli>'` drives it through an external model on stdin (the engine
-  embeds none), and `challenge-apply` re-gates the verdicts (monotonic, downgrade-only); with
-  no oracle it defers to a human.
-- **Render** — Mermaid sequence + topology diagrams, runbooks, and Copilot reliability
-  guardrails that are **tier-aware** (Tier-B findings are advisory, never hard rules) with
-  untrusted values sanitized into the output.
-- **Publish** — SCM-neutral Forge. `--dry-run` stages a Backstage per-service PR tree
-  (REVIEW.md + FINDINGS.md, each claim labeled by trust tier); `--no-dry-run` opens a live
-  PR (git + GitHub REST) confined to a **repo allowlist**, with the token kept out of `git`
-  argv. A **fan-out cap** refuses a runaway tree.
-- **Estate** (`sre-kb estate`) — cross-service topology + co-tenancy blast radius.
-- **Drift** (`sre-kb diff`) — living-KB changelog across two scans.
-- **Findings** (`sre-kb findings`) — ranked, evidence-linked risk digest (CI-gateable),
-  plus a `tier-conflict` detector (Tier-A vs Tier-B disagreement).
-- **Security** — a fail-closed publish-time **secret-scan gate** (redaction only on the
-  `--allow-secrets` override), a **non-escapable** untrusted-input context fence, sanitized
-  renderers, the publish-repo allowlist + fan-out cap above, a read-only `sre-target-scan`
-  agent for untrusted repos, dangerous-pattern output lint, and engine resource limits.
-
-Built and exercised end-to-end: the **challenge loop (Phase 3)** — a deterministic grounding
-challenger runs inline, and judgment-call claims are emitted as a worklist that Copilot
-adjudicates (`challenge-worklist`), then `challenge-apply` re-gates monotonically
-(downgrade-only). The in-process `LLMChallenger` hook stays dormant by design: the oracle is
-Copilot via the worklist, so the engine never calls a model.
-
-Landed: the fenced Tier-B LLM gap-finder collector (Phase 4, `collectors/llm/`,
-`ResiliencyGap`) with refutation probes
-(`missing-timeout`, `unguarded-critical-dependency`), confirmation probes (`swallowed-failure`,
-`undocumented-job`), judgment routing (`data-loss-path`, `missing-idempotency`,
-`unbounded-resource`), and a first-slice **Python/FastAPI** collector. A first real-Copilot run
-against `sample-gap-finder` measured 4/4 proposal recall, 4/4 kept recall, and no false-positive
-survivors; still not proven are service-scale noise/precision, the full recurring-category
-promotion workflow, the rest of the scan/publish credential split (the no-credential scan role
-landed; scoped publish role + CI wiring remain), and Python/Node/Go flow + resiliency parity
-beyond the endpoint slice. Supply-chain pinning (hash-locked `requirements.lock` + the independent
-detect-secrets CI gate) and the Node/Go collectors have since landed. See
-[`HYBRID-PLAN.md`](HYBRID-PLAN.md) §8 and §9.5.
+Live status is **not tracked here**. [`HYBRID-PLAN.md`](HYBRID-PLAN.md) is the single
+source of truth (§8 the tracker, §9 the rolling reassessment);
+[`SCOPE-AND-COVERAGE.md`](SCOPE-AND-COVERAGE.md) holds the coverage matrix and the
+accuracy gates. This document records the architecture and its invariants.
 
 ---
 
@@ -357,7 +303,7 @@ Adding a kind = schema + prompt + (optional) collector + one `registry.yaml` row
 
 ---
 
-## The Copilot "skill/agent" driver (the LLM half)
+## The Copilot "skill/agent" driver (the default LLM transport)
 
 **Agent Skills are the primary mechanism** (this is the "skill for VS Code" you
 asked for); a custom agent orchestrates them; instructions + prompt files round it
@@ -536,13 +482,16 @@ symlink-follow.
 
 Engine stages under `.work/<run-id>/`, resumable via `--from-stage/--to-stage`:
 `clone → scan (facts + deterministic scaffold) → validate → review-gate → render → publish`.
-**There is no LLM-calling stage — the engine never calls a model.** The synthesis /
-enrichment step sits *between* `scan` and `validate` and is done by **Copilot in VS
-Code** (the `sre-analyst` agent + `sre-*` skills), which edits the scaffolded
-artifacts in `candidates/` in place. In CI / headless runs there is no Copilot, so the
-pipeline runs the **deterministic path only** (scaffold → validate → render) — exactly
-what the offline e2e test exercises; `--from-stage validate` resumes after a Copilot
-enrichment session.
+**The engine embeds no model.** The synthesis / enrichment step sits *between* `scan`
+and `validate` and runs through the configured `LLMProvider`: by default **Copilot in
+VS Code** (the `sre-analyst` agent + `sre-*` skills) edits the scaffolded artifacts in
+`candidates/` in place; `sre-kb worklist-run --oracle '<llm-cli>'` drives the same
+scan-worklist tasks (discover + confirm + challenge) through a programmatic provider
+end-to-end, writing the exact files the manual exchange would have. Either way every
+output is re-grounded and gated. With no provider configured, CI / headless runs take
+the **deterministic path only** (scaffold → validate → render) — exactly what the
+offline e2e test exercises; `--from-stage validate` resumes after an enrichment
+session.
 
 ```
 sre-kb run     --target <path|git-url> [--profile java-spring-pcf] [--to-stage scan]
@@ -550,6 +499,7 @@ sre-kb scan    --run <id>            # deterministic facts + scaffold (no LLM)
 sre-kb validate --run <id>           # schema + provenance + crossref + gating
 sre-kb render  --run <id>            # Copilot projection + Backstage catalog
 sre-kb publish --run <id> --sre-repo <git-url> --forge github [--dry-run]
+sre-kb worklist-run --run <id> --oracle '<llm-cli>'   # run the whole LLM worklist programmatically
 sre-kb validate-kb <dir>             # standalone validate an existing KB tree
 sre-kb diff    --from <commit> --to <commit>   # P2: drift — diff the KB across commits
 sre-kb schema list|show <kind>
@@ -647,50 +597,15 @@ it never invents it.
 
 ---
 
-## Vertical slice — what actually gets built first
+## Build order (historical)
 
-**Phase 0 — walking skeleton:** repo layout, `pyproject`, `cli.py` stubs, config
-loader, `_envelope.schema.json`, `registry.yaml`, run-dir layout, the
-`sample-spring-pcf` fixture, and an offline e2e test. *Done = `sre-kb run --to-stage
-render` produces a schema-valid (mostly-scaffolded) KB with zero network/LLM.*
-
-**Phase 1 — Flow → Alert → Runbook (the value proof):**
-1. Java/Spring + PCF collectors: build, annotations, config, resiliency,
-   observability (logging), flow_builder (enough to support a flow and its alert/runbook).
-2. Schemas + prompts for `Flow`, `ResiliencyPattern`, `Observability` (logging
-   sub-section), `Fallback`, `Alert`, `Runbook`, **`BlastRadius` (minimal/single-
-   service)**, **`SloSli` (minimal detect-or-needs-review)**, **`ReadinessScore`
-   (coverage roll-up)** (+ `ServiceCatalogEntry`).
-3. Deterministic `scaffold.py` fills provenance-backed fields (incl. the
-   single-service blast-radius reverse-reachability and the **timeout/retry-budget
-   check**) and marks LLM-synthesis gaps; `context_pack.py` builds the bounded context.
-4. The shipped `sre-analyst` custom agent (`.agent.md`) + `sre-flow/alert/runbook`
-   Agent Skills (`SKILL.md`, bundling the `sre-kb` invocation) + prompt files.
-5. The four validation layers (structural / provenance / crossref / gating); render
-   the Copilot projection (incl. **reliability-guardrail instructions** + a **Mermaid
-   sequence diagram per flow**) + catalog; `publish --dry-run`.
-
-*Minimum demonstrating value:* point the engine at a Spring-Boot/PCF service →
-get validated `Flow` artifacts with real `path:line` provenance, a **single-service
-`BlastRadius`** (which flows/steps fail if `inventory-service` or `orders-postgres`
-is down, minus what the circuit-breaker contains), a **timeout/retry-budget finding**,
-**one generated Alert** (e.g. on a swallowed `order.created` publish failure, as Splunk
-SPL + Prometheus PromQL, severity ranked by blast radius), **one Runbook** wired to it,
-a **sequence diagram + coverage scorecard**, and a Copilot skill bundle (with
-reliability guardrails) + staged PR tree — all reproducible **offline**; Copilot
-enrichment layers on top in VS Code.
-
-**Beyond the slice:** P2 = remaining kinds & sub-sections (`TechStack`/`Architecture`/
-`Dependency`/`Deployment` (infra+capacity)/`Interface`/`Topology`/**`BlastRadius`
-(full cross-service + co-tenancy + stateful)**/`Observability` (metrics/traces/health)/
-`DataStore`/`ConfigManagement`/**`SloSli`** (full error-budget)/**`ReadinessScore`**
-(full PRR)) + **diagrams** (topology/blast-radius graph) + **drift detection
-(`sre-kb diff`)**. Most of the original P3/P4 is now built — the challenge-pass validator,
-redaction + publish-time secret-scan gate, untrusted-input framing + output lint, the live
-GitHub PR path, and the .NET/Steeltoe collector. What remains: a `SecurityPosture` collector,
-`DrBackup`, Node/Python collectors, and the hybrid-plan phases (trust tiers ✓, status-aware
-spine ✓, then the LLM-challenger oracle + fenced Tier-B gap-finders) — see
-[`HYBRID-PLAN.md`](HYBRID-PLAN.md).
+The **P1/P2** markers in the kind catalog above record what shipped first, not open
+work: **P1** was the Flow → Alert → Runbook vertical slice (collectors, the slice
+kinds, the analyst agent + skills, the validation layers, render + `publish
+--dry-run`); **P2** was the remaining kinds and sub-sections, full cross-service blast
+radius, and drift detection. Both are built, as is most of the original P3/P4
+hardening. The live roadmap and what remains are tracked in
+[`HYBRID-PLAN.md`](HYBRID-PLAN.md) §8/§9.
 
 ---
 
@@ -716,7 +631,8 @@ deterministic path; the fixture stands in for a cloned target repo:
 
 ## Assumptions / defaults (correct me if wrong)
 
-- First-class collector = **Java/Spring Boot on PCF**; other stacks are later phases.
+- Collectors ship for Java/Spring on PCF, .NET/Steeltoe, Python/FastAPI, Node/Express,
+  and Go; a new stack is a new collector set in the registry, not a redesign.
 - Target repo is **cloned locally** by the engine (or an existing local path passed
   in); arbitrary outbound clone may be limited by the environment's network policy,
   so the fixture is the primary offline proof.

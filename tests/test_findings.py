@@ -111,3 +111,13 @@ def test_non_pcf_kb_gets_no_snapshot_findings():
     assert [f for f in collect_findings([{"kind": "TechStack", "metadata": {"name": "x"},
                                           "spec": {}}])
             if "cf-env" in f["type"]] == []
+
+
+def test_snapshot_without_org_space_still_counts_as_present():
+    """A checked-in snapshot that types the bindings but carries no org/space must not
+    trigger the missing-snapshot nudge — Dependency snapshot fields prove it exists."""
+    docs = [_PCF_DEP,
+            {"kind": "Dependency", "metadata": {"name": "db"},
+             "spec": {"name": "db", "type": "datastore", "plan": "standard",
+                      "managed": True}}]
+    assert [f for f in collect_findings(docs) if f["type"] == "missing-cf-env-snapshot"] == []

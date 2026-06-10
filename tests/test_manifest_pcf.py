@@ -94,3 +94,25 @@ def test_env_variant_uses_its_own_vars_and_carries_environment(tmp_path):
     # though 'manifest-prod.yml' sorts before 'manifest.yml' lexically.
     assert "environment" not in apps[0].attrs and apps[0].attrs["instances"] == 1
     assert apps[1].attrs["environment"] == "prod" and apps[1].attrs["instances"] == 6
+
+
+def test_per_app_manifests_are_not_misread_as_environments(tmp_path):
+    """manifest-api.yml + manifest-worker.yml with NO base manifest.yml is the per-app
+    convention — neither file is an environment variant named 'api'/'worker'."""
+    (tmp_path / "manifest-api.yml").write_text(
+        "applications:\n- name: api\n", encoding="utf-8")
+    (tmp_path / "manifest-worker.yml").write_text(
+        "applications:\n- name: worker\n", encoding="utf-8")
+    apps, _ = _apps(tmp_path)
+    assert {a.attrs["name"] for a in apps} == {"api", "worker"}
+    assert all("environment" not in a.attrs for a in apps)
+
+
+def test_env_suffix_still_applies_beside_a_base_manifest(tmp_path):
+    (tmp_path / "manifest.yml").write_text(
+        "applications:\n- name: orders\n", encoding="utf-8")
+    (tmp_path / "manifest-prod.yml").write_text(
+        "applications:\n- name: orders\n", encoding="utf-8")
+    apps, _ = _apps(tmp_path)
+    envs = {a.attrs.get("environment") for a in apps}
+    assert envs == {None, "prod"}

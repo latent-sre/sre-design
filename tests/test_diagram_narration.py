@@ -62,3 +62,28 @@ def test_missing_proposals_file_is_a_noop(tmp_path):
     layout = _layout(tmp_path)
     result = apply_narrations(layout, _DOCS, tmp_path / "absent.json")
     assert result.outcomes == []
+
+
+def test_cli_ingest_renders_projections_on_a_validate_only_run(tmp_path):
+    """The worklist's declared ingest must work on the default validate-only run: missing
+    projections are rendered first instead of dropping every caption as unrendered."""
+    import json
+
+    from typer.testing import CliRunner
+
+    from sre_kb.cli import app
+    from sre_kb.pipeline import run as run_pipeline
+
+    target = tmp_path / "target"
+    import shutil
+    shutil.copytree(Path(__file__).parent / "fixtures" / "sample-spring-pcf", target)
+    run_pipeline(str(target), work_root=str(tmp_path / "w"), run_id="nv", to_stage="validate")
+    (target / ".sre").mkdir(exist_ok=True)
+    (target / ".sre" / "diagram-narrations.json").write_text(json.dumps({"narrations": [
+        {"diagram": "create-order", "text": "Shows the order flow."}]}), encoding="utf-8")
+    r = CliRunner().invoke(app, ["narrate-diagrams", "--run", "nv", "--target", str(target),
+                                 "--work-root", str(tmp_path / "w")])
+    assert r.exit_code == 0, r.output
+    assert "1 applied" in r.output
+    md = (tmp_path / "w" / "nv" / "projections" / "diagrams" / "create-order.md").read_text()
+    assert "Narration (LLM, advisory)" in md

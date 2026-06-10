@@ -115,6 +115,9 @@ def _ingest_drafts(layout: RunLayout, target: Path, result: AutopilotResult) -> 
             [{"target": o.proposal.target, "result": o.result, "path": o.path,
               "lines": list(o.lines) if o.lines else None, "note": o.note}
              for o in reviewed.outcomes], indent=2), encoding="utf-8")
+    # Reload: the drafters above just wrote new KB docs (alerts/runbooks/architecture); the
+    # projection render and narrations below must see them, not the list from function entry.
+    docs = load_kb(layout.root)
     if (target / PCF_REVIEW_REL).exists():
         result.pcf_review_routed = len(run_pcf_review(str(target)).kept())
     if (target / NARRATIONS_REL).exists():

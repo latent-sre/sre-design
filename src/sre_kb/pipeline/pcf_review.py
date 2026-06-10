@@ -21,8 +21,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from sre_kb.collectors import scan
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
+from sre_kb.collectors.common import manifest_pcf
 from sre_kb.models.facts import Fact
 
 # Conventional location of the skill's output inside the (untrusted) target repo.
@@ -73,11 +73,12 @@ def load_proposals(path: Path) -> list[PcfProposal]:
 
 def _web_instances(attrs: dict) -> object:
     """The instance count that matters for failover: the web process's when one is declared,
-    else the app-level count."""
+    else the app-level count. An omitted `instances:` is Cloud Foundry's default of 1."""
     for p in attrs.get("processes") or []:
         if p.get("type") == "web" and p.get("instances") is not None:
             return p["instances"]
-    return attrs.get("instances")
+    n = attrs.get("instances")
+    return 1 if n is None else n
 
 
 def _rederive(check: str, attrs: dict) -> tuple[bool, str]:
@@ -101,9 +102,12 @@ def _rederive(check: str, attrs: dict) -> tuple[bool, str]:
 
 
 def apply_review(apps: list[Fact], proposals: list[PcfProposal]) -> PcfReviewResult:
-    by_name: dict[str, Fact] = {}
-    for a in apps:  # base manifest first (collector ordering); keep the first per app name
-        by_name.setdefault(a.attrs.get("name"), a)
+    # Every manifest fact per app, base AND env variants: a condition that holds in any one
+    # of them deserves attention (manifest-prod.yml overriding instances: 1 is exactly the
+    # case a base-only check would wrongly refute).
+    by_name: dict[str, list[Fact]] = {}
+    for a in apps:
+        by_name.setdefault(a.attrs.get("name"), []).append(a)
     result = PcfReviewResult()
     for p in proposals:
         if p.check not in {"single-instance", "port-health-check",
@@ -111,26 +115,38 @@ def apply_review(apps: list[Fact], proposals: list[PcfProposal]) -> PcfReviewRes
             result.outcomes.append(PcfReviewOutcome(p, "unknown-check",
                                                     f"'{p.check}' is not in the vocabulary"))
             continue
-        app = by_name.get(p.app)
-        if app is None:
+        facts = by_name.get(p.app)
+        if not facts:
             result.outcomes.append(PcfReviewOutcome(p, "unknown-app",
                                                     f"no scanned manifest declares app '{p.app}'"))
             continue
-        holds, note = _rederive(p.check, app.attrs)
-        result.outcomes.append(PcfReviewOutcome(
-            p, "routed" if holds else "refuted",
-            note if holds else f"manifest disproves it: {note}",
-            app.evidence.path,
-        ))
+        notes = []
+        proving = None
+        for app in facts:
+            holds, note = _rederive(p.check, app.attrs)
+            env = app.attrs.get("environment")
+            notes.append(f"{f'[{env}] ' if env else ''}{note}")
+            if holds and proving is None:
+                proving = (app, note, env)
+        if proving:
+            app, note, env = proving
+            result.outcomes.append(PcfReviewOutcome(
+                p, "routed", f"{note} ({env or 'base'} manifest)", app.evidence.path))
+        else:
+            result.outcomes.append(PcfReviewOutcome(
+                p, "refuted", f"no manifest supports it: {'; '.join(notes)}",
+                facts[0].evidence.path))
     return result
 
 
 def run_pcf_review(target: str) -> PcfReviewResult:
     """Load proposals from the target, re-derive each against a fresh manifest scan, and write
-    the reviewed findings back (`.sre/pcf-review.json`) — advisory, `source: llm`."""
+    the reviewed findings back (`.sre/pcf-review.json`) — advisory, `source: llm`. Only the
+    manifest collector runs (the sole `pcf.app` emitter): a review costs a few YAML loads,
+    never a full repo scan."""
     root = Path(target).resolve()
     ctx = ScanContext(root=root, repo=root.as_uri(), commit=LOCAL_COMMIT)
-    apps = scan(ctx).of("pcf.app")
+    apps = [f for f in manifest_pcf.collect(ctx) if f.type == "pcf.app"]
     result = apply_review(apps, load_proposals(root / PROPOSALS_REL))
     findings = [{
         "check": o.proposal.check,

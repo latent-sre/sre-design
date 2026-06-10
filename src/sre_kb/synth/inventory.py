@@ -114,7 +114,11 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
             "patterns": patterns, "styleTags": ["layered"],
         }, arch_ev, "verified", confidence(Signal.DERIVED), service))  # composed from components
 
-    # --- Deployment (infra + capacity; one per manifest, so env variants keep their own contract) ---
+    # --- Deployment (infra + capacity; one per app+manifest, so env variants and multi-app
+    # manifests each keep their own contract instead of silently overwriting one file) ---
+    from sre_kb.util import slug as _slug
+
+    dep_names: set[str] = set()
     for app_f in fs.of("pcf.app"):
         a = app_f.attrs
         env_name = a.get("environment")
@@ -134,7 +138,16 @@ def inventory_docs(fs: FactSet, ctx: ScanContext, service: str) -> list[dict]:
         }
         if env_name:
             dep_spec["environment"] = env_name
-        docs.append(emit("Deployment", f"{service}-{env_name}" if env_name else service, dep_spec,
+        # The doc is named after the APP (a multi-app manifest emits one Deployment each);
+        # for the common single-app repo the app name IS the service name, so nothing changes.
+        base = _slug(str(a.get("name") or service))
+        dep_name = f"{base}-{env_name}" if env_name else base
+        n = 2
+        while dep_name in dep_names:  # same app declared twice (e.g. two base manifests)
+            dep_name = f"{base}-{env_name}-{n}" if env_name else f"{base}-{n}"
+            n += 1
+        dep_names.add(dep_name)
+        docs.append(emit("Deployment", dep_name, dep_spec,
                          [app_f.evidence], "verified", confidence(Signal.DIRECT), service))
 
     # --- Dependency (runtime service deps: bindings + downstream HTTP) ---

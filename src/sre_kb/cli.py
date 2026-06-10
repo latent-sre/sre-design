@@ -1127,11 +1127,18 @@ def estate(
     target: list[str] = typer.Option(..., "--target", help="Repeatable: each service repo path."),
     work_root: str = typer.Option(".work", "--work-root"),
     run_id: str = typer.Option(None, "--run"),
+    internal_namespace: list[str] = typer.Option(
+        None, "--internal-namespace",
+        help="Repeatable: shared-library allowlist glob (e.g. 'com.acme*', '@acme/*') for "
+        "uses-library edges and version-skew findings. Without it (and without an "
+        "estate.internal_namespaces config), library lineage is off.",
+    ),
 ) -> None:
     """Build an estate-level Topology + co-tenancy blast radius across services."""
     from sre_kb.estate import run_estate
 
-    r = run_estate(list(target), work_root=work_root, run_id=run_id)
+    r = run_estate(list(target), work_root=work_root, run_id=run_id,
+                   internal_namespaces=list(internal_namespace) if internal_namespace else None)
     typer.echo(f"estate {r.run_id}: {len(r.services)} services {r.services}, {r.docs} artifact(s)")
     for status, n in sorted(r.by_status.items()):
         typer.echo(f"  {status}: {n}")
@@ -1220,13 +1227,17 @@ def narrate_diagrams_cmd(
 ) -> None:
     """Tier-B diagram narration (§3.2/§2.6): apply the narrate-diagrams captions to the run's
     rendered diagram markdown — only names this run actually rendered, sanitized to one plain
-    paragraph, and always labeled advisory."""
+    paragraph, and always labeled advisory. A validate-only run has no projections yet, so
+    they are rendered first (deterministic, idempotent) instead of dropping every caption."""
     from sre_kb.pipeline.diagram_narration import PROPOSALS_REL, apply_narrations
-    from sre_kb.render import load_kb
+    from sre_kb.render import load_kb, render_projections
     from sre_kb.workspace import RunLayout
 
     layout = RunLayout(Path(work_root), run_id)
-    result = apply_narrations(layout, load_kb(layout.root), Path(target) / PROPOSALS_REL)
+    docs = load_kb(layout.root)
+    if not (layout.root / "projections" / "diagrams").is_dir():
+        render_projections(layout, docs)
+    result = apply_narrations(layout, docs, Path(target) / PROPOSALS_REL)
     for o in result.outcomes:
         typer.echo(f"  {o.diagram}: {o.result}  ({o.note})")
     applied = result.applied()

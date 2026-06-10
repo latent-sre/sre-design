@@ -23,9 +23,16 @@ from sre_kb.workspace import RunLayout
 
 
 def load_kb(run_root: Path) -> list[dict]:
+    """Load the run's validated KB tree, canonicalizing schema-evolution aliases on the way
+    in (§1.6): a doc written against a renamed field's old name reads identically to a new
+    one everywhere downstream — renderers, findings, narrations — not just in validation."""
+    from sre_kb.validation.structural import canonicalize_doc
+
     docs: list[dict] = []
     for p in sorted((run_root / "kb").rglob("*.yaml")):
-        docs.append(yaml.safe_load(p.read_text(encoding="utf-8")))
+        doc = yaml.safe_load(p.read_text(encoding="utf-8"))
+        canonical, _ = canonicalize_doc(doc) if isinstance(doc, dict) else (doc, [])
+        docs.append(canonical)
     return docs
 
 

@@ -374,3 +374,20 @@ def test_breaking_change_blast_labels_path_level_hits(tmp_path):
     assert blast["impactedServices"] == ["audit", "shop"]   # the resolved lower bound
     assert blast["preciselyImpacted"] == ["shop"]           # only the code-level path hit
     assert "shop" in blast["detail"]
+
+
+def test_estate_cli_internal_namespace_flag_reaches_the_join(tmp_path):
+    """§5.3's on-switch: the estate command's --internal-namespace flag must reach
+    build_estate (the config default is empty, so without a flag the feature was dead)."""
+    from typer.testing import CliRunner
+
+    from sre_kb.cli import app
+
+    _lib_repo(tmp_path / "a", "svc-a", "1.0.0")
+    _lib_repo(tmp_path / "b", "svc-b", "2.0.0")
+    r = CliRunner().invoke(app, ["estate", "--target", str(tmp_path / "a"),
+                                 "--target", str(tmp_path / "b"),
+                                 "--work-root", str(tmp_path / "w"), "--run", "cli-ns",
+                                 "--internal-namespace", "com.acme*"])
+    assert r.exit_code == 0, r.output
+    assert "library-version-skew" in r.output

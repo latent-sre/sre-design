@@ -89,3 +89,36 @@ def test_missing_or_garbage_proposals_are_a_noop(tmp_path):
     (tmp_path / ".sre").mkdir(exist_ok=True)
     (tmp_path / PROPOSALS_REL).write_text("not json", encoding="utf-8")
     assert run_pcf_review(str(tmp_path)).outcomes == []
+
+
+def test_omitted_instances_defaults_to_one_and_routes(tmp_path):
+    """Cloud Foundry defaults instances to 1 when the key is omitted — a single-instance
+    proposal for such an app must route, not be refuted with 'instances=None'."""
+    (tmp_path / "manifest.yml").write_text(
+        "applications:\n- name: solo\n  routes:\n  - route: solo.apps.internal\n",
+        encoding="utf-8")
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.collectors.common import manifest_pcf
+
+    apps = [f for f in manifest_pcf.collect(ScanContext(root=tmp_path, repo="file://x"))
+            if f.type == "pcf.app"]
+    result = apply_review(apps, [PcfProposal("single-instance", "solo", "high", "no failover")])
+    assert result.outcomes[0].result == "routed"
+
+
+def test_env_variant_condition_is_rederived_not_refuted_by_the_base(tmp_path):
+    """manifest-prod.yml overriding instances: 1 is a real prod risk even when manifest.yml
+    declares 3 — re-derivation must consider every manifest fact for the app."""
+    (tmp_path / "manifest.yml").write_text(
+        "applications:\n- name: orders\n  instances: 3\n", encoding="utf-8")
+    (tmp_path / "manifest-prod.yml").write_text(
+        "applications:\n- name: orders\n  instances: 1\n", encoding="utf-8")
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.collectors.common import manifest_pcf
+
+    apps = [f for f in manifest_pcf.collect(ScanContext(root=tmp_path, repo="file://x"))
+            if f.type == "pcf.app"]
+    result = apply_review(apps, [PcfProposal("single-instance", "orders", "high", "prod risk")])
+    [o] = result.outcomes
+    assert o.result == "routed"
+    assert "prod" in o.note  # the proving manifest is named

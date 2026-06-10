@@ -136,6 +136,7 @@ Engine-computed failure impact for one node (dependency/broker/datastore): the f
 | `node.name` | string | yes |  |
 | `impactedFlows` | array of string | yes |  |
 | `impactedServices` | array of string |  |  |
+| `indirectServices` | array of string |  | The subset of impactedServices reached transitively (bounded-depth walk of resolved calls edges against their direction), not by binding the node directly. |
 | `containment` | array |  |  |
 | `coTenancy` | array |  |  |
 | `stateful` | object |  |  |

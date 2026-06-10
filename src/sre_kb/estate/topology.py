@@ -12,6 +12,23 @@ from sre_kb.util import slug
 # Flow sinks carry the code-side target type; bindings carry the platform-side resource type.
 _SINK_TYPE_FOR = {"datastore": "db", "broker": "kafka"}
 
+# §5.7: how many caller hops the impact fold walks (A→B→C reach without unbounded cycles).
+_TRANSITIVE_DEPTH = 3
+
+
+def _transitive_callers(direct: set[str], callers_of: dict[str, set[str]]) -> set[str]:
+    """Services that degrade because something they call is impacted: walk resolved `calls`
+    edges against their direction from the directly-impacted set, bounded depth. Returns only
+    the indirect reach (the input set excluded)."""
+    reach, frontier = set(direct), set(direct)
+    for _ in range(_TRANSITIVE_DEPTH):
+        nxt = {c for s in frontier for c in callers_of.get(s, ())} - reach
+        if not nxt:
+            break
+        reach |= nxt
+        frontier = nxt
+    return reach - direct
+
 
 def _internal_libs(fs, patterns: tuple[str, ...]) -> dict[str, str | None]:
     """lib name -> pinned version (or None) for the `tech.dependency` facts matching the
@@ -209,24 +226,35 @@ def build_estate(services: list[dict],
         )
     )
 
+    # §5.7: resolved calls edges, reversed — who degrades when a service is impacted.
+    svc_names = {s["service"] for s in services}
+    callers_of: dict[str, set[str]] = {}
+    for e in edges:
+        if e.get("relation") == "calls" and e["from"] in svc_names and e["to"] in svc_names:
+            callers_of.setdefault(e["to"], set()).add(e["from"])
+
     fs_by_service = {s["service"]: s["fs"] for s in services}
     for res, by_service in sorted(owners.items()):
         if len(by_service) < 2:
             continue  # not shared -> not co-tenancy
         ntype = nodes.get(res, "resource")
+        indirect = sorted(_transitive_callers(set(by_service), callers_of))
+        spec = {
+            "node": {"type": ntype, "name": res},
+            "impactedFlows": _impacted_flows(res, ntype, by_service, fs_by_service),
+            "impactedServices": sorted(set(by_service) | set(indirect)),
+            "coTenancy": [{"sharedBy": sorted(by_service.keys())}],
+            "stateful": {"dataLossRisk": ntype == "datastore"},
+            "dependencyCriticality": "critical",
+            "severityHint": "critical",
+        }
+        if indirect:
+            spec["indirectServices"] = indirect
         docs.append(
             emit(
                 "BlastRadius",
                 f"{res}-cotenancy",
-                {
-                    "node": {"type": ntype, "name": res},
-                    "impactedFlows": _impacted_flows(res, ntype, by_service, fs_by_service),
-                    "impactedServices": sorted(by_service.keys()),
-                    "coTenancy": [{"sharedBy": sorted(by_service.keys())}],
-                    "stateful": {"dataLossRisk": ntype == "datastore"},
-                    "dependencyCriticality": "critical",
-                    "severityHint": "critical",
-                },
+                spec,
                 list(by_service.values()),
                 "verified",
                 0.8,

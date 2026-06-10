@@ -260,3 +260,21 @@ def test_breaking_change_with_no_scanned_consumer_is_not_an_estate_finding(tmp_p
     (lone / "manifest.yml").write_text("applications:\n- name: lone\n", encoding="utf-8")
     r = run_estate([str(provider), str(lone)], work_root=str(tmp_path / "w"), run_id="noc")
     assert [f for f in (r.findings or []) if f["type"] == "api-breaking-change-blast"] == []
+
+
+def test_cotenancy_impact_folds_transitive_callers(tmp_path):
+    """§5.7: a gateway that calls order-service degrades when the shared postgres fails —
+    impactedServices includes the A->B->C reach, with the indirect subset labeled."""
+    gw = tmp_path / "gateway"
+    (gw / "src/main/resources").mkdir(parents=True)
+    (gw / "manifest.yml").write_text("applications:\n- name: gateway\n", encoding="utf-8")
+    (gw / "src/main/resources/application.yml").write_text(
+        "clients:\n  orders:\n    base-url: order-service.apps.internal\n    timeout: 2s\n",
+        encoding="utf-8")
+    r = run_estate([str(gw), str(ORDER), str(BILLING)],
+                   work_root=str(tmp_path / "w"), run_id="trans")
+    co = next(yaml.safe_load(p.read_text())
+              for p in (r.root / "kb").rglob("orders-postgres-cotenancy.yaml"))
+    assert set(co["spec"]["impactedServices"]) == {"order-service", "billing-service", "gateway"}
+    assert co["spec"]["indirectServices"] == ["gateway"]
+    assert set(co["spec"]["coTenancy"][0]["sharedBy"]) == {"order-service", "billing-service"}

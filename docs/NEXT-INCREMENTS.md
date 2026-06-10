@@ -45,9 +45,9 @@ the suggested sequencing. Companion docs: [`DESIGN.md`](DESIGN.md) (architecture
    only two kind-qualified mentions exist across all skill docs (the rest are bare `spec.x`
    that regex can't attribute to a kind) — so this is folded into increment 1, where the
    generated references make the check structural instead of textual.
-3. **Govern or remove the registry `prompt:` field.** Either make the engine resolve it to
-   `.github/prompts/<key>.prompt.md` (and add a governance test that every non-null key has a
-   file), or drop the dead keys. Today it is unvalidated metadata that reads like a contract.
+3. **Govern or remove the registry `prompt:` field** — **done.** The eight dead keys are
+   pruned to null; a governance test requires every non-null key to resolve to
+   `.github/prompts/<key>.prompt.md`, so the field is a contract again.
 4. **Single-source the shared references** — **done.** Canonical copies live in
    `.github/skills/_shared/`; `tools/lint_skills.py` verifies every bundled copy is
    byte-identical and `--sync` propagates an edit to all bundling skills.
@@ -171,7 +171,7 @@ integration required.
    upgrade to typed, planned services (the broker label classifies what name heuristics
    can't; managed vs user-provided distinguished); `Topology.pcfSpaces` populates per
    service and estate-wide; estate drawings cluster by org/space. Snapshot facts carry a
-   `capturedAt` freshness marker. Still open: a finding for a missing/stale snapshot.
+   `capturedAt` freshness marker, and the findings digest nudges adoption: a PCF app with no snapshot (or one past `estate.snapshot_max_age_days`) gets an info finding.
 4. **Pipeline files as deployment evidence.** Parse `cf push` invocations out of checked-in
    CI definitions (GitHub workflows, Concourse, etc.) → org/space/manifest per environment,
    and populate the `DeliveryPipeline` kind, which today has a schema but no collector.
@@ -275,8 +275,10 @@ From the audit, since closed: `Topology.pcfSpaces` (populated by §4.3's snapsho
 parity — `[Authorize]` → `security.authz`, swallowed `SaveChanges` → `swallowed.db.failure`,
 Steeltoe `spring:cloud:config:uri` → `config.source`, and csproj/go.mod dependency versions.
 Refresh-scope stays Java-only by design (Steeltoe reloads via config providers, not an
-annotation). `http.egress` facts now carry literal `url` arguments across all five stacks —
-the consumer-side anchor §5.5's path-level join needs (the join itself remains open). **Decided:** CI is GitHub
+annotation). `http.egress` facts carry literal `url` arguments across all five stacks, and the §5.5
+blast finding now uses them: consumers whose code paths hit a changed endpoint are labeled
+`preciselyImpacted` (segment-wise match, `{}` wildcards, string-concat prefixes; nothing
+fuzzier matches). **Decided:** CI is GitHub
 Actions only, so `common.delivery_pipeline`'s GitHub-only scope is the design, not a gap.
 Within that scope, deploy detection covers `cf push` in `run:` steps and cloudfoundry
 marketplace actions in `uses:`; a bespoke action that hides cf entirely stays undetected

@@ -68,3 +68,6 @@ publish:
 # flag version skew. Empty = lineage off.
 estate:
   internal_namespaces: []
+  # Freshness budget for cf-env snapshot facts (.sre/cf-env.json, §4.3): older than this and
+  # the findings digest nudges for a refresh — snapshot facts drift from live platform state.
+  snapshot_max_age_days: 90

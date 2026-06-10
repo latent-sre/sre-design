@@ -391,3 +391,26 @@ def test_estate_cli_internal_namespace_flag_reaches_the_join(tmp_path):
                                  "--internal-namespace", "com.acme*"])
     assert r.exit_code == 0, r.output
     assert "library-version-skew" in r.output
+
+
+def test_near_name_client_key_never_draws_a_lookalike_external_node(tmp_path):
+    """A client KEY that slug-matches a scanned service ('Orders_Service' vs
+    'orders-service') with an unresolved baseUrl must not draw a lookalike external node
+    beside the real service — same slug normalization as the confirm-item detection."""
+    caller = tmp_path / "caller"
+    (caller / "src/main/resources").mkdir(parents=True)
+    (caller / "manifest.yml").write_text("applications:\n- name: caller\n", encoding="utf-8")
+    (caller / "src/main/resources/application.yml").write_text(
+        "clients:\n  Orders_Service:\n    base-url: orders.internal.acme\n    timeout: 2s\n",
+        encoding="utf-8")
+    callee = tmp_path / "orders-service"
+    callee.mkdir()
+    (callee / "manifest.yml").write_text(
+        "applications:\n- name: orders-service\n  routes:\n  - route: orders-service.apps.internal\n",
+        encoding="utf-8")
+    r = run_estate([str(caller), str(callee)], work_root=str(tmp_path / "w"), run_id="near")
+    topo = next(yaml.safe_load(p.read_text()) for p in (r.root / "kb").rglob("estate.yaml"))
+    names = {n["name"] for n in topo["spec"]["nodes"]}
+    assert "Orders_Service" not in names  # no lookalike node
+    items = __import__("json").loads((r.root / "confirm" / "edge-calls.json").read_text())["items"]
+    assert items[0]["candidate"] == "orders-service"  # routed to confirmation instead

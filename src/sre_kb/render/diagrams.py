@@ -18,6 +18,16 @@ _PARTICIPANT = {
 }
 
 
+def known_http_clients(docs: list[dict]) -> dict[str, str]:
+    """slug -> display name for the configured HTTP clients (Dependency `type: http`) — the
+    targets every sequence diagram (projection, runbook, Copilot instructions) names instead
+    of the `Downstream` catch-all, so the same flow never renders two different casts."""
+    from sre_kb.util import slug
+
+    return {slug(d["spec"]["name"]): d["spec"]["name"] for d in docs
+            if d.get("kind") == "Dependency" and (d.get("spec") or {}).get("type") == "http"}
+
+
 def mermaid_sequence(flow: dict, known_targets: dict[str, str] | None = None) -> str:
     """`known_targets` (slug -> display name) promotes an http-egress step whose sink target is
     a configured client to a named participant instead of the `Downstream` catch-all. Targets
@@ -209,13 +219,21 @@ def mermaid_topology(topology: dict, tiers: dict[str, str] | None = None,
         out += [f"  {line}" for line in node_lines.values()]
     else:
         clusters: dict[str, list[str]] = {}
+        ungrouped: list[str] = []
         for name in nodes:
-            clusters.setdefault(group.get(name, _SHARED_GROUP), []).append(name)
+            key = group.get(name)
+            if key is None:
+                # Touched by no service: drawing it inside ANY cluster — least of all the
+                # shared (co-tenant) one — would assert a tenancy that doesn't exist.
+                ungrouped.append(name)
+            else:
+                clusters.setdefault(key, []).append(name)
         # Service clusters first (stable name order), the shared cluster last.
         for cluster in sorted(clusters, key=lambda c: (c == _SHARED_GROUP, c)):
             out.append(f'  subgraph sg_{re.sub(r"[^A-Za-z0-9]", "_", cluster)}["{_mm(cluster)}"]')
             out += [f"    {node_lines[name]}" for name in clusters[cluster]]
             out.append("  end")
+        out += [f"  {node_lines[name]}" for name in ungrouped]
 
     lossy_edges: list[int] = []
     for i, e in enumerate(edges):

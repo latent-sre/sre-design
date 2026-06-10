@@ -54,11 +54,14 @@ def _service_entries(doc: dict) -> list[dict]:
         if not isinstance(name, str):
             return
         lbl = inst.get("label") if isinstance(inst.get("label"), str) else label
+        raw_tags = inst.get("tags")
         out.append({
             "name": name,
             "label": lbl,
             "plan": inst.get("plan") if isinstance(inst.get("plan"), str) else None,
-            "tags": [t for t in (inst.get("tags") or []) if isinstance(t, str)],
+            # list-of-strings only: a bare string would iterate char-by-char
+            "tags": [t for t in raw_tags if isinstance(t, str)]
+            if isinstance(raw_tags, list) else [],
             "managed": bool(inst["managed"]) if isinstance(inst.get("managed"), bool)
             else lbl != "user-provided",
         })

@@ -176,7 +176,10 @@ def _path_hits(changed: str, consumer: str) -> bool:
     literal = consumer.split("?", 1)[0]
     consumer_segs = [s for s in literal.split("/") if s]
     if literal.endswith("/") and consumer_segs:
-        return changed_segs[:-1] == consumer_segs and changed_segs[-1:] == ["{}"]
+        # `"/tenants/{x}/orders/" + id` — present segments still match `{}` wildcards.
+        return (len(changed_segs) == len(consumer_segs) + 1
+                and changed_segs[-1] == "{}"
+                and all(c == "{}" or c == u for c, u in zip(changed_segs, consumer_segs)))
     return len(changed_segs) == len(consumer_segs) and all(
         c == "{}" or c == u for c, u in zip(changed_segs, consumer_segs))
 
@@ -294,10 +297,12 @@ def build_estate(services: list[dict],
                 edges.append(edge)
             else:
                 downstream = c.attrs.get("client", "downstream")
-                if any(downstream == s["service"] for s in services):
-                    # The client KEY collides with a scanned service but its baseUrl did not
-                    # resolve to that service's routes: drawing the edge would be a guess.
-                    # It stays off the graph; ambiguous_call_edges routes it to confirmation.
+                if slug(str(downstream)) in {slug(s["service"]) for s in services}:
+                    # The client KEY collides with a scanned service (slug-compared, the same
+                    # normalization ambiguous_call_edges uses) but its baseUrl did not resolve
+                    # to that service's routes: drawing the edge — or a near-name external
+                    # node beside the real service — would be a guess. It stays off the
+                    # graph; ambiguous_call_edges routes it to confirmation.
                     continue
                 nodes.setdefault(downstream, "external")
                 edges.append({"from": name, "to": downstream, "relation": "calls"})

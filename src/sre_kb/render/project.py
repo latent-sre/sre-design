@@ -13,6 +13,7 @@ from sre_kb.render.diagrams import (
     TOPOLOGY_LEGEND,
     architecture_caption,
     diagram_markdown,
+    known_http_clients,
     mermaid_architecture,
     mermaid_sequence,
     mermaid_topology,
@@ -45,14 +46,8 @@ def service_name(docs: list[dict]) -> str:
 
 
 def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
-    from sre_kb.util import slug
-
     name = doc["metadata"]["name"]
-    # Configured HTTP clients are known downstreams: name them in the sequence diagram
-    # instead of collapsing every egress into the generic `Downstream` participant.
-    known = {slug(d["spec"]["name"]): d["spec"]["name"] for d in docs
-             if d.get("kind") == "Dependency" and (d.get("spec") or {}).get("type") == "http"}
-    src = mermaid_sequence(doc, known_targets=known)
+    src = mermaid_sequence(doc, known_targets=known_http_clients(docs))
     (proj / "diagrams" / f"{name}.mmd").write_text(src, encoding="utf-8")
     (proj / "diagrams" / f"{name}.md").write_text(
         diagram_markdown(f"{name} — flow", src), encoding="utf-8"
@@ -62,7 +57,7 @@ def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict], docs: list[di
 def _render_runbook(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
     related = flows.get(doc["spec"].get("relatedFlow"))
     (proj / "runbooks" / f"{doc['metadata']['name']}.md").write_text(
-        runbook_markdown(doc, related), encoding="utf-8"
+        runbook_markdown(doc, related, known_targets=known_http_clients(docs)), encoding="utf-8"
     )
 
 

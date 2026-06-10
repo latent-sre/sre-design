@@ -105,3 +105,11 @@ def test_snapshot_label_classifies_what_the_name_cannot(tmp_path):
     docs = inventory_docs(scan(ctx), ctx, "svc")
     dep = next(d["spec"] for d in docs if d["kind"] == "Dependency")
     assert dep["type"] == "datastore" and dep["engine"] == "postgres"
+
+
+def test_string_tags_value_is_dropped_not_exploded(tmp_path):
+    """`"tags": "relational"` (string, not list) must not become per-character tags."""
+    facts = _facts(tmp_path, {"organization": "o", "space": "s", "services": [
+        {"name": "db", "label": "postgres", "tags": "relational"}]})
+    inst = next(f for f in facts if f.type == "pcf.service-instance")
+    assert inst.attrs["tags"] == []

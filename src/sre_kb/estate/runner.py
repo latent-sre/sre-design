@@ -12,7 +12,13 @@ from sre_kb.collectors import scan
 from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.config import load_config
 from sre_kb.estate.topology import build_estate, library_version_skew
-from sre_kb.render.diagrams import TOPOLOGY_LEGEND, diagram_markdown, mermaid_topology
+from sre_kb.render.diagrams import (
+    TOPOLOGY_LEGEND,
+    diagram_markdown,
+    mermaid_topology,
+    topology_overlays,
+)
+from sre_kb.tiers import AST
 from sre_kb.util import slug
 from sre_kb.validation.gating import final_status
 from sre_kb.validation.provenance import verify_evidence_roots
@@ -96,7 +102,16 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
     if topo:
         diagrams = layout.root / "projections" / "diagrams"
         diagrams.mkdir(parents=True, exist_ok=True)
-        src = mermaid_topology(topo)
+        # Data-loss styling joins from the co-tenancy BlastRadius docs; tier coloring from each
+        # service's declared criticality — authoritative (Tier-A) declarations only, mirroring
+        # the severity-floor rule (an LLM-proposed tier stays advisory, never amplified).
+        _, lossy = topology_overlays(topo, docs)
+        tiers = {
+            s["service"]: decl.attrs.get("tier")
+            for s in services
+            if (decl := s["fs"].first("criticality.declared")) and decl.evidence.source_tier == AST
+        }
+        src = mermaid_topology(topo, tiers=tiers, lossy=lossy)
         (diagrams / "topology.mmd").write_text(src, encoding="utf-8")
         (diagrams / "topology.md").write_text(
             diagram_markdown("estate — topology", src, TOPOLOGY_LEGEND), encoding="utf-8")

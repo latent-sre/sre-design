@@ -67,3 +67,73 @@ def test_topology_tolerates_malformed_nodes_and_edges():
     out = mermaid_topology(topo)               # does not raise
     assert "n_svc" in out and "reads" in out   # the well-formed node/edge rendered
     assert out.count("-->") == 1               # the malformed edge was skipped
+
+
+def test_topology_tier_coloring_uses_only_the_fixed_vocabulary():
+    """A service node with a known criticality tier gets the tier class instead of the plain
+    service class; a tier value outside the engine vocabulary never reaches a style line."""
+    from sre_kb.render.diagrams import topology_overlays
+
+    topo = {"spec": {"nodes": [{"type": "service", "name": "orders"},
+                               {"type": "service", "name": "billing"}], "edges": []}}
+    docs = [
+        {"kind": "Criticality", "metadata": {"service": "orders"}, "spec": {"tier": "tier0"}},
+        {"kind": "Criticality", "metadata": {"service": "billing"},
+         "spec": {"tier": "evil;classDef pwn fill:#000"}},
+    ]
+    tiers, lossy = topology_overlays(topo, docs)
+    out = mermaid_topology(topo, tiers=tiers, lossy=lossy)
+    assert "class n_orders tier0" in out and "classDef tier0" in out
+    assert "class n_billing service" in out   # unknown tier -> plain service style
+    assert "pwn" not in out
+
+
+def test_topology_lossy_node_styles_incoming_edges():
+    """Edges feeding a data-loss node render red-dashed via linkStyle; indices skip
+    malformed edges so the style lands on the drawn edge, not a phantom index."""
+    from sre_kb.render.diagrams import topology_overlays
+
+    topo = {"spec": {
+        "nodes": [{"type": "service", "name": "orders"},
+                  {"type": "datastore", "name": "orders-postgres"}],
+        "edges": [{"from": "orders"},  # malformed: skipped, consumes no linkStyle index
+                  {"from": "orders", "to": "orders-postgres", "relation": "binds"}],
+    }}
+    docs = [{"kind": "BlastRadius", "metadata": {"name": "orders-postgres-x"},
+             "spec": {"node": {"type": "datastore", "name": "orders-postgres"},
+                      "stateful": {"dataLossRisk": True}}}]
+    tiers, lossy = topology_overlays(topo, docs)
+    assert lossy == {"orders-postgres"}
+    out = mermaid_topology(topo, tiers=tiers, lossy=lossy)
+    assert "linkStyle 0 stroke:#d93025" in out
+
+
+def test_lossy_attribution_falls_back_to_the_sole_node_of_type():
+    """A single-service BlastRadius names the code-side target (repository slug); when the
+    topology has exactly one datastore node, the write can only be going there."""
+    from sre_kb.render.diagrams import topology_overlays
+
+    topo = {"spec": {
+        "nodes": [{"type": "service", "name": "orders"},
+                  {"type": "datastore", "name": "orders-postgres"}],
+        "edges": [{"from": "orders", "to": "orders-postgres", "relation": "binds"}],
+    }}
+    docs = [{"kind": "BlastRadius", "metadata": {"name": "order-repository"},
+             "spec": {"node": {"type": "datastore", "name": "order-repository"},
+                      "stateful": {"dataLossRisk": True}}}]
+    _, lossy = topology_overlays(topo, docs)
+    assert lossy == {"orders-postgres"}
+
+
+def test_lossy_attribution_never_guesses_between_two_nodes_of_type():
+    from sre_kb.render.diagrams import topology_overlays
+
+    topo = {"spec": {
+        "nodes": [{"type": "datastore", "name": "db-a"}, {"type": "datastore", "name": "db-b"}],
+        "edges": [],
+    }}
+    docs = [{"kind": "BlastRadius", "metadata": {"name": "x"},
+             "spec": {"node": {"type": "datastore", "name": "some-repo"},
+                      "stateful": {"dataLossRisk": True}}}]
+    _, lossy = topology_overlays(topo, docs)
+    assert lossy == set()  # ambiguous -> no styling, never a guessed edge

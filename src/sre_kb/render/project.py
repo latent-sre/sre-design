@@ -14,6 +14,7 @@ from sre_kb.render.diagrams import (
     diagram_markdown,
     mermaid_sequence,
     mermaid_topology,
+    topology_overlays,
 )
 from sre_kb.registry import renderer_for
 from sre_kb.workspace import RunLayout
@@ -34,7 +35,7 @@ def service_name(docs: list[dict]) -> str:
     return "service"
 
 
-def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict]) -> None:
+def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
     name = doc["metadata"]["name"]
     src = mermaid_sequence(doc)
     (proj / "diagrams" / f"{name}.mmd").write_text(src, encoding="utf-8")
@@ -43,16 +44,17 @@ def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict]) -> None:
     )
 
 
-def _render_runbook(doc: dict, proj: Path, flows: dict[str, dict]) -> None:
+def _render_runbook(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
     related = flows.get(doc["spec"].get("relatedFlow"))
     (proj / "runbooks" / f"{doc['metadata']['name']}.md").write_text(
         runbook_markdown(doc, related), encoding="utf-8"
     )
 
 
-def _render_topology(doc: dict, proj: Path, flows: dict[str, dict]) -> None:
+def _render_topology(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
     name = doc["metadata"]["name"]
-    src = mermaid_topology(doc)
+    tiers, lossy = topology_overlays(doc, docs)
+    src = mermaid_topology(doc, tiers=tiers, lossy=lossy)
     (proj / "diagrams" / f"{name}-topology.mmd").write_text(src, encoding="utf-8")
     (proj / "diagrams" / f"{name}-topology.md").write_text(
         diagram_markdown(f"{name} — topology", src, TOPOLOGY_LEGEND), encoding="utf-8"
@@ -88,5 +90,5 @@ def render_projections(layout: RunLayout, docs: list[dict] | None = None) -> Pat
     for d in docs:
         handler = _PROJECTION_RENDERERS.get(renderer_for(d.get("kind")))
         if handler:
-            handler(d, proj, flows)
+            handler(d, proj, flows, docs)
     return proj

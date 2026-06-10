@@ -21,7 +21,10 @@ def collect(ctx: ScanContext) -> list[Fact]:
             if not isinstance(app, dict):
                 continue
             name = app.get("name", "app")
-            routes = [r.get("route") for r in (app.get("routes") or []) if isinstance(r, dict)]
+            routes = [
+                r["route"] for r in (app.get("routes") or [])
+                if isinstance(r, dict) and r.get("route")
+            ]
             services = [s for s in (app.get("services") or []) if isinstance(s, str)]
             facts.append(
                 Fact(

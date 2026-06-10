@@ -52,8 +52,7 @@ _CLASS_PATTERNS: dict[str, tuple[re.Pattern, ...]] = {
     "pii": tuple(
         re.compile(p, re.I)
         for p in (
-            r"\bemail\b",
-            r"@Email\b",
+            r"\bemail\b",  # also matches the `@Email` bean-validation annotation (word boundary at @|E)
             r"\bssn\b",
             r"\bsocial[_-]?security\b",
             r"\bpassport\b",

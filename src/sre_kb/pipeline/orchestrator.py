@@ -187,8 +187,11 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         if key in downgrades:
             status = "needs-review"
         d["status"] = status
-        out = _dest_dir(layout, status, d["kind"])
-        _dump_yaml(out / f"{d['metadata']['name']}.yaml", d)
+        # ReadinessScore is (re)dumped just below with its recomputed, final-status spec — skip the
+        # premature write here so the same file isn't written twice (stale spec then final).
+        if d.get("kind") != "ReadinessScore":
+            out = _dest_dir(layout, status, d["kind"])
+            _dump_yaml(out / f"{d['metadata']['name']}.yaml", d)
         by_status[status] = by_status.get(status, 0) + 1
         by_tier[s["tier"]] = by_tier.get(s["tier"], 0) + 1
         rec = {

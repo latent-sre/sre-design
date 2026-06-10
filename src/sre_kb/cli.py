@@ -126,6 +126,8 @@ def validate_kb(
         typer.echo(f"[{mark}] {r.path} ({r.kind or '?'})")
         for err in r.errors:
             typer.echo(f"         - {err}")
+        for warning in r.warnings:
+            typer.echo(f"         ~ deprecation: {warning}")
     typer.echo(f"\n{len(results)} artifact(s), {len(failures)} failed.")
     raise typer.Exit(code=1 if failures else 0)
 

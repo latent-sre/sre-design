@@ -27,7 +27,8 @@ def red_panels(route: str | None, *, percentile=None, source: str = "prometheus"
     faithful RED dialect yields panels with the metric but no query (honest: no fabricated dialect).
     """
     uri = _label_match("uri", route) if route else ""  # escaped, like the alert adapters
-    phi = _pctl(percentile, 99) / 100  # one shared percentile normalizer; dashboards want a fraction
+    pct = _pctl(percentile, 99)  # one shared percentile normalizer (e.g. 99.9 stays 99.9)
+    phi = pct / 100  # dashboards want a fraction
     rate_q = err_q = dur_q = None
     if source in ("prometheus", "grafana"):
         # Grafana dashboards query a Prometheus datasource, so reuse the deterministic PromQL.
@@ -40,10 +41,8 @@ def red_panels(route: str | None, *, percentile=None, source: str = "prometheus"
             f"/ sum(rate({_BURN_METRIC}_count{tot_sel}[5m]))"
         )
     elif source == "wavefront":
-        flt = _label_match("uri", route) if route else ""
-
         def _ts(metric: str, extra: str = "") -> str:
-            clauses = " and ".join(c for c in (flt, extra) if c)
+            clauses = " and ".join(c for c in (uri, extra) if c)
             return f'ts("{metric}", {clauses})' if clauses else f'ts("{metric}")'
 
         tot = _ts("http.server.requests.count")
@@ -70,6 +69,6 @@ def red_panels(route: str | None, *, percentile=None, source: str = "prometheus"
                "throughput (RED: Rate)"),
         _panel("Error fraction", "timeseries", "percentunit", f"{_BURN_METRIC}_count", err_q,
                "fraction of non-SUCCESS responses (RED: Errors)"),
-        _panel(f"Latency p{int(phi * 100)}", "timeseries", "s", f"{_BURN_METRIC}_bucket", dur_q,
+        _panel(f"Latency p{pct:g}", "timeseries", "s", f"{_BURN_METRIC}_bucket", dur_q,
                dur_desc),
     ]

@@ -43,7 +43,9 @@ def parse_confirm_reply(raw: str) -> tuple[str, str]:
     rest = [ln for ln in lines[idx + 1 :] if not _FENCE_LINE.match(ln)]
     anchor = "\n".join(rest).strip().strip("`").strip()
     if not anchor:  # single-line dispute: the anchor is whatever follows the verdict token
-        anchor = first[len("dispute"):].lstrip("dD").lstrip(":—-, ").strip().strip("`").strip('"')
+        # Strip the leading `dispute`/`disputed` verb and its separators precisely — the old
+        # `lstrip("dD")` could also eat a real anchor's leading `d` (e.g. `disputedlqPresent`).
+        anchor = re.sub(r"(?i)^disputed?[\s:—,-]*", "", first).strip().strip("`").strip('"')
     return "dispute", anchor
 
 

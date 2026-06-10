@@ -61,6 +61,18 @@ def test_value_shape_catches_secret_in_later_pair():
     assert any(f["rule"] == "value-shape" for f in findings)
 
 
+def test_scan_text_long_line_does_not_blow_up():
+    """An unbounded key group made _KV_RE O(n^2) per line: one long line in a hostile target repo
+    (the per-file cap is 1 MB) wedged the fail-closed publish gate for minutes. A bounded key keeps
+    it linear — a 200 KB single line must scan well under a generous budget (was ~3 min pre-fix)."""
+    import time
+
+    line = "A" * 200_000
+    start = time.perf_counter()
+    scan_text(line, "huge.txt")
+    assert time.perf_counter() - start < 5.0
+
+
 def test_scan_budget_counts_bytes_not_characters(tmp_path):
     """The byte budget must count bytes, not decoded characters — else a multibyte tree (each char
     >1 byte) silently overshoots the DoS guard."""

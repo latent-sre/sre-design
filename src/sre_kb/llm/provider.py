@@ -79,7 +79,9 @@ class SubprocessProvider:
 
     def complete(self, prompt: str) -> str:
         try:
-            proc = subprocess.run(
+            # argv is operator-configured (never target-derived) and the prompt is fed on STDIN, so
+            # untrusted code in the pack can't break into the command line — see the class docstring.
+            proc = subprocess.run(  # noqa: S603
                 self.argv, input=prompt, capture_output=True, text=True,
                 timeout=self.timeout, check=False,
             )

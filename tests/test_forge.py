@@ -125,6 +125,18 @@ def test_open_pr_keeps_token_out_of_argv(tmp_path):
     assert "https://github.com/o/r.git" in flat    # remote URL is tokenless
 
 
+def test_open_pr_rejects_unsafe_branch_name(tmp_path):
+    """A branch starting with '-' would be parsed by git as an option (arg-injection); '..' is not
+    valid ref content. The guard must reject before any git runs."""
+    forge = GitHubForge(
+        runner=lambda cmd: (_ for _ in ()).throw(AssertionError("git must not run")),
+        token="T",
+    )
+    for bad in ("-x", "a..b", "feat;rm -rf", "white space"):
+        with pytest.raises(ForgePublishError):
+            forge.open_pr(tmp_path, sre_repo="o/r", branch=bad, title="t", body="x")
+
+
 def test_open_pr_allowlist_blocks_unlisted_repo(tmp_path):
     def runner(cmd):
         raise AssertionError("git must not run when the target repo is blocked")

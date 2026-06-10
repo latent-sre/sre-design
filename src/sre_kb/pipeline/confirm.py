@@ -145,7 +145,7 @@ def build_confirm_worklist(run_id: str, gap_facts: list[Fact],
         items.append({
             "claimId": _presence_claim_id(f),
             "direction": "presence",
-            "artifact": f"ResiliencyPattern/{_slug(instance, '')}".rstrip("-"),
+            "artifact": f"ResiliencyPattern/{_slug(instance, '')}",
             "concern": [concern],
             "target": instance,
             "path": f.evidence.path,
@@ -247,7 +247,7 @@ def apply_confirm(ctx: ScanContext, gap_facts: list[Fact], verdicts: dict,
         if presence_confirmable(f):
             concern, instance = _PRESENCE_CONCERNS[f.type], f.attrs["name"]
             presence[_presence_claim_id(f)] = BoundaryCall(
-                _presence_claim_id(f), f"ResiliencyPattern/{_slug(instance, '')}".rstrip("-"),
+                _presence_claim_id(f), f"ResiliencyPattern/{_slug(instance, '')}",
                 "disabled-resilience", instance, (concern,),
                 f.evidence.path, f.evidence.lines.start, ())
     outcomes: list[ConfirmOutcome] = []

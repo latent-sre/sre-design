@@ -91,7 +91,11 @@ _SECRETISH_MARKERS = (
     "connstring",
     "dsn",
 )
-_KV_RE = re.compile(r"""([A-Za-z0-9_.\-]+)\s*[:=]\s*(['"]?[^\s'"]{12,}['"]?)""")
+# The key group is length-bounded ({1,128}, longer than any real secret key) so a non-matching
+# start position fails in O(1): an unbounded `+` makes `finditer` O(n²) per line — every offset
+# rescans the whole remaining run looking for a `[:=]` that never comes — which a single long line
+# in a hostile target repo turns into a multi-minute wedge of the fail-closed publish gate.
+_KV_RE = re.compile(r"""([A-Za-z0-9_.\-]{1,128})\s*[:=]\s*(['"]?[^\s'"]{12,}['"]?)""")
 _TOKEN_RE = re.compile(r"[^\s'\"=:,;()\[\]{}<>]+")
 _OPAQUE = re.compile(r"^[A-Za-z0-9+=_-]+$")
 

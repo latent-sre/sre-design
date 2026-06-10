@@ -7,13 +7,19 @@ Guidance for Claude Code (and any agent) working in this repo. Keep it short; li
 
 ```bash
 make install   # pip install -e ".[dev]"
-make test      # pytest -q     — must be green before you call work done
-make lint      # ruff check src tests   — must be clean
+make test      # pytest -q     — fast inner loop
+make cov       # pytest --cov --cov-fail-under=90   — the CI gate; green this before calling work done
+make lint      # ruff check src tests   — must be clean (incl. flake8-bandit `S` SAST rules)
 make fmt       # ruff format src tests
+make lock      # regenerate the hashed requirements.lock — run this whenever you change dependencies
 ```
 
 Python ≥ 3.13 (the floor, the dev base, and what CI tests). CLI entrypoint is `sre-kb`. Tests live in
 `tests/`.
+
+**CI gates (don't get surprised by them):** beyond `make cov` + `make lint`, CI also (1) hash-verifies
+`requirements.lock` and `pip-audit`s it — a dependency change without `make lock` fails; and (2) runs
+`detect-secrets` over the whole tree against `.secrets.baseline` as an independent secret gate.
 
 ## Branching & commits — use the standards
 

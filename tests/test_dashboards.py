@@ -45,6 +45,15 @@ def test_dashboard_queries_escape_route_values():
 def test_source_without_red_dialect_emits_no_fabricated_query():
     panels = red_panels("/x", source="splunk")  # logs backend: no faithful RED dashboard query
     assert all("query" not in p["signal"] for p in panels)  # honest: no dialect we can't generate
+
+
+def test_fractional_percentile_title_is_not_truncated():
+    """A 99.9th-percentile SLO must label the panel 'p99.9', not 'p99' — the title used to be built
+    from int(phi*100) and silently disagreed with the 0.999 query on the same panel."""
+    panels = red_panels("/api/v1/orders", percentile="p99.9")
+    dur = next(p for p in panels if p["title"].startswith("Latency"))
+    assert dur["title"] == "Latency p99.9"
+    assert dur["signal"]["query"].startswith("histogram_quantile(0.999,")
     assert all(p["signal"]["metric"] for p in panels)        # still names the metric
 
 

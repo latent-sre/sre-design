@@ -48,3 +48,15 @@ pythonpath = ["src"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Ruff's default rules (E4/E7/E9 pycodestyle + F pyflakes) PLUS flake8-bandit (S): a native SAST
+# gate that rides inside `make lint`, no extra tool/dependency. The engine reads untrusted target
+# code and shells out to git/an LLM CLI, so the S checks (subprocess, urllib, hardcoded secrets) are
+# exactly the footgun class worth gating. Intentional, reviewed exec/urlopen sites carry `# noqa`.
+select = ["E4", "E7", "E9", "F", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests opt out of flake8-bandit: `assert` IS the test contract (S101), and the secret-scan fixtures
+# deliberately embed fake credentials (S105/S106) to exercise the gate.
+"tests/**" = ["S"]

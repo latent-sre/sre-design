@@ -11,18 +11,21 @@ Two halves:
   extracts facts with hard provenance (`path:line` + commit + `excerptHash`), scaffolds
   artifacts, **validates** them (schema + provenance + cross-ref + gating), renders
   projections, and publishes.
-- **GitHub Copilot in VS Code** — the *LLM* half (the only approved LLM): its agent mode
-  enriches the scaffolded artifacts, driven by the Agent Skills / custom agent / prompt
-  files this repo ships. The engine **never calls an LLM**.
+- **An LLM behind the `LLMProvider` seam** — the *judgment* half. The LLM is a
+  **pointer-generator, never a fact source**: it cites verbatim bytes, and the engine
+  re-grounds every output and gates it (downgrade-only). The default transport is
+  **GitHub Copilot in VS Code** (agent mode + the Agent Skills / custom agent / prompt
+  files this repo ships; the engine embeds no model); any LLM CLI plugs into the same
+  seam via `--oracle` for headless runs.
 
 The full design lives in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Status
 
-Working engine, tested offline (467 tests, ruff-clean) against bundled **Java/Spring**,
+Working engine, tested offline (686 tests, ruff-clean) against bundled **Java/Spring**,
 **.NET/Steeltoe**, **Python/FastAPI**, **Node/Express**, and **Go** fixtures — the same collectors
-emit the same KB across stacks (repo-neutrality). See [`docs/DESIGN.md`](docs/DESIGN.md) for the full
-design and a current implementation-status section.
+emit the same KB across stacks (repo-neutrality). [`docs/DESIGN.md`](docs/DESIGN.md) holds the
+architecture; live status is tracked in [`docs/HYBRID-PLAN.md`](docs/HYBRID-PLAN.md) §8/§9.
 
 Implemented:
 - **AST-backed extraction** — code structure (classes, methods, calls, annotations,
@@ -58,14 +61,19 @@ Implemented:
   allowlist with the token kept out of `git` argv, fan-out cap, dangerous-pattern output lint,
   engine resource limits, and a read-only `sre-target-scan` agent for untrusted repos.
 - **Copilot driver** under `.github/` split into an **authoring** side (the `sre-analyst` +
-  read-only `sre-target-scan` agents, and the `sre-flow-analysis`, `sre-blast-radius`,
-  `sre-prr-review`, `sre-estate`, `sre-criticality`, `sre-gap-finder`, `sre-observability-coverage`
-  skills that *build* the KB) and a **consumer** side (the `sre-oncall` agent +
-  `sre-incident-response` skill that *use* a published KB during an incident).
-- **Challenge loop, automatable end-to-end:** the engine emits a worklist, an oracle
-  adjudicates, `sre-kb challenge-apply` re-gates (monotonic, downgrade-only). `sre-kb
-  challenge-run --oracle '<llm-cli>'` drives the loop through an external LLM CLI on stdin —
-  the engine embeds no model; with no oracle it defers to a human, exactly as offline.
+  read-only `sre-target-scan` agents and the `sre-*`/`map-*`/`generate-*` Agent Skills that *build*
+  the KB — `/sre-autopilot` launches the whole loop in one invocation) and a **consumer** side
+  (the `sre-oncall` agent + `sre-incident-response` skill that *use* a published KB during an
+  incident). The canonical skill list is `.github/skills/pipeline.yaml`.
+- **The whole LLM loop, automatable end-to-end:** every LLM task (gap discovery, boundary
+  confirms, challenge adjudication, alert/runbook/architecture/contract/narrative drafting) lives
+  in one scan-worklist manifest. `sre-kb worklist-run --oracle '<llm-cli>'` drives it through any
+  LLM CLI on stdin, and `sre-kb autopilot` converges scan → provider → apply → re-scan in one
+  command — the engine embeds no model; with no oracle everything defers to the manual IDE loop,
+  exactly as offline. Accuracy is measurable the same way (`copilot-gap-validate --oracle`), the
+  published repo carries a generated **scheduled drift workflow** (`sre-kb diff --from-kb`), and
+  recurring confirmed findings graduate via `sre-kb graduation-draft` (LLM-drafted,
+  engine-verified, human-merged).
 
 ## What's next
 
@@ -79,12 +87,15 @@ into `sre-kb run`** (a `.sre/gap-proposals.json` is auto-detected and routed thr
 §9.3 item 1). The remaining order is **integrate before expand** (§9.3):
 
 - **Scoped publish credential split** — wire the scoped publish role + CI so an unattended
-  `--no-dry-run` publish (and `challenge-run --oracle`) runs under least privilege; the no-credential
+  `--no-dry-run` publish (and `autopilot --oracle`) runs under least privilege; the no-credential
   scan role already landed. This is the remaining gate before live publish.
-- **Live oracle in CI** — run `challenge-run --oracle '<llm-cli>'` against a hosted Copilot/
-  Claude CLI so the judgment-call gate runs unattended.
+- **The measured pilot** — sweep real services through `copilot-gap-validate --oracle` against the
+  stage-2 accuracy floors (`docs/SCOPE-AND-COVERAGE.md` §3) before trusting drafted output.
 
-Recently landed: the **graduation loop** (`sre-kb confirm-gap` → `sre-kb graduation-candidates`),
+Recently landed: the **programmatic LLM loop** (S10: unified scan worklist + `worklist-run` +
+`autopilot`, the scheduled drift workflow, one-command measurement, `graduation-draft`, and the
+`map-architecture` channel — see HYBRID-PLAN §9.7), the **graduation loop**
+(`sre-kb confirm-gap` → `sre-kb graduation-candidates`),
 the Phase 5 **render-adapter breadth** (Prometheus/Splunk/Wavefront/AppDynamics/Grafana/ThousandEyes
 alerts; Prometheus/Grafana/Wavefront dashboards), **drift detection** (`sre-kb diff`), the
 **generate-phase skills** (`sre-generate-slos`, `sre-generate-dashboards`) plus `sre-security-posture`,
@@ -99,12 +110,15 @@ AST model.
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                                                   # the test suite (467 tests)
+pytest -q                                                   # the test suite
 sre-kb schema list                                          # the kind registry
 
 # scan -> scaffold -> validate -> render -> stage a PR tree (dry-run)
 sre-kb run --target tests/fixtures/sample-spring-pcf --run demo --to-stage publish
 sre-kb findings --run demo                                  # ranked risk digest
+
+# the whole loop in one command (any LLM CLI as the oracle; in VS Code use /sre-autopilot)
+sre-kb autopilot --target tests/fixtures/sample-spring-pcf --oracle 'copilot -p'
 
 # repo-neutrality: the same engine on a .NET/Steeltoe service
 sre-kb run --target tests/fixtures/sample-dotnet-steeltoe --run net --to-stage validate
@@ -126,6 +140,6 @@ pip install --no-index --find-links dist/wheels sre-kb
 
 ### Dev container
 
-VS Code / Codespaces can also open this repo in the included dev container. It uses Python 3.13 (the
-working base; the supported floor is still 3.11) and runs `pip install -e ".[dev]"` after creation,
+VS Code / Codespaces can also open this repo in the included dev container. It uses Python 3.13
+(also the supported floor) and runs `pip install -e ".[dev]"` after creation,
 so `pytest -q` and `ruff check src tests` work from a clean container without local Python setup.

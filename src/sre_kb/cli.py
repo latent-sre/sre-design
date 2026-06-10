@@ -297,8 +297,9 @@ def run(
 ) -> None:
     """Run the deterministic pipeline: clone(local) -> scan -> validate.
 
-    LLM enrichment (Copilot in VS Code) happens between scan and validate; the engine
-    itself never calls a model.
+    LLM enrichment happens between scan and validate — in VS Code (Copilot + the sre-*
+    skills), via `worklist-run --oracle`, or end-to-end with `autopilot`. The engine
+    itself embeds no model.
     """
     from sre_kb.pipeline import run as run_pipeline
 

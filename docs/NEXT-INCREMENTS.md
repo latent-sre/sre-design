@@ -48,10 +48,9 @@ the suggested sequencing. Companion docs: [`DESIGN.md`](DESIGN.md) (architecture
 3. **Govern or remove the registry `prompt:` field.** Either make the engine resolve it to
    `.github/prompts/<key>.prompt.md` (and add a governance test that every non-null key has a
    file), or drop the dead keys. Today it is unvalidated metadata that reads like a contract.
-4. **Single-source the shared references.** Keep one canonical
-   `.github/skills/_shared/provenance-rules.md` (and `challenge-protocol.md`); have
-   `tools/lint_skills.py` copy-on-sync or verify, instead of humans propagating edits ten
-   times.
+4. **Single-source the shared references** — **done.** Canonical copies live in
+   `.github/skills/_shared/`; `tools/lint_skills.py` verifies every bundled copy is
+   byte-identical and `--sync` propagates an edit to all bundling skills.
 5. **Ship schema references *to the consumer*, not just the author.** The published PR tree
    already carries the KB YAML; add a generated `yaml.schemas` mapping
    (`.vscode/settings.json` fragment) plus `$id`s on the schemas so the target repo's editor
@@ -76,20 +75,24 @@ visual encoding; no grouping; output is bare `.mmd` that GitHub won't render inl
 
 ### Increments
 
-1. **Legends + engine-controlled styling.** *Partially done on this branch:* topology nodes
-   are styled per type from a fixed engine `classDef` vocabulary (unknown types render
-   unstyled — scanned strings can never reach a style line), with a legend in the markdown
-   wrapper. Still open: criticality-tier coloring and data-loss edge styling from
-   `Criticality`/`BlastRadius` artifact joins.
+1. **Legends + engine-controlled styling** — **done.** Topology nodes are styled per type
+   from a fixed engine `classDef` vocabulary (unknown types render unstyled — scanned
+   strings can never reach a style line), with a legend in the markdown wrapper.
+   Criticality-tier coloring and data-loss edge styling land via `topology_overlays`:
+   `Criticality` colors its service node by tier (estate runs use Tier-A declarations
+   only), `BlastRadius.stateful.dataLossRisk` styles incoming edges red-dashed, with
+   BlastRadius→binding attribution by slug match or sole-node-of-type (the estate
+   co-tenancy rule; ambiguity styles nothing).
 2. **Render GitHub-native wrappers** — **done on this branch.** Every flow and topology
    diagram also emits `diagrams/<name>.md` with a fenced ```mermaid block (plus the topology
    legend), so PRs and the published KB render drawings inline with zero tooling.
-3. **Promote known services to named participants.** In sequence diagrams, when a step's
-   target matches a `config.client` name (or, after §5.1, a resolved service), render it as a
-   named participant instead of the `Dependency` catch-all.
-4. **Estate subgraphs.** Group the estate topology with `subgraph` per service vs. a shared
-   "co-tenancy" cluster; once §4.3 lands org/space facts, group by space — that is the drawing
-   that makes blast radius legible to an app team.
+3. **Promote known services to named participants** — **done.** An http-egress step whose
+   sink target matches a configured client (Dependency `type: http`) renders as a named
+   participant instead of the `Downstream` catch-all, under the same index-parallel
+   steps/sinks guard as `_lossy_sink`.
+4. **Estate subgraphs** — **done** (pre-§4.3 form). A topology with 2+ services clusters
+   each service with its exclusive resources and puts anything touched by several services
+   in a shared (co-tenant) cluster. Still open: group by org/space once §4.3 lands.
 5. **Architecture context diagram.** A C4-style context view rendered from the
    `Architecture` artifact (components + patterns) — same Mermaid pipeline, new projector.
 6. **(Tier-B, cheap) Diagram narration.** Add a worklist task where the LLM writes the
@@ -123,11 +126,12 @@ through that seam, not rebuilding trust machinery.
    - *Cross-repo edge confirmation* — ambiguous estate matches (IP baseUrls, aliased
      hostnames) go to the confirm loop instead of being guessed (pairs with §5.6).
    - *Diagram narration* (§2.6).
-3. **Close the graduation flywheel.** `pipeline/confirm.py:375-418` already tallies
-   confirmations and `graduation_draft.py` drafts collectors; add the stats trigger — when a
-   category's confirmed share crosses a threshold across N services, emit a "time to graduate
-   this to Tier-A" finding automatically. That is how the AI surface *shrinks* over time, the
-   plan's stated goal.
+3. **Close the graduation flywheel** — **done** (per-target form). Crossing the
+   confirmation threshold with zero false positives announces itself: `confirm-gap` and
+   `confirm-apply` echo a time-to-graduate message the moment a category becomes ready, and
+   `findings --target` surfaces each ready category as a `graduation-ready` finding
+   (`reporting.graduation_findings`). The tracker is per-target, so the cross-service
+   share remains an aggregation a fleet runner could add later.
 4. **Invariants to hold** (unchanged): pointer-generator never fact-source; downgrade-only
    gating; every Tier-B output re-grounded at cited bytes; target content fenced as untrusted.
 
@@ -148,15 +152,15 @@ integration required.
 
 ### Increments (by source, increasing effort)
 
-1. **Finish the manifest we already parse.** `processes:` (web vs worker instance counts —
-   today a worker-bearing app misreports as a single web process), `sidecars:`, `services:`
-   entries as maps (v3 binding `parameters:`), `no-route`/`random-route`, and **`vars.yml` /
-   `manifest-<env>.yml` variants** — resolving `((var))` interpolation per environment gives
-   the KB an environments dimension for free. All static YAML, all Tier-A.
-2. **Mine app config as PCF evidence.** Spring `application-cloud.yml` / spring.cloud.*
-   properties and Steeltoe connector config encode binding expectations and config sources;
-   route them into the unpopulated `ConfigManagement` artifact. Collector exists
-   (`java_spring/config_props.py`) — it needs a ConfigManagement synthesizer, not new parsing.
+1. **Finish the manifest we already parse** — **done.** `processes:`, `sidecars:`, v3
+   `services:` maps (with binding `parameters:`), `no-route`/`random-route`, and
+   `manifest-<env>.yml` variants with `((var))` interpolation from sibling
+   `vars[-<env>].yml` files; each env variant emits its own `Deployment`
+   (`<service>-<env>`), giving the KB the environments dimension.
+2. **Mine app config as PCF evidence** — **done for Spring.** `spring.config.import`
+   entries and the legacy `spring.cloud.config.uri` emit line-cited `config.source` facts,
+   and `ConfigManagement.sources` lists those external sources alongside the citing files.
+   Still open: Steeltoe connector config (.NET parity).
 3. **A redacted `cf env` snapshot convention — `.sre/cf-env.json`.** Developers can run
    `cf env <app>` themselves. Define a checked-in, *credential-stripped* shape: from
    `VCAP_SERVICES` keep label/plan/tags/name per binding (never `credentials`); from
@@ -200,11 +204,11 @@ collected** — these are joins in `build_estate`, not new collectors.
    `message.consumer.channel` merge across services into shared `topic` nodes with
    publishes/consumes edges (estate and single-service Topology both), so "who consumes
    `order.created`?" is answerable from the graph.
-3. **Shared-library lineage.** `tech.dependency` facts already come from
-   pom.xml/csproj/package.json. Join on a configurable internal-namespace allowlist
-   (e.g. `com.acme.*`, `@acme/*`) → `service —uses-library→ lib` edges, plus a **version-skew
-   finding** when two services pin different versions of the same internal library (the
-   "margin/shared libraries" picture: which repos a library change blasts into).
+3. **Shared-library lineage** — **done.** `tech.dependency` facts carry group/version where
+   the manifest states them (pom canonical order, package.json values); estate runs join
+   dependencies matching the `estate.internal_namespaces` allowlist into `library` nodes
+   with `uses-library` edges, and the estate report carries a `library-version-skew`
+   finding when services pin different versions. Still open: go.mod/csproj version capture.
 4. **SPA → backend edges.** Extend the Node collector to read what frontends already declare:
    `proxy` in package.json, vite/webpack devServer proxies, `.env` `*_API_URL` vars, axios
    `baseURL` constants — emit them as `config.client`-equivalent facts so SPAs flow through

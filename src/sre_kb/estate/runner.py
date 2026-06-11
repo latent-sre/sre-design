@@ -59,10 +59,18 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
     layout = RunLayout(Path(work_root), run_id)
     layout.ensure()
 
+    from sre_kb.clone import ensure_local, is_git_url
+
     services: list[dict] = []
     roots: dict[str, Path] = {}
-    for t in targets:
-        root = Path(t).resolve()
+    for i, t in enumerate(targets):
+        # A git-URL target is shallow-cloned into the run workspace (ambient auth only);
+        # a local path passes through — the documented two-arm clone stage.
+        if is_git_url(t):
+            tail = t.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
+            root = ensure_local(t, layout.root / "targets" / (slug(tail) or f"t{i}"))
+        else:
+            root = Path(t).resolve()
         if not root.exists():
             raise FileNotFoundError(f"target not found: {root}")
         # Repo identity is the full file URI — collision-free by construction, so two targets

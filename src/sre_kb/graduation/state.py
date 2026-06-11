@@ -151,7 +151,11 @@ def draft_signature(cat: ConfirmedCategory, concerns: tuple[str, ...], *, known:
     category should become. The engine never edits its own rules — this is a suggestion to merge.
     `known=False` marks a novel (out-of-taxonomy) category from the open-discovery channel."""
     lines = [f"  draft for '{cat.category}' — review and merge by hand, never auto-applied:"]
-    if not known:
+    if cat.category.startswith("area-"):
+        lines.append("    a COVERAGE AREA (discover-areas loop), not a gap category — sketch a NEW")
+        lines.append("    COLLECTOR, not a regex: the files it globs, the fact type(s) it emits, the")
+        lines.append("    artifact kind + registry row; seed it from the confirmed anchors below.")
+    elif not known:
         lines.append("    novel (out-of-taxonomy) category, confirmed repeatedly by reviewers — promote it")
         lines.append("    into the gap taxonomy first: add the category (+ a probe/refuter or judgment")
         lines.append("    routing) in collectors/llm/gap_finder.py and the ResiliencyGap schema enum; it")
@@ -160,10 +164,9 @@ def draft_signature(cat: ConfirmedCategory, concerns: tuple[str, ...], *, known:
         lines.append("    graduates via the AST swallow detector (Call.swallow), not a regex signature;")
         lines.append("    extend that detector to cover the confirmed sites below.")
     elif cat.category == "disabled-resilience":
-        lines.append("    graduates into a PROACTIVE Tier-A disable collector (no LLM): for each present")
-        lines.append("    mechanism (a named resiliency.* fact), scan the resolved resilience config for an")
-        lines.append("    `enabled: false` scoped to that instance and emit a disabled-resilience gap —")
-        lines.append("    the same rule confirm-apply re-grounds today, run without the skill pointing.")
+        lines.append("    the proactive Tier-A disable collector exists (java_spring.resiliency_params")
+        lines.append("    `_disabled`): extend its annotation/config scope to cover the confirmed sites")
+        lines.append("    below rather than adding a regex signature.")
     elif concerns:
         lines.append(f"    add a pattern to signatures.py concern(s): {', '.join(concerns)}")
         lines.append('    patterns=_p(r"<regex that fires on the confirmed anchors>"),')

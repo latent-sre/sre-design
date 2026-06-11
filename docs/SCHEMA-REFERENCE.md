@@ -263,6 +263,7 @@ The service's inbound surface: REST/messaging style, the concrete endpoints/chan
 | `contract.undocumented` | array of string |  |  |
 | `contract.specOnly` | array of string |  |  |
 | `contract.baselineVersion` | string or null |  |  |
+| `contract.semanticChanges` | array |  | Routed Tier-B semantic-break survivors (map-api-contracts): meaning changes the structural diff can't see, re-grounded to verbatim spec bytes; their presence pins the Interface needs-review. |
 | `contract.changes` | array |  | Deterministic, byte-grounded diff vs the committed baseline spec. |
 | `contract.changes[].changeType` | string | yes | one of: `operation-removed`, `operation-added`, `required-parameter-added` |
 | `contract.changes[].ref` | string | yes |  |

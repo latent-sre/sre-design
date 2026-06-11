@@ -52,6 +52,7 @@ class AutopilotResult:
     narrative_note: str | None = None
     pcf_review_routed: int = 0
     narrations_applied: int = 0
+    area_recommendations: int = 0
 
 
 def _apply_cycle(layout: RunLayout, target: Path, outcome: CycleOutcome, *, record: bool) -> None:
@@ -120,6 +121,12 @@ def _ingest_drafts(layout: RunLayout, target: Path, result: AutopilotResult) -> 
     docs = load_kb(layout.root)
     if (target / PCF_REVIEW_REL).exists():
         result.pcf_review_routed = len(run_pcf_review(str(target)).kept())
+    from sre_kb.pipeline.areas import PROPOSALS_REL as AREAS_REL
+    from sre_kb.pipeline.areas import run_discover_areas
+
+    if (target / AREAS_REL).exists():
+        result.area_recommendations = len(run_discover_areas(
+            str(target), layout.facts / "facts.jsonl", layout.reports).kept())
     if (target / NARRATIONS_REL).exists():
         from sre_kb.render import render_projections
 

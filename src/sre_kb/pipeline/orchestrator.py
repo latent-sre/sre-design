@@ -1,8 +1,9 @@
-"""Deterministic pipeline. Stages: clone(local) -> scan(+scaffold) -> validate.
+"""Deterministic pipeline. Stages: clone -> scan(+scaffold) -> validate.
 
 The LLM enrichment step (Copilot in VS Code) sits between scaffold and validate and is
-NOT run here — the engine never calls a model. For a local target, 'clone' just points
-the scan context at the path.
+NOT run here — the engine never calls a model. The clone stage accepts a local path
+(points the scan context at it) or a git URL (shallow-cloned into the run workspace,
+ambient auth only — see `sre_kb.clone`).
 """
 
 from __future__ import annotations
@@ -79,7 +80,9 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     layout = RunLayout(Path(work_root), run_id)
     layout.ensure()
 
-    target_path = Path(target).resolve()
+    from sre_kb.clone import ensure_local
+
+    target_path = ensure_local(target, layout.root / "target")
     if not target_path.exists():
         raise FileNotFoundError(f"target not found: {target_path}")
 
@@ -129,6 +132,29 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         app = fs.first("pcf.app")
         service = (app.attrs.get("name") if app else None) or "service"
         docs += [scaffold_gap(f, service) for f in gap_facts]
+    # S7 follow-up: routed semantic contract-break survivors fold into the Interface artifact
+    # during `run` — a complete no-op when the target has no `.sre/contract-proposals.json`.
+    # An Interface carrying unverified LLM claims is pinned needs-review (the gate only ever
+    # preserves or lowers a pre-set status), and each survivor's hash-checked citation joins
+    # the artifact's evidence.
+    from sre_kb.pipeline import contract as contract_review
+
+    if (target_path / contract_review.PROPOSALS_REL).exists():
+        kept = contract_review.run_map_contracts(str(target_path)).kept()
+        iface = next((d for d in docs if d.get("kind") == "Interface"), None)
+        if kept and iface is not None:
+            iface["spec"].setdefault("contract", {})["semanticChanges"] = [{
+                "target": o.proposal.target,
+                "severity": o.proposal.severity,
+                "was": o.proposal.was,
+                "rationale": o.proposal.rationale,
+                "anchor": f"{o.path}:{o.lines[0]}-{o.lines[1]}" if o.lines else o.path,
+                "source": "llm",
+            } for o in kept]
+            iface["evidence"] = list(iface.get("evidence") or []) + [
+                o.evidence.model_dump(mode="json") for o in kept if o.evidence is not None]
+            iface["status"] = "needs-review"
+
     ctx_dir = layout.candidates / "context"
     ctx_dir.mkdir(exist_ok=True)
     for d in docs:
@@ -259,9 +285,15 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     from sre_kb.pipeline.diagram_narration import diagram_docs
     from sre_kb.reporting import collect_findings
     from sre_kb.synth.draft_prompts import _uncovered_alerts
+    from sre_kb.reporting.coverage import coverage_report
 
     app = fs.first("pcf.app")
     service = (app.attrs.get("name") if app else None) or "service"
+    # Coverage ledger (the production-run expectation): what the scan walked but no fact
+    # cites — the deterministic ground the discover-areas exchange stands on.
+    coverage = coverage_report(ctx, fs, docs)
+    (layout.reports / "coverage.json").write_text(json.dumps(coverage, indent=2),
+                                                  encoding="utf-8")
     scan_worklist = build_scan_worklist(
         run_id,
         service=service,
@@ -278,6 +310,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         findings=len(collect_findings(docs)),
         pcf_apps=len(fs.of("pcf.app")),
         diagrams=len(diagram_docs(docs)),
+        uncovered_groups=len((coverage.get("uncovered") or {}).get("groups") or []),
     )
     (layout.root / "scan-worklist.json").write_text(
         json.dumps(scan_worklist, indent=2), encoding="utf-8"

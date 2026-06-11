@@ -220,4 +220,4 @@ def test_draft_signature_for_disabled_resilience_describes_a_proactive_collector
 
     cat = ConfirmedCategory(category="disabled-resilience", confirmed=5)
     draft = draft_signature(cat, (), known=True)
-    assert "PROACTIVE Tier-A disable collector" in draft and "enabled: false" in draft
+    assert "resiliency_params" in draft  # the proactive collector exists; extend, don't regex

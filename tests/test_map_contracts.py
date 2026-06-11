@@ -78,3 +78,24 @@ def test_malformed_proposals_file_self_gates(tmp_path):
     (tmp_path / ".sre").mkdir()
     (tmp_path / ".sre" / "contract-proposals.json").write_text("{ not json", encoding="utf-8")
     assert contract.run_map_contracts(str(tmp_path)).outcomes == []
+
+
+def test_run_folds_routed_semantic_breaks_into_the_interface(tmp_path):
+    """S7 follow-up: during `sre-kb run`, routed survivors land in the Interface artifact's
+    contract.semanticChanges, pin it needs-review, and carry the grounded citation."""
+    import shutil
+
+    import yaml
+
+    from sre_kb.pipeline import run as run_pipeline
+
+    target = tmp_path / "target"
+    shutil.copytree(FIXTURE, target)
+    r = run_pipeline(str(target), work_root=str(tmp_path / "w"), run_id="s7", to_stage="validate")
+    iface_path = next((r.root / "kb").rglob("Interface/*.yaml"))
+    doc = yaml.safe_load(iface_path.read_text())
+    assert doc["status"] == "needs-review"  # unverified LLM claims pin the artifact
+    [change] = doc["spec"]["contract"]["semanticChanges"]
+    assert change["target"] == "GET /api/v1/orders"
+    assert change["source"] == "llm"
+    assert change["anchor"].startswith("openapi.yaml:")

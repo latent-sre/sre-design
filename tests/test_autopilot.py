@@ -58,6 +58,8 @@ class StubProvider:
                 {"check": "missing-disk-quota", "app": "order-service", "severity": "low",
                  "rationale": "no disk_quota declared for an app that writes local spill files"},
             ]})
+        if "Coverage-discovery context" in prompt:
+            return '{"areas": []}'
         if "Diagram-narration context" in prompt:
             return json.dumps({"narrations": [
                 {"diagram": "create-order", "text": "Shows the create-order flow."},

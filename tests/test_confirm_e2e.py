@@ -91,24 +91,30 @@ def test_run_offers_the_present_breaker_as_a_presence_boundary_call(tmp_path):
     assert any(i["claimId"] == "present:circuit-breaker:inventory" for i in presence)
 
 
-def test_disabled_dispute_emits_a_verified_tier_a_gap(tmp_path):
+def test_disabled_gap_is_emitted_proactively_and_a_dispute_reconfirms_it(tmp_path):
+    """S4c graduated: the proactive collector emits the disabled-resilience gap during the
+    plain run — no reviewer dispute needed — and a dispute can only re-confirm it."""
     layout, _ = _run_disabled(tmp_path)
-    assert "ResiliencyGap/inventory-disabled-resilience" not in _kb(layout)  # not there before
+    gap = _kb(layout).get("ResiliencyGap/inventory-disabled-resilience")
+    assert gap is not None                         # there BEFORE any confirm verdict
+    assert gap["spec"]["category"] == "disabled-resilience" and gap["spec"]["sourceTier"] == "ast"
+    assert gap["status"] == "verified"             # byte-grounded to the disabling config line
     verdicts = {"verdicts": [{"claimId": "present:circuit-breaker:inventory", "verdict": "dispute",
                               "anchor": "      inventory:\n        enabled: false"}]}
     outcomes = regate_run(layout, str(DISABLED_CB), verdicts)
     assert any(o.result == "disabled-confirmed" for o in outcomes)
-    gap = _kb(layout).get("ResiliencyGap/inventory-disabled-resilience")
-    assert gap is not None
-    assert gap["spec"]["category"] == "disabled-resilience" and gap["spec"]["sourceTier"] == "ast"
-    assert gap["status"] == "verified"            # engine-re-derived from byte-grounded config
+    regapped = _kb(layout).get("ResiliencyGap/inventory-disabled-resilience")
+    assert regapped is not None and regapped["status"] == "verified"
 
 
-def test_disabled_affirm_emits_no_gap(tmp_path):
+def test_disabled_affirm_no_longer_hides_the_disabled_breaker(tmp_path):
+    """Before S4c graduated, an affirming (or absent) reviewer hid a disabled breaker; the
+    proactive collector closes that hole — the gap survives an affirm verdict."""
     layout, _ = _run_disabled(tmp_path)
     regate_run(layout, str(DISABLED_CB),
                {"verdicts": [{"claimId": "present:circuit-breaker:inventory", "verdict": "affirm"}]})
-    assert "ResiliencyGap/inventory-disabled-resilience" not in _kb(layout)
+    gap = _kb(layout).get("ResiliencyGap/inventory-disabled-resilience")
+    assert gap is not None and gap["spec"]["rederivation"] == "disabled"
 
 
 def test_confirm_apply_cli_records_graduation_from_confirms(tmp_path):

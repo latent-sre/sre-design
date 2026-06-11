@@ -27,7 +27,8 @@
             "undocumented": { "type": "array", "items": { "type": "string" } },
             "specOnly": { "type": "array", "items": { "type": "string" } },
             "baselineVersion": { "type": ["string", "null"] },
-            "changes": {
+            "semanticChanges": { "type": "array", "description": "Routed Tier-B semantic-break survivors (map-api-contracts): meaning changes the structural diff can't see, re-grounded to verbatim spec bytes; their presence pins the Interface needs-review." },
+        "changes": {
               "type": "array",
               "description": "Deterministic, byte-grounded diff vs the committed baseline spec.",
               "items": {

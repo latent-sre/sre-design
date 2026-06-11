@@ -259,6 +259,27 @@ def _run_narrate_diagrams(layout: RunLayout, provider, target: Path) -> dict:
     return _write_proposals(target, PROPOSALS_REL, "narrate-diagrams", data, key="narrations")
 
 
+def _run_discover_areas(layout: RunLayout, provider, target: Path) -> dict:
+    """Ask for new coverage AREAS over the run's blind-spot ledger; the ingest
+    (`sre-kb discover-areas`) drops unlocatable evidence and refutes areas the fact set
+    already covers."""
+    from sre_kb.collectors.base import ScanContext
+    from sre_kb.pipeline.areas import PROPOSALS_REL
+    from sre_kb.synth.draft_prompts import build_area_prompt
+
+    try:
+        coverage = json.loads((layout.reports / "coverage.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"task": "discover-areas", "status": "deferred",
+                "note": "no coverage ledger for this run — task left to the manual loop"}
+    ctx = ScanContext(root=target, repo=f"file://{target.name}")
+    data = extract_json_object(provider(build_area_prompt(ctx, coverage)))
+    if data is None:
+        return {"task": "discover-areas", "status": "deferred",
+                "note": "unparseable reply — task left to the manual loop"}
+    return _write_proposals(target, PROPOSALS_REL, "discover-areas", data, key="areas")
+
+
 def run_scan_worklist(layout: RunLayout, worklist: dict, provider, *, target: Path) -> list[dict]:
     """Execute every task in the scan worklist through `provider`, returning one summary dict per
     task (`status`: written | deferred). An interactive provider (the model-free Copilot file
@@ -276,6 +297,7 @@ def run_scan_worklist(layout: RunLayout, worklist: dict, provider, *, target: Pa
                "map-contracts": lambda: _run_map_contracts(layout, provider, target),
                "review-pcf": lambda: _run_pcf_review(layout, provider, target),
                "narrate-diagrams": lambda: _run_narrate_diagrams(layout, provider, target),
+               "discover-areas": lambda: _run_discover_areas(layout, provider, target),
                "findings-narrative": lambda: _run_narrative(layout, provider, target)}
     summaries = []
     for task in worklist.get("tasks", []):

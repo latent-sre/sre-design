@@ -43,6 +43,7 @@ def build_scan_worklist(
     findings: int = 0,
     pcf_apps: int = 0,
     diagrams: int = 0,
+    uncovered_groups: int = 0,
 ) -> dict:
     """Build the unified worklist for a validated run.
 
@@ -174,6 +175,19 @@ def build_scan_worklist(
                 "writeTo": ".sre/diagram-narrations.json",  # relative to the target repo
                 "writeToBase": "target",
                 "ingest": f"sre-kb narrate-diagrams --run {run_id} --target {target}",
+            }
+        )
+    if uncovered_groups:
+        tasks.append(
+            {
+                "id": "discover-areas",
+                "mode": "discover",
+                "title": f"Propose new coverage AREAS over {uncovered_groups} uncovered file group(s)",
+                "skill": ".github/skills/sre-discover-areas/SKILL.md",
+                "reads": ["reports/coverage.json"],  # the blind-spot ledger (run root)
+                "writeTo": ".sre/area-proposals.json",  # relative to the target repo
+                "writeToBase": "target",
+                "ingest": f"sre-kb discover-areas --target {target} --run {run_id}",
             }
         )
     if findings:

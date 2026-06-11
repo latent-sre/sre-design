@@ -1136,6 +1136,37 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   `.github/skills/map-architecture/`;
   `tests/test_{worklist_run,autopilot,automation_loop}.py`.)
 
+### 9.8 Production finding (2026-06-11) — the coverage-discovery loop
+
+The first live production run surfaced a capability hole the plan never named: the
+self-improvement loop was a **closed world**. Discover proposed findings only *within* the
+gap taxonomy (plus the thin novel-category channel), and graduation only ratcheted gap
+*signatures* — nothing inventoried what the engine never looked at, and nothing turned "the
+engine missed this whole area" into engine-facing recommendations. The production
+expectation — verify findings, hunt undiscovered findings, discover unexamined areas,
+recommend engine improvements for future runs — failed at the last two steps.
+
+**Built, on the existing trust spine:**
+
+- **Tier-A coverage ledger** (`reporting/coverage.py`, written to `reports/coverage.json`
+  every run): files the scan walked vs files cited by ≥1 fact (grouped by extension/family
+  with samples), registered kinds never emitted, detectors that fired. Blind spots are a
+  byte-grounded inventory before any model is asked about them.
+- **`discover-areas` worklist task** (`sre-discover-areas` skill; prompt =
+  `build_area_prompt`): the engine's machine-generated capability inventory + the ledger +
+  fenced samples of the largest uncovered groups; the model proposes AREAS (name, files,
+  verbatim evidence, what's missing, what to collect) — restraint contracted explicitly.
+- **Engine ingest** (`pipeline/areas.py`, `sre-kb discover-areas`): locate each evidence
+  anchor verbatim anywhere in the repo, **refute** any area whose cited files already
+  produced facts (fact-set refutation, the R6 pattern), route survivors to
+  `reports/engine-recommendations.{json,md}` — advisory, `source: llm`, never artifacts.
+- **Flywheel closure:** a reviewer confirms a recurring area with
+  `sre-kb confirm-gap area-<name> --novel`; the existing graduation tracker accrues it, and
+  `draft_signature` for an `area-*` category sketches a **new collector** (globs, fact
+  types, kind, registry row) instead of a regex — recommendations compound into engine
+  coverage, run over run. Wired through `worklist-run` and `autopilot` like every exchange.
+  (`tests/test_discover_areas.py`.)
+
 #### Decision — LLM transport (2026-06-09)
 
 The "engine never calls a model" rule was reassessed and found to bundle two separable decisions:

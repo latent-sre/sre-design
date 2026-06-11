@@ -285,9 +285,15 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     from sre_kb.pipeline.diagram_narration import diagram_docs
     from sre_kb.reporting import collect_findings
     from sre_kb.synth.draft_prompts import _uncovered_alerts
+    from sre_kb.reporting.coverage import coverage_report
 
     app = fs.first("pcf.app")
     service = (app.attrs.get("name") if app else None) or "service"
+    # Coverage ledger (the production-run expectation): what the scan walked but no fact
+    # cites — the deterministic ground the discover-areas exchange stands on.
+    coverage = coverage_report(ctx, fs, docs)
+    (layout.reports / "coverage.json").write_text(json.dumps(coverage, indent=2),
+                                                  encoding="utf-8")
     scan_worklist = build_scan_worklist(
         run_id,
         service=service,
@@ -304,6 +310,7 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
         findings=len(collect_findings(docs)),
         pcf_apps=len(fs.of("pcf.app")),
         diagrams=len(diagram_docs(docs)),
+        uncovered_groups=len((coverage.get("uncovered") or {}).get("groups") or []),
     )
     (layout.root / "scan-worklist.json").write_text(
         json.dumps(scan_worklist, indent=2), encoding="utf-8"

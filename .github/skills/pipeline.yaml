@@ -21,6 +21,7 @@ phases:
     - map-architecture
   assess:
     - sre-gap-finder
+    - sre-discover-areas
     - sre-confirm-boundaries
     - sre-observability-coverage
     - sre-assess-logging

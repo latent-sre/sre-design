@@ -1236,6 +1236,31 @@ def narrate_diagrams_cmd(
     typer.echo(f"narrate-diagrams: {len(result.outcomes)} narration(s) -> {len(applied)} applied")
 
 
+@app.command("discover-areas")
+def discover_areas_cmd(
+    target: str = typer.Option(..., "--target", help="Target repo holding .sre/area-proposals.json."),
+    run_id: str = typer.Option(..., "--run", help="The run whose fact ledger refutes covered areas."),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Tier-B coverage discovery: re-ground the area proposals — locate each evidence anchor
+    verbatim, refute any area the run's facts already cover — and write the surviving engine
+    recommendations (reports/engine-recommendations.{json,md}). Confirm a recurring area with
+    `sre-kb confirm-gap area-<name> --novel`; at the graduation threshold the engine drafts
+    the collector sketch."""
+    from sre_kb.pipeline.areas import run_discover_areas
+    from sre_kb.workspace import RunLayout
+
+    layout = RunLayout(Path(work_root), run_id)
+    result = run_discover_areas(target, layout.facts / "facts.jsonl", layout.reports)
+    for o in result.outcomes:
+        where = f"  ({o.path}:{o.line})" if o.path else ""
+        typer.echo(f"  area-{o.proposal.name}: {o.result}{where}  {o.note}")
+    kept = result.kept()
+    typer.echo(f"discover-areas: {len(result.outcomes)} proposal(s) -> {len(kept)} recommended")
+    if kept:
+        typer.echo(f"  recommendations: {layout.reports / 'engine-recommendations.md'}")
+
+
 def main() -> None:
     app()
 

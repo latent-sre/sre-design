@@ -233,3 +233,57 @@ def build_narration_prompt(diagrams: list[dict]) -> str:
                        f"{d.get('kind')}/{name}"), ""]
     out += [_NARRATION_CONTRACT]
     return "\n".join(out)
+
+
+_AREA_CONTRACT = """\
+## Required answer
+Propose ONLY genuinely new AREAS — repo content carrying an SRE-relevant signal that the
+capability inventory above does not cover. Reply with a JSON object:
+
+{"areas": [
+  {"name": "db-migrations",                     // kebab-case area name
+   "files": ["db/migration/V7__drop_index.sql"],  // uncovered files carrying the signal
+   "evidence": "<one line copied EXACTLY from an UNTRUSTED sample above>",
+   "missing": "what operational risk/knowledge lives here that no fact captures",
+   "proposal": "what the engine should collect: files to read, fact type(s), artifact kind"}
+]}
+
+Rules:
+- `evidence` is verbatim bytes — the engine locates it and DROPS any area it cannot find,
+  and REFUTES any area whose cited files already produced facts (the engine looked there).
+- Do not re-propose anything the capability inventory covers; most uncovered files are
+  noise (docs, assets, lockfiles) — restraint is the value. Reply {"areas": []} if nothing
+  here deserves a collector.
+"""
+
+
+def build_area_prompt(ctx: ScanContext, coverage: dict) -> str:
+    """The discover-areas context (the production-run expectation made a loop): the engine's
+    own capability inventory, the uncovered-file ledger, and fenced samples of the biggest
+    blind-spot groups — so the model proposes new collection AREAS, not findings."""
+    from sre_kb.registry import kinds
+
+    out = ["# Coverage-discovery context", "", _HEADER, "",
+           "## What the engine ALREADY covers (do not re-propose)",
+           f"- Artifact kinds registered: {', '.join(sorted(kinds()))}",
+           f"- Detectors that fired this run: {', '.join(coverage.get('detectorsFired') or []) or 'none'}",
+           f"- Registered kinds this run did not produce: "
+           f"{', '.join(coverage.get('kindsNeverEmitted') or []) or 'none'}", "",
+           "## Files the scan walked but NO fact cites "
+           f"({(coverage.get('uncovered') or {}).get('count', 0)} file(s))"]
+    groups = (coverage.get("uncovered") or {}).get("groups") or []
+    for g in groups:
+        out.append(f"- {g['group']}: {g['count']} file(s) — e.g. {', '.join(g['samples'])}")
+    out += ["", "## Samples from the largest uncovered groups (untrusted)"]
+    for g in groups[:8]:
+        rel = (g.get("samples") or [None])[0]
+        if not rel:
+            continue
+        try:
+            head = "".join(ctx.read_lines(rel)[:40]).rstrip()
+        except (OSError, UnicodeDecodeError):
+            continue  # binary/unreadable sample: the group listing above still names it
+        if head:
+            out += [_fence(head, rel), ""]
+    out += [_AREA_CONTRACT]
+    return "\n".join(out)

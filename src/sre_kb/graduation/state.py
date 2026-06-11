@@ -151,7 +151,11 @@ def draft_signature(cat: ConfirmedCategory, concerns: tuple[str, ...], *, known:
     category should become. The engine never edits its own rules — this is a suggestion to merge.
     `known=False` marks a novel (out-of-taxonomy) category from the open-discovery channel."""
     lines = [f"  draft for '{cat.category}' — review and merge by hand, never auto-applied:"]
-    if not known:
+    if cat.category.startswith("area-"):
+        lines.append("    a COVERAGE AREA (discover-areas loop), not a gap category — sketch a NEW")
+        lines.append("    COLLECTOR, not a regex: the files it globs, the fact type(s) it emits, the")
+        lines.append("    artifact kind + registry row; seed it from the confirmed anchors below.")
+    elif not known:
         lines.append("    novel (out-of-taxonomy) category, confirmed repeatedly by reviewers — promote it")
         lines.append("    into the gap taxonomy first: add the category (+ a probe/refuter or judgment")
         lines.append("    routing) in collectors/llm/gap_finder.py and the ResiliencyGap schema enum; it")

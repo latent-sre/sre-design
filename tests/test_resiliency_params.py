@@ -157,3 +157,51 @@ def test_param_gap_flows_through_run_as_verified_tier_a(tmp_path):
     assert gap["spec"]["rederivation"] == "param-completeness"
     assert gap["evidence"][0]["detector"] == "java_spring.resiliency_params"
     assert gap["evidence"][0]["source_tier"] == "ast"
+
+
+# --- S4c proactive disable probe ---------------------------------------------------------------
+_JAVA = (
+    "package acme;\npublic class C {\n"
+    '  @CircuitBreaker(name = "inventory")\n  public String call() { return "x"; }\n}\n'
+)
+
+
+def _disable_gaps(tmp_path, config_yaml):
+    (tmp_path / "C.java").write_text(_JAVA, encoding="utf-8")
+    (tmp_path / "application.yml").write_text(config_yaml, encoding="utf-8")
+    ctx = ScanContext(root=tmp_path, repo="file://x")
+    return [f for f in resiliency_params.collect(ctx) if f.type == "resiliency.gap"]
+
+
+def test_explicitly_disabled_instance_emits_a_proactive_tier_a_gap(tmp_path):
+    """S4c graduation: enabled: false in the instance's resolved config emits the
+    disabled-resilience gap with no LLM pointing — citing the disabling config line —
+    and dominates the parameter gap (tuning a breaker that is off is moot)."""
+    gaps = _disable_gaps(tmp_path,
+                 "resilience4j:\n  circuitbreaker:\n    instances:\n      inventory:\n"
+                 "        enabled: false\n")
+    [g] = gaps
+    assert g.attrs["category"] == "disabled-resilience"
+    assert g.attrs["target"] == "inventory" and g.attrs["rederivation"] == "disabled"
+    assert g.evidence.path == "application.yml"
+    assert "enabled" in (tmp_path / "application.yml").read_text().splitlines()[g.evidence.lines.start - 1]
+    assert g.evidence.source_tier == "ast"  # verified-eligible, the graduation point
+
+
+def test_disable_inherited_from_default_config_unless_instance_overrides(tmp_path):
+    inherited = _disable_gaps(tmp_path,
+                      "resilience4j:\n  circuitbreaker:\n    configs:\n      default:\n"
+                      "        enabled: false\n    instances:\n      inventory:\n"
+                      "        failure-rate-threshold: 50\n")
+    assert [g.attrs["category"] for g in inherited] == ["disabled-resilience"]
+    overridden = _disable_gaps(tmp_path,
+                       "resilience4j:\n  circuitbreaker:\n    configs:\n      default:\n"
+                       "        enabled: false\n    instances:\n      inventory:\n"
+                       "        enabled: true\n        failure-rate-threshold: 50\n")
+    assert overridden == []  # the instance's own toggle decides outright
+
+
+def test_enabled_instance_keeps_the_param_completeness_behavior(tmp_path):
+    gaps = _disable_gaps(tmp_path, "resilience4j:\n  circuitbreaker:\n    instances:\n      inventory:\n"
+                           "        enabled: true\n")
+    assert [g.attrs["category"] for g in gaps] == ["circuit-breaker-without-thresholds"]

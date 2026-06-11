@@ -160,10 +160,9 @@ def draft_signature(cat: ConfirmedCategory, concerns: tuple[str, ...], *, known:
         lines.append("    graduates via the AST swallow detector (Call.swallow), not a regex signature;")
         lines.append("    extend that detector to cover the confirmed sites below.")
     elif cat.category == "disabled-resilience":
-        lines.append("    graduates into a PROACTIVE Tier-A disable collector (no LLM): for each present")
-        lines.append("    mechanism (a named resiliency.* fact), scan the resolved resilience config for an")
-        lines.append("    `enabled: false` scoped to that instance and emit a disabled-resilience gap —")
-        lines.append("    the same rule confirm-apply re-grounds today, run without the skill pointing.")
+        lines.append("    the proactive Tier-A disable collector exists (java_spring.resiliency_params")
+        lines.append("    `_disabled`): extend its annotation/config scope to cover the confirmed sites")
+        lines.append("    below rather than adding a regex signature.")
     elif concerns:
         lines.append(f"    add a pattern to signatures.py concern(s): {', '.join(concerns)}")
         lines.append('    patterns=_p(r"<regex that fires on the confirmed anchors>"),')

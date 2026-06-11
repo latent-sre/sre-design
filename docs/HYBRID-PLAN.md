@@ -1029,7 +1029,11 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   `enabled: false` scoped to a known instance, no LLM pointing first); a refuted absence records a
   false positive that blocks graduation and flags an over-firing probe. `regate_run` stays pure (it
   never writes the tracker), so a plain re-gate doesn't touch the target; the CLI does the recording.
-  That proactive disable collector is the one remaining follow-up for this category.
+  **That proactive disable collector landed (2026-06-11):** `java_spring.resiliency_params`
+  now resolves each declared instance's `enabled` toggle (instance → base-config → implicit
+  default, the same explicit-toggle conservatism as `_DISABLE_RE`) and emits the Tier-A
+  `disabled-resilience` gap with no LLM pointing — a disabled mechanism dominates its
+  parameter gaps. (`tests/test_resiliency_params.py`.)
   (`pipeline/confirm.py`, `graduation/state.py`, `cli.py`; `tests/test_confirm*.py`.)
 - **S5 — Eval harness (rubric-as-spec). ✅ Done.** `eval/scorecard.py` generalizes
   `copilot-gap-validate`'s precision/recall from gaps-only to **all extraction**: it runs the
@@ -1072,8 +1076,9 @@ surfaces two P0 extraction gaps. These supersede nothing above; they are new ope
   the gap-finder uses — locate the anchor verbatim in the current spec, **refute** anything the
   deterministic diff already flags as structural, **route** genuine semantic breaks to review
   (`source_tier=llm`, never auto-verified). Shipped report-first via `sre-kb map-contracts` (mirroring
-  the Phase-4 gap-finder spike); folding the routed survivors into the `Interface` artifact during `run`
-  is the documented follow-up. (`collectors/common/openapi.py`, `synth/inventory.py`,
+  the Phase-4 gap-finder spike); the routed survivors now also fold into the `Interface`
+  artifact during `run` (`contract.semanticChanges`, pinning it `needs-review` and
+  carrying each survivor's hash-checked citation) — follow-up closed 2026-06-11. (`collectors/common/openapi.py`, `synth/inventory.py`,
   `schemas/v1alpha1/Interface.schema.json`, `pipeline/contract.py`, `cli.py`,
   `.github/skills/map-api-contracts/`; `tests/test_openapi.py`, `tests/test_map_contracts.py`.)
 - **S8 — `generate-alerts` Tier-B drafter (coverage #19). ✅ Done.** The first drafting skill with a
@@ -1144,6 +1149,10 @@ constraint is governance, not automation.
   candidate is **Google Vertex/Gemini in-tenant** — we have access but must clear a business case,
   drafted in `docs/VERTEX-LLM-PROVIDER-CASE.md`. The seam preserves the pointer-generator trust
   boundary and keeps the engine reproducible via prompt-hash response caching.
+- **Decision (2026-06-11): the programmatic arm is not pursued.** The org standardizes on VS Code
+  Copilot + GitHub; the Vertex business case is closed-unapproved (banner in
+  `docs/VERTEX-LLM-PROVIDER-CASE.md`, decision recorded in `NEXT-INCREMENTS.md` §3.1). The seam and
+  `worklist-run`/`autopilot` remain as the dormant transport should that ever be revisited.
 - **Seam groundwork ✅ built** (`src/sre_kb/llm/provider.py`): the `LLMProvider` protocol +
   `CopilotFileProvider` (the **model-free default** — `complete()` raises so the engine defers to the
   worklist), `SubprocessProvider` (the existing `--oracle` seam, now built via `make_provider`),

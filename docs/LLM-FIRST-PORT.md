@@ -1,12 +1,10 @@
-# LLM-first port + `resiliency-skills` deep review
+# LLM-first design & `resiliency-skills` deep review
 
-> **Why this doc exists.** It is the *durable memory* for a shift in direction that spans more than one
-> working session: `sre-design` is moving to an **LLM-first** design and adopting the neutral-artifact
-> model from its sibling repo [`latent-sre/resiliency-skills`](https://github.com/latent-sre/resiliency-skills).
-> The `resiliency-skills` clone is ephemeral and an agent's context can be summarized away, so the
-> findings, the plan, and a cold-start prompt live here in git. If you are picking this up fresh, read
-> this file first, then `docs/SCOPE-AND-COVERAGE.md`, `docs/NEXT-INCREMENTS.md` §5, and
-> `src/sre_kb/render/alerts.py`.
+> **What this doc is.** The design and plan for taking `sre-design` **LLM-first** and adopting the
+> neutral-artifact model from its sibling repo [`latent-sre/resiliency-skills`](https://github.com/latent-sre/resiliency-skills).
+> It also persists the deep review of that sibling suite so a fresh session need not re-clone or
+> re-derive it. Read this file first, then `docs/SCOPE-AND-COVERAGE.md`, `docs/NEXT-INCREMENTS.md` §5,
+> and `src/sre_kb/render/alerts.py`.
 
 Reference snapshot: `resiliency-skills` @ `04e220e87d2e7d55296c3787bb11a645bfe0926e`.
 
@@ -14,11 +12,11 @@ Reference snapshot: `resiliency-skills` @ `04e220e87d2e7d55296c3787bb11a645bfe09
 
 The LLM (Copilot / Claude in the IDE) reads the target's code **across files** and emits the SRE
 analysis **directly** — dependencies, callers, resiliency gaps, alerts — as neutral artifacts carrying
-a governance block. We have **dropped the old grounding *gate*** (the deterministic engine used to
-re-derive every fact and downgrade the LLM to `needs-review`). We keep `path:line` citations for
-traceability, but nothing second-guesses the model by construction.
+a governance block. The design **drops the grounding *gate*** (a deterministic engine that re-derives
+every fact and downgrades the LLM to `needs-review`). `path:line` citations stay for traceability, but
+nothing second-guesses the model by construction.
 
-**The engine ENHANCES, it does not GATE.** We still run the `sre-kb` engine — to cross-check, enrich,
+**The engine ENHANCES, it does not GATE.** The `sre-kb` engine still runs — to cross-check, enrich,
 and render — but as a *tool the analyst calls*, not a judge that overrules it. An engine confirmation
 **raises** a finding's confidence and lends it a byte-grounded `path:line`; an engine miss does **not**
 erase a finding (the AST model is per-file and misses cross-file facts the LLM can see) — the
@@ -27,7 +25,7 @@ disagreement is recorded for a human. See `.github/skills/_shared/challenge-prot
 ## 2. Deep review of `resiliency-skills` (the LLM-first ancestor)
 
 `resiliency-skills` is the suite `sre-design` forked from *before* it grew the AST engine and the
-re-grounding gate. Because it never had that gate, it is already the model we are pivoting toward.
+re-grounding gate. Because it never had that gate, it is already the model this design pivots toward.
 
 **Design motto: "thin skills, fat config, deterministic transforms."** Two surfaces, one hard boundary:
 
@@ -81,7 +79,7 @@ fleet correlation. **This is the novel capability to build: `map-callers`.** In 
 raw material already exists — `src/sre_kb/estate/topology.py` reverses resolved `calls` edges into
 `callers_of` and walks transitive callers; it just is not surfaced as a first-class deliverable.
 
-## 3. What `sre-design` has ALREADY adopted (so the "port" is mostly at the skills layer)
+## 3. What `sre-design` already has (so the port lands mostly at the skills layer)
 
 - **The tool-neutral alert intent + per-backend adapters** live in `src/sre_kb/render/alerts.py`
   (Prometheus/Grafana/Splunk/Wavefront/AppDynamics/ThousandEyes, `REPLACE_ME__` sentinels), with the
@@ -96,11 +94,11 @@ authoring + the governance block), reusing the engine's existing render half.
 
 ## 4. The plan (deliverables)
 
-1. **Shared contract — DONE.** `.github/skills/_shared/provenance-rules.md` → "Evidence & the
-   governance block"; `challenge-protocol.md` → "Self-review" (engine enhances, not gates). Propagated
-   with `python tools/lint_skills.py --sync`.
+1. **Shared contract.** Rewrite `.github/skills/_shared/provenance-rules.md` → "Evidence & the
+   governance block" and `challenge-protocol.md` → "Self-review" (engine enhances, not gates); propagate
+   the bundled copies with `python tools/lint_skills.py --sync`.
 2. **AlertIntent adoption.** Modernize `generate-alerts` to emit the neutral intent (reusing
-   `render/alerts.py`), governance block, LLM-first.
+   `render/alerts.py`), with the governance block, LLM-first.
 3. **`map-dependencies`** (outbound: HTTP/gRPC/db/queue/cache/SDK/libs, cross-file, resilience posture
    + failure mode).
 4. **`map-callers`** (inbound / who-calls — the novel gap; see §6) + an **`sre-dependency-analyst`**
@@ -154,19 +152,15 @@ way to complete it. Never fabricate a caller.
 ## 8. Cold-start prompt (paste into a fresh session on this repo)
 
 ```
-Read docs/LLM-FIRST-PORT.md first — it is the durable record of this work. We are taking sre-design
-LLM-first: the LLM reads code across files and emits the SRE analysis directly (neutral artifacts +
-governance block, path:line citations, NO re-grounding gate), and RUNS the sre-kb engine to ENHANCE
-findings (cross-check, enrich, render) without letting it override the model. Complete the plan in
-§4: adopt the AlertIntent model in generate-alerts (reuse src/sre_kb/render/alerts.py); add
+Read docs/LLM-FIRST-PORT.md first — the design + plan. Take sre-design LLM-first: the LLM reads code
+across files and emits the SRE analysis directly (neutral artifacts + governance block, path:line
+citations, NO re-grounding gate) and RUNS the sre-kb engine to ENHANCE findings (cross-check, enrich,
+render) without letting it override the model. Execute the deliverables in §4: rewrite the _shared
+contract; adopt the AlertIntent model in generate-alerts (reuse src/sre_kb/render/alerts.py); add
 map-dependencies (outbound) and the novel map-callers (inbound/who-calls, §6) plus an
-sre-dependency-analyst agent; then modernize every existing sre-*/map-*/generate- skill + the 3
-agents onto the neutral-artifact + governance shape. Keep CI green (§7); work on branch
-claude/code-dependency-sre-analysis-jlnug1; Conventional Commits. The resiliency-skills reference is
-pinned at 04e220e — add_repo latent-sre/resiliency-skills to read it.
+sre-dependency-analyst agent; then modernize every existing sre-*/map-*/generate- skill + the 3 agents
+(sre-analyst, sre-oncall, sre-target-scan) onto the neutral-artifact + governance shape. Reuse the
+engine's existing render adapters and taxonomy (§3). Keep CI green (§7). Cut a feature branch from
+origin/main; Conventional Commits. To read the reference suite, add_repo latent-sre/resiliency-skills
+and check out 04e220e.
 ```
-
-## 9. Status
-
-- ✅ §4.1 shared contract landed (this branch).
-- ⏭️ §4.2–4.5 pending.

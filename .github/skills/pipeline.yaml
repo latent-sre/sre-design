@@ -16,6 +16,8 @@ phases:
   map:
     - sre-flow-analysis
     - sre-estate
+    - map-dependencies
+    - map-callers
     - map-messaging
     - map-api-contracts
     - map-architecture

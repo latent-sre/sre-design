@@ -1,13 +1,13 @@
 ---
 name: sre-confirm-boundaries
 description: >-
-  Tier-B (LLM) confirm loop (HYBRID-PLAN S4) — the precision dual of the gap-finder. The engine hands
+  Confirm loop (HYBRID-PLAN S4) — the precision dual of the gap-finder. The engine hands
   you its own Tier-A boundary calls in two directions: ABSENCE (a mechanism it believes is missing for
   a target) and PRESENCE (a mechanism it believes is active). You affirm each, or dispute an absence
   with an anchor showing the mechanism IS present, or dispute a presence as present-but-DISABLED with
   an anchor at the disabling config. The engine re-grounds every dispute against its own signatures —
   an absence dispute can only drop a false-positive gap; a presence dispute can only add a byte-proven
-  disabled-resilience gap. Never on fabricated code, nothing auto-verifies.
+  disabled-resilience gap. Never on fabricated code; every verdict is flagged for human review.
 allowed-tools: ["codebase", "search", "editFiles"]
 metadata:
   version: 0.1.0
@@ -38,7 +38,7 @@ engine missed), this tightens *precision* in **two directions**:
 The first: *a `dead-letter` mechanism is absent for `order.shipped`.* The second: *a `circuit-breaker`
 is active for instance `inventory`.*
 
-## The non-circular contract
+## How your findings are grounded
 
 You **point**, the engine **judges**:
 

@@ -1,14 +1,14 @@
 ---
 name: map-api-contracts
 description: >-
-  Tier-B (LLM) API-contract versioning gap-finder (coverage #7). The engine already diffs the current
+  API-contract versioning gap-finder (coverage #7). The engine already diffs the current
   OpenAPI spec against the committed `.sre/api-baseline/` baseline and deterministically classifies
   the structural breaking changes — operation removed/added, a newly-required request parameter — and
   the semver version-policy. You judge only what the shape diff cannot prove: a SEMANTIC break, where
   an operation keeps the same shape but changes meaning (units, default, enum semantics, an auth or
   status-code contract). Point at verbatim spec text from both versions; the engine re-grounds each
   against its own diff (dropping anything that merely restates a structural change) and routes genuine
-  semantic breaks to review. Nothing auto-verifies.
+  semantic breaks to review.
 allowed-tools: ["codebase", "search", "editFiles"]
 metadata:
   version: 0.1.0
@@ -36,7 +36,7 @@ category only:
   newly-required authentication scheme, or a pagination/ordering guarantee dropped. There is no
   deterministic ground truth for "this meaning changed in a breaking way" — it always routes to review.
 
-## The non-circular contract (same as sre-gap-finder)
+## How your findings are grounded (same as sre-gap-finder)
 
 You **point**, the engine **judges**:
 
@@ -47,7 +47,7 @@ You **point**, the engine **judges**:
    An anchor it can't find verbatim in the current spec is dropped.
 3. The **engine refutes** any proposal whose operation the deterministic diff already flags as a
    *structural* change (removed/added/newly-required) — that is not a semantic break, it is already
-   covered. Survivors are Tier-B `needs-review`; you widen recall on semantic versioning judgment, the
+   covered. Findings carry `needs-human-review: true`; you widen recall on semantic versioning judgment, the
    engine makes the deterministic calls.
 
 ## Emit
@@ -68,4 +68,4 @@ A JSON object written to `.sre/contract-proposals.json`:
 ```
 
 `category` is always `semantic-break` (you may omit it; the engine defaults it). Every surviving
-proposal is Tier-B `needs-review`. The engine runs `sre-kb map-contracts` to re-ground them.
+finding is flagged for human review. The engine runs `sre-kb map-contracts` to re-ground them.

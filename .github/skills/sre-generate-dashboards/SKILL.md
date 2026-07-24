@@ -1,7 +1,7 @@
 ---
 name: sre-generate-dashboards
 description: >-
-  Generate-phase (Tier-B) dashboard drafter — extend the engine's baseline RED overview with the
+  Generate-phase dashboard drafter — extend the engine's baseline RED overview with the
   golden-signal panels it can't infer (saturation, per-dependency latency/errors, async queue depth),
   each grounded in a metric/dependency fact the engine already detected. Use when asked to draft or
   improve a service's dashboard, add panels, or close monitoring-coverage gaps. Every panel lands

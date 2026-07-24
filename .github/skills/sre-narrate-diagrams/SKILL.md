@@ -1,7 +1,7 @@
 ---
 name: sre-narrate-diagrams
 description: >-
-  Generate-phase (Tier-B) diagram narrator (§3.2/§2.6) — write the one-paragraph "what this
+  Generate-phase diagram narrator (§3.2/§2.6) — write the one-paragraph "what this
   drawing shows and what to worry about" caption for each rendered flow/topology/architecture
   diagram, from the artifact's own JSON (closed-world input). Drawings are the one projection
   with no prose; you add it. Captions render clearly labeled advisory under the diagram, never

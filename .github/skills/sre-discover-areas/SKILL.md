@@ -1,7 +1,7 @@
 ---
 name: sre-discover-areas
 description: >-
-  Coverage-discovery (Tier-B) — propose NEW AREAS the engine never looked at. After a run,
+  Coverage-discovery — propose NEW AREAS the engine never looked at. After a run,
   the engine writes a deterministic blind-spot ledger (reports/coverage.json): every file the
   scan walked that no fact cites, plus its own capability inventory. You judge which blind
   spots carry real SRE signal (migrations, Dockerfiles, IaC, cron syntax, nginx conf, …) and
@@ -33,7 +33,7 @@ database migrations, Dockerfiles/buildpacks config, IaC, cron/quartz definitions
 configs, feature-flag rule files, data-retention policies. For each, say *what the engine
 misses* and *what it should collect* (files to read, fact types, artifact kind).
 
-## The non-circular contract
+## How your findings are grounded
 
 You **point**, the engine **judges**: your `evidence` is one line copied EXACTLY from an
 uncovered file. The ingest (`sre-kb discover-areas --target <repo> --run <id>`) locates it

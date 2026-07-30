@@ -25,25 +25,26 @@ delay was supplied.
 
 ## Design-to-reality divergences
 
-### LLM-first migration is a plan, not uniform current behavior
+### LLM-first skill contract and engine runtime still diverge
 
-`docs/LLM-FIRST-PORT.md` proposes that engine evidence enhances rather than gates LLM findings.
-Current `src/sre_kb/llm/provider.py`, the main orchestrator, `map-architecture`, and
-`sre-analyst.agent.md` still specify re-grounding/gating. `map-dependencies` and `map-callers` already
-use the newer “engine enhances” framing.
+The Copilot instructions, skills, and agents now consistently direct the LLM to produce governed
+cross-file analysis while the engine enhances supported findings. The executable
+`src/sre_kb/llm/provider.py` and main orchestrator still re-ground, gate, reject, or downgrade
+artifacts on their existing ingestion path.
 
-Impact: an LLM maintainer can receive contradictory authority rules depending on the selected skill.
-This atlas states both current and intended contracts rather than choosing silently. Complete the
-planned migration as a separately reviewed behavior change, including tests for the resulting trust
-boundary.
+Impact: instruction-facing analysis and executable ingestion currently have different trust
+boundaries. Treat LLM-authored findings as governed analysis, report engine confirmation or
+disagreement separately, and do not claim the runtime gate has been removed. Aligning runtime
+behavior with the skill contract requires a separately reviewed behavior change and trust-boundary
+tests.
 
 ### Collector overview text lags collector coverage
 
 The module docstring in `src/sre_kb/collectors/__init__.py:1-7` names Java and C# AST coverage, while
 the enabled collector registry at lines 52-76 also includes Python/FastAPI, Node/Express, and Go.
 
-Impact: code readers can underestimate supported stacks. Update the docstring when the broader
-LLM-first migration touches this module; the executable registry remains the working source of truth.
+Impact: code readers can underestimate supported stacks. Update the docstring during the next
+collector documentation refresh; the executable registry remains the working source of truth.
 
 ### Direct root self-scan aggregates bundled service fixtures
 
@@ -71,8 +72,8 @@ business-topology interpretation.
 
 ## Questions for maintainers
 
-1. Is `docs/LLM-FIRST-PORT.md` approved for implementation, or still a proposal requiring an
-   architecture decision?
+1. Should runtime ingestion change to match the adopted LLM-first skill contract, or should the
+   design explicitly retain artifact gating as a separate executable trust boundary?
 2. Which evidence should be authoritative when a cross-file LLM finding is supported by source but
    the current deterministic engine cannot re-derive it?
 3. Is `sre-kb` intended for external distribution? If yes, which project license and SBOM/license
@@ -99,8 +100,8 @@ Refresh the atlas when any of these change:
 - `docs/LLM-FIRST-PORT.md:1-21,92-125` — intended design. [`MANIFEST_DECLARED`]
 - `src/sre_kb/llm/provider.py:1-20` and `pipeline/orchestrator.py:172-257` — current gate.
   [`STATIC_EXTRACTED`]
-- `.github/skills/map-dependencies/SKILL.md:30-41` and
-  `.github/skills/map-architecture/SKILL.md:17-34` — conflicting current skill contracts.
+- `AGENTS.md`, `.github/copilot-instructions.md`, `.github/skills/map-architecture/SKILL.md`, and
+  `.github/agents/sre-analyst.agent.md` — adopted instruction-facing engine-enhances contract.
   [`STATIC_EXTRACTED`]
 - `src/sre_kb/collectors/__init__.py:1-76` — overview/registry mismatch.
   [`STATIC_EXTRACTED`]

@@ -1,7 +1,7 @@
 ---
 name: sre-gap-finder
 description: >-
-  Tier-B (LLM) gap-finder — the recall booster of HYBRID-PLAN §7.9. Read the engine's resiliency
+  Resiliency gap-finder — the recall booster of HYBRID-PLAN §7.9. Read the engine's resiliency
   facts + the code and propose resiliency gaps the AST missed (e.g. a critical client call with no
   timeout), as byte-anchored pointers the engine then locates, stamps, and re-derives, refutes, or
   routes to review. Refutation/judgment proposals never auto-verify; confirmation proposals can
@@ -18,9 +18,9 @@ detection logic is the vendored **`assess-resiliency`** skill from
 [`latent-sre/resiliency-skills`](https://github.com/latent-sre/resiliency-skills) — see
 [`references/assess-resiliency.SKILL.md`](references/assess-resiliency.SKILL.md) (vendored at
 `00b3071`). What changes here is the **output contract**: in `sre-design` the LLM is a
-*pointer-generator*, not a fact source, so it emits byte anchors, not artifacts.
+the analyst: it emits byte anchors the engine can locate and ground, not raw assertions.
 
-## The non-circular contract (read this first)
+## How your findings are grounded (read this first)
 
 The engine never trusts an LLM claim. This skill does **not** decide that a gap exists or where it
 is. It only *points*:
@@ -74,9 +74,8 @@ open-discovery channel: locate-grounded, always `needs-review`, under a tighter 
 confirmations (`sre-kb confirm-gap <name> --novel`) graduate the category into the taxonomy.
 
 Current engine behavior:
-- `missing-timeout`, `unguarded-critical-dependency`: refutation probes; kept as Tier-B
-  `needs-review` only when the relevant resilience signatures do not fire in scope.
+- `missing-timeout`, `unguarded-critical-dependency`: refutation probes; kept and flagged for human review only when the relevant resilience signatures do not fire in scope.
 - `swallowed-failure`, `undocumented-job`: confirmation probes; kept only when the deterministic
   engine rule fires at the pointer, then graduated to Tier-A.
 - `data-loss-path`, `missing-idempotency`, `unbounded-resource`: judgment-routed; citation-grounded
-  Tier-B `needs-review`, never verified automatically.
+  flagged for human review, never verified automatically.

@@ -85,8 +85,9 @@ different edge semantics and evidence ceilings. SCCs are computed at a named gra
 
 The atlas skill reads across files and can describe source relationships the per-file collectors do
 not model. Existing engine output adds `ENGINE_CONFIRMED` evidence and preferred sanitized diagrams.
-The atlas also documents the current source reality: the repository's planned “engine enhances”
-direction is not yet uniform, and current proposal ingests still gate/re-ground in several paths.
+The skills and agents now consistently use the “engine enhances” contract, while the executable
+provider and orchestrator still gate, reject, or downgrade artifacts. The atlas keeps that
+instruction/runtime distinction explicit instead of treating either layer as evidence for the other.
 
 ### Resolver-specific machine graph, with unresolved cases retained
 

@@ -8,6 +8,7 @@ sre-design/
 │   ├── agents/                 Copilot agent roles
 │   ├── skills/                 Agent Skills and canonical pipeline.yaml
 │   └── workflows/              CI, lockfile audit, and secret scan
+├── AGENTS.md                   Codex routing and repository evidence rules
 ├── docs/                       Design, roadmap, scope, and this atlas
 ├── scripts/                    Offline-wheel helper
 ├── src/sre_kb/
@@ -50,7 +51,11 @@ This is a purpose-oriented map, not an exhaustive directory listing.
 | `sre-kb atlas` / `atlas-check` | Generate the graph or fail on projection drift | `src/sre_kb/cli.py`; `src/sre_kb/atlas/runner.py` |
 | `sre_kb.pipeline.run` | Main scan/scaffold/validate/render/publish path | `src/sre_kb/pipeline/orchestrator.py:48-334` |
 | `sre_kb.estate.run_estate` | Multi-service topology/co-tenancy analysis | `src/sre_kb/estate/runner.py:52` |
+| `AGENTS.md` | Codex atlas, external-evidence, and LLM/runtime routing | `AGENTS.md:1-34` |
+| `.github/copilot-instructions.md` | Repository-wide GitHub Copilot contract | `.github/copilot-instructions.md:1-55` |
 | `.github/skills/pipeline.yaml` | Canonical Agent Skill inventory and phase routing | `.github/skills/pipeline.yaml:9-42` |
+| `.github/skills/sre-codebase-atlas/SKILL.md` | Whole-repository visual atlas workflow | `.github/skills/sre-codebase-atlas/SKILL.md:1` |
+| `.github/agents/sre-codebase-cartographer.agent.md` | Copilot entry point for atlas work | `.github/agents/sre-codebase-cartographer.agent.md:1` |
 | `.github/agents/sre-analyst.agent.md` | Command-capable developer/analysis loop | `.github/agents/sre-analyst.agent.md:1-50` |
 | `.github/agents/sre-target-scan.agent.md` | Read-only untrusted-target inspection | `.github/agents/sre-target-scan.agent.md:1` |
 | `tools/lint_skills.py` | Skill shape, tool-surface, pipeline, and shared-reference gate | `tools/lint_skills.py:1-151` |

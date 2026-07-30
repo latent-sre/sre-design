@@ -1,11 +1,10 @@
 ---
 name: sre-observability-coverage
 description: >-
-  Tier-B (LLM) observability-coverage gap-finder (HYBRID-PLAN R6). Score a service's
+  Observability-coverage gap-finder (HYBRID-PLAN R6). Score a service's
   metrics / logs / traces / synthetics posture covered|partial|missing and propose the missing
   pillars as byte-anchored gaps; the engine refutes each against its own observability facts (a
-  pillar the facts already prove present is dropped) and routes survivors to review. Nothing
-  auto-verifies.
+  pillar the facts already prove present is dropped) and flags findings for human review.
 allowed-tools: ["codebase", "search", "editFiles"]
 metadata:
   version: 0.1.0
@@ -17,7 +16,7 @@ The **prompt half** of the observability-coverage gap-finder. It extends the gap
 (`collectors/llm/gap_finder.py`) to the four observability pillars; the engine half is the
 fact-based refutation in that module.
 
-## The non-circular contract (same as sre-gap-finder)
+## How your findings are grounded (same as sre-gap-finder)
 
 You do **not** decide coverage exists or is missing — you *point*, the engine *refutes*:
 
@@ -55,4 +54,4 @@ A JSON object written to `.sre/gap-proposals.json` (same file/loader as sre-gap-
 
 `category` ∈ {`missing-metrics`, `missing-tracing`, `missing-structured-logging`,
 `missing-synthetic-monitoring`}. `anchor` is bytes copied **exactly** from one UNTRUSTED block.
-Every surviving gap is Tier-B `needs-review` — you widen recall; the engine makes the call.
+Every gap is flagged for human review — you widen recall; the engine cross-checks.

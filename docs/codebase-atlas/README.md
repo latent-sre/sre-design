@@ -81,8 +81,9 @@ are `RUNTIME_OBSERVED`. No deployed service or production behavior was observed.
   were not observed. [`UNKNOWN`: needs runtime telemetry/deployment evidence]
 - The complete set of external users and service consumers cannot be derived from this repository
   alone. [`UNKNOWN`: needs fleet repositories, gateway records, contracts, or traces]
-- The planned LLM-first contract in `docs/LLM-FIRST-PORT.md` is not yet the uniform current source
-  contract; current code and skills contain both engine-gated and engine-enhanced models.
+- Skills and agent instructions now consistently use the LLM-first, engine-enhances contract. The
+  provider and orchestrator runtime still gate, reject, or downgrade artifacts, so instruction and
+  executable trust boundaries remain intentionally distinct in this atlas.
 - Project license terms and dependency license assertions remain unknown until maintainers choose a
   project license and import a reviewed SBOM/license source.
 

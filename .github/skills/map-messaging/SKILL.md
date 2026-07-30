@@ -1,12 +1,12 @@
 ---
 name: map-messaging
 description: >-
-  Tier-B (LLM) consumer-side messaging-resilience gap-finder (HYBRID-PLAN S3). The engine already
+  Consumer-side messaging-resilience gap-finder (HYBRID-PLAN S3). The engine already
   detects each consumer's dead-letter route, retry, and idempotency guard deterministically (the
   Messaging kind). You judge what it cannot prove: ordering/partition safety, whether a poison pill
   is genuinely handled, and saga/distributed-transaction compensation. Point at verbatim handler
   code; the engine refutes missing-poison-pill-handling against its own consumer facts and routes
-  survivors to review. Nothing auto-verifies.
+  findings for human review.
 allowed-tools: ["codebase", "search", "editFiles"]
 metadata:
   version: 0.1.0
@@ -32,10 +32,10 @@ idempotency *presence/absence* — those are deterministic. Three judgment categ
   nor route off the partition. (If the consumer has a dead-letter route, the engine refutes this —
   raise it only where a malformed message would actually block or crash-loop the partition.)
 - **`missing-saga-compensation`** — a multi-step distributed transaction with no compensating action
-  on partial failure. **Permanently Tier-B**: there is no deterministic ground truth for "this needed
+  on partial failure. **Permanently a judgment call**: there is no deterministic ground truth for "this needed
   a saga." Always routes to review.
 
-## The non-circular contract (same as sre-gap-finder)
+## How your findings are grounded (same as sre-gap-finder)
 
 You **point**, the engine **judges**:
 
@@ -63,5 +63,5 @@ A JSON object written to `.sre/gap-proposals.json` (same file/loader as sre-gap-
 ```
 
 `category` ∈ {`unordered-consumer`, `missing-poison-pill-handling`, `missing-saga-compensation`}.
-Every surviving gap is Tier-B `needs-review` — you widen recall on messaging judgment; the engine
+Every gap is flagged for human review — you widen recall on messaging judgment; the engine
 makes the deterministic calls.

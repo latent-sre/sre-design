@@ -110,20 +110,23 @@ bytes, applies downgrade-only checks, and can reject or route material to human 
 and gated. [`STATIC_EXTRACTED`: `src/sre_kb/llm/provider.py:1-20`;
 `src/sre_kb/pipeline/orchestrator.py:172-257`]
 
-### Planned direction
+### Current skill and agent direction
 
-`docs/LLM-FIRST-PORT.md` describes a planned model in which the LLM reads across files and emits
-neutral artifacts while the engine enhances rather than overrules supported findings.
-[`MANIFEST_DECLARED`: `docs/LLM-FIRST-PORT.md:1-21`, explicitly labeled design and plan]
+The Copilot instructions, skills, and agents have adopted the model described by
+`docs/LLM-FIRST-PORT.md`: the LLM reads across files and emits governed neutral artifacts while
+engine evidence enhances rather than silently erases supported findings. This instruction-level
+contract has changed; the deterministic runtime described above has not.
+[`STATIC_EXTRACTED`: `AGENTS.md`; `.github/copilot-instructions.md`;
+`.github/skills/map-architecture/SKILL.md`; `.github/agents/sre-analyst.agent.md`]
 
 ### Atlas contract
 
-This atlas does not pretend that migration is complete:
+This atlas keeps the instruction contract and executable behavior separate:
 
 1. LLM/source inspection builds a broad cross-file understanding model.
 2. Direct citations retain their own evidence label.
 3. Engine output adds `ENGINE_CONFIRMED` evidence when available.
-4. Current engine validation behavior remains accurately documented until source changes.
+4. Current engine validation behavior remains accurately documented until the runtime changes.
 5. Design/source disagreements remain visible in [CONCERNS.md](CONCERNS.md).
 
 A fresh self-scan traversed this entire stage path through publish and produced 157 facts, 72
@@ -139,5 +142,8 @@ truthful business-topology model for `sre-design`.
   [`STATIC_EXTRACTED`]
 - `src/sre_kb/render/project.py:27-116` and `render/diagrams.py:1-320` — implemented projection and
   diagram behavior. [`STATIC_EXTRACTED`]
-- `docs/LLM-FIRST-PORT.md:1-21,92-125` — intended migration, not current-runtime evidence.
+- `AGENTS.md`, `.github/copilot-instructions.md`, `.github/skills/map-architecture/SKILL.md`, and
+  `.github/agents/sre-analyst.agent.md` — current instruction-facing contract.
+  [`STATIC_EXTRACTED`]
+- `docs/LLM-FIRST-PORT.md:1-21,92-125` — design rationale, not current-runtime evidence.
   [`MANIFEST_DECLARED`]

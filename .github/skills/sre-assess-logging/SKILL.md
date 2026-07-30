@@ -1,12 +1,12 @@
 ---
 name: sre-assess-logging
 description: >-
-  Tier-B (LLM) logging-quality gap-finder (HYBRID-PLAN S2). The engine already parses the log
+  Logging-quality gap-finder (HYBRID-PLAN S2). The engine already parses the log
   statements deterministically (framework, level distribution, message parameterization, request/
   trace-ID correlation context). You judge what it cannot prove: is an ERROR actually noise
   (alert fatigue), and does a failure site lack request/trace context? Point at verbatim log lines;
   the engine refutes `missing-log-context` against its own correlation facts and routes survivors to
-  review. Nothing auto-verifies.
+  review.
 allowed-tools: ["codebase", "search", "editFiles"]
 metadata:
   version: 0.1.0
@@ -37,7 +37,7 @@ This is **distinct from** `sre-observability-coverage`'s `missing-structured-log
 *pillar-level* present/absent call. Here the structured-logging pillar exists; you assess its
 *quality*.
 
-## The non-circular contract (same as sre-gap-finder)
+## How your findings are grounded (same as sre-gap-finder)
 
 You **point**, the engine **judges**:
 
@@ -47,7 +47,7 @@ You **point**, the engine **judges**:
    An anchor it can't find verbatim is dropped.
 3. The **engine refutes** `missing-log-context` against its own `observability.logging` facts: if
    the format is JSON or carries any `%X{}` correlation field, the gap is dropped (the context is
-   global). `noisy-error-logging` is pure judgment — it routes to review, it never auto-verifies.
+   global). `noisy-error-logging` is pure judgment — it always goes to a human reviewer.
 
 ## Emit
 
@@ -64,5 +64,5 @@ A JSON object written to `.sre/gap-proposals.json` (same file/loader as sre-gap-
 ]}
 ```
 
-`category` ∈ {`noisy-error-logging`, `missing-log-context`}. Every surviving gap is Tier-B
-`needs-review` — you widen recall on logging quality; the engine makes the call.
+`category` ∈ {`noisy-error-logging`, `missing-log-context`}. Every gap is flagged for human
+review — you widen recall on logging quality; the engine makes the call.

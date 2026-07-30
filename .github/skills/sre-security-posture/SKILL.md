@@ -1,13 +1,14 @@
 ---
 name: sre-security-posture
 description: >-
-  Assess-phase (Tier-B) security-posture authorer — record a service's security controls (authn,
-  authz, encryption, secret handling) and open risks as a needs-review SecurityPosture artifact,
-  each grounded in cited security config or dependencies. Use when asked about a service's security
-  posture, auth/encryption/secret handling, or to fill the security section of a production-readiness
-  review. You propose controls from real evidence; the engine never raises severity off them, and
-  data classification (PII/PCI) stays the engine's deterministic job (Criticality). Keywords: security
-  posture, authn, authz, oauth, TLS, encryption, secrets, vault, production readiness, open risk.
+  Assess-phase security-posture authorer — record a service's security controls (authn, authz,
+  encryption, secret handling) and its open risks as a SecurityPosture artifact, each grounded in
+  cited security config or dependencies. Use when asked about a service's security posture,
+  auth/encryption/secret handling, or to fill the security section of a production-readiness review.
+  You record controls from real evidence; the posture stays advisory (it never raises the alert
+  severity floor), and data classification (PII/PCI) is the engine's deterministic job (Criticality).
+  Keywords: security posture, authn, authz, oauth, TLS, encryption, secrets, vault, production
+  readiness, open risk.
 allowed-tools: ["codebase", "search", "editFiles", "runCommands"]
 metadata:
   version: 0.1.0
@@ -15,10 +16,10 @@ metadata:
 
 # sre-security-posture
 
-Author a **needs-review** `SecurityPosture` for a scanned service — its authn / authz / encryption /
-secret-handling controls and the open risks a reviewer must close — each grounded in cited code or
-config. This activates the `SecurityPosture` kind via the same propose-don't-assert contract the
-other Tier-B skills use.
+Author a `SecurityPosture` for a scanned service — its authn / authz / encryption / secret-handling
+controls and the open risks a reviewer must close — each grounded in cited code or config. Carry the
+governance block ([references/provenance-rules.md](./references/provenance-rules.md)): a posture is
+advisory input to a human review, so it ships `needs-human-review: true` and honest `confidence`.
 
 ## When to use this skill
 
@@ -47,8 +48,8 @@ severity or data classification:
 3. **Data classification is the engine's, not yours.** Whether the service handles PII/PCI is
    deterministically detected and lives on the `Criticality` artifact. Cross-ref it; do not restate
    or override it here.
-4. **needs-review, never severity.** A `SecurityPosture` is advisory: it informs a human review and
-   never feeds the deterministic alert severity floor (only a grounded criticality tier does).
+4. **Advisory, never severity.** A `SecurityPosture` informs a human review; it never feeds the
+   deterministic alert severity floor (only a grounded criticality tier does).
 
 ## Workflow
 

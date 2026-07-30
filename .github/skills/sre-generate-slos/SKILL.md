@@ -1,10 +1,10 @@
 ---
 name: sre-generate-slos
 description: >-
-  Generate-phase (Tier-B) SLO drafter — propose candidate SLI definitions and objectives for a
+  Generate-phase SLO drafter — propose candidate SLI definitions and objectives for a
   service's endpoints and critical flows that have no authoritative SLO, grounded in the cited
   endpoint/flow code. Use when asked to draft SLOs/SLIs, suggest reliability targets, or fill the SLO
-  coverage gap for a scanned service. Every proposal lands needs-review with source=inferred: a drafted
+  coverage gap for a scanned service. Every proposal is flagged for human review with source=inferred: a drafted
   target is a judgment, never authoritative, and never feeds the burn-rate alert or severity floor.
   Keywords: SLO, SLI, objective, error budget, reliability target, latency, availability, burn rate.
 allowed-tools: ["codebase", "search", "editFiles", "runCommands"]

@@ -1,13 +1,13 @@
 ---
 name: generate-runbooks
 description: >-
-  Generate-phase (Tier-B) runbook drafter (coverage #20) — author the diagnosis/remediation content
+  Generate-phase runbook drafter (coverage #20) — author the diagnosis/remediation content
   for an Alert that has no runbook. The engine already writes the one runbook it can fully derive (a
   swallowed-publish failure); you draft the rest, grounded in the scanned flows and dependencies. Each
   runbook triggers on a real Alert and references only real artifacts; the engine re-grounds the target
   and every Kind/name citation against the run, flagging anything that isn't there. Use when asked to
-  draft a runbook, write incident steps, or document what to do when an alert fires. Nothing you draft
-  auto-verifies — it lands needs-review with a GENERATED banner.
+  draft a runbook, write incident steps, or document what to do when an alert fires. Every draft is
+  flagged for human review and carries a GENERATED banner.
 allowed-tools: ["codebase", "search", "editFiles"]
 metadata:
   version: 0.1.0
@@ -35,7 +35,7 @@ Do **not** invent a flow, dependency, or service that the scan didn't produce �
 every `Kind/name` reference against this run and flags anything that isn't there. Do **not** draft a
 second runbook for an Alert that already has one (the engine refuses duplicates).
 
-## The non-circular contract
+## How your findings are grounded
 
 You **draft**, the engine **grounds**:
 
@@ -44,7 +44,7 @@ You **draft**, the engine **grounds**:
    refused.
 2. The **engine** grounds every `Kind/name` reference in your prose against the run's artifacts; an
    ungrounded reference (a flow/dependency that isn't there) is named so it can't hide in a step.
-3. Survivors are Tier-B `needs-review` `Runbook` artifacts with the GENERATED banner, byte-grounded to
+3. Your findings become `Runbook` artifacts flagged for human review, carrying the GENERATED banner, byte-grounded to
    the same code their target Alert cites. You authored the content; the engine made every grounding
    call.
 
@@ -64,5 +64,5 @@ A JSON object written to `.sre/runbook-proposals.json`:
 ]}
 ```
 
-`alertRef` is required and must be a real Alert. Every surviving proposal is Tier-B `needs-review`.
+`alertRef` is required and must be a real Alert. Every finding ships `needs-human-review: true`.
 The engine runs `sre-kb generate-runbooks` to re-ground them.

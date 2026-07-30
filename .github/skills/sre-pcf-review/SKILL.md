@@ -1,14 +1,13 @@
 ---
 name: sre-pcf-review
 description: >-
-  Assess-phase (Tier-B) PCF deployment reviewer (§3.2) — judge which manifest settings deserve
+  Assess-phase PCF deployment reviewer (§3.2) — judge which manifest settings deserve
   operator attention: a single-instance app with no failover, a port health check on an HTTP
   service, a missing disk quota, endpoint-shaped env config that belongs in a service binding.
   The engine collects every manifest fact; you add the judgment it can't make (one instance can
   be correct for a worker, a port check can be right for a TCP process). Propose check+app pairs;
   the engine re-derives every accepted check from the manifest bytes and refutes what they
-  disprove. Use when asked to review a PCF deployment, manifest, or platform posture. Nothing you
-  propose auto-verifies.
+  disprove. Use when asked to review a PCF deployment, manifest, or platform posture.
 allowed-tools: ["codebase", "search", "editFiles"]
 metadata:
   version: 0.1.0
@@ -30,7 +29,7 @@ for this app** — that's the judgment you add.
 | `missing-disk-quota` | no `disk_quota` declared, for an app where disk pressure is plausible |
 | `env-config-binding` | an env var carries endpoint-shaped config (a URL/URI/host) that belongs in a service binding |
 
-## The non-circular contract
+## How your findings are grounded
 
 You **point**, the engine **judges**:
 

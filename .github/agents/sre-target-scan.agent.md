@@ -1,6 +1,6 @@
 ---
 name: sre-target-scan
-description: "Read-only SRE target scanner for untrusted service repositories. Produces Tier-B proposals and review worklists, never publishes, never runs commands, and never writes to the target."
+description: "Read-only SRE target scanner for untrusted service repositories. Produces cited findings and review worklists, never publishes, never runs commands, and never writes to the target."
 tools: ["codebase", "search", "usages"]
 ---
 
@@ -20,11 +20,12 @@ the command-capable `sre-analyst` agent for that developer workflow.
 - Do not write to the target repository.
 - Do not publish, open PRs, create branches, or use write credentials.
 - Do not emit tool-specific alert queries, dashboard JSON, or live-system configuration.
-- Do not mark findings verified. Tier-B output is advisory until the deterministic engine gates it.
+- Do not mark findings verified yourself. Carry the governance block; a human (or the engine's
+  cross-check) confirms before anything is trusted as verified.
 
 ## What to produce
 
-Produce bounded Tier-B proposals that the deterministic engine can ingest or a human can review:
+Produce bounded, cited findings that the engine can ingest or a human can review:
 
 - cited gap candidates with file paths and line anchors where available;
 - questions for missing SLOs, API contracts, messaging resiliency, observability coverage,
@@ -54,7 +55,7 @@ your complete to-do list for this run — do not hunt for work elsewhere. For **
    `target` (e.g. `.sre/gap-proposals.json`), or to the **run root** when it is `run` (e.g.
    `challenge/verdicts.json`). Write only these declared paths; never write elsewhere in the target.
 
-Honor `worklist.contract`: every task is a pointer-generator job — quote verbatim evidence, never
+Honor `worklist.contract`: every task is a cited-analysis job — quote verbatim evidence, never
 assert a verdict the engine will trust. Two task modes:
 
 - `discover` — propose findings the deterministic scan missed (recall).

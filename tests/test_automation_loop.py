@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import sys
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -14,6 +13,7 @@ from typer.testing import CliRunner
 from sre_kb.cli import app
 from sre_kb.graduation import GraduationTracker
 from sre_kb.pipeline.graduation_draft import draft_candidates
+from tests.subprocess_helpers import python_command
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SPRING = FIXTURES / "sample-spring-pcf"
@@ -28,14 +28,17 @@ def test_gap_validate_oracle_generates_then_measures(tmp_path):
     target = tmp_path / "target"
     shutil.copytree(GAP, target)
     (target / ".sre" / "gap-proposals.json").unlink()  # measure the oracle's, not the archived ones
-    oracle = (f"{sys.executable} -c \"import sys;sys.stdin.read();"
-              "print('{\\\"proposals\\\": []}')\"")
+    oracle = python_command(
+        "import sys;sys.stdin.read();print('{\"proposals\": []}')"
+    )
     res = CliRunner().invoke(app, [
         "copilot-gap-validate", "--target", str(target), "--truth",
         str(target / ".sre" / "gap-truth.json"), "--oracle", oracle,
     ])
     assert "oracle proposals ->" in res.stdout
-    assert json.loads((target / ".sre" / "gap-proposals.json").read_text()) == {"proposals": []}
+    assert json.loads(
+        (target / ".sre" / "gap-proposals.json").read_text(encoding="utf-8")
+    ) == {"proposals": []}
     # empty proposals against a non-empty truth set: measured, and failing the default floors
     assert "kept-recall=0.00" in res.stdout
     assert res.exit_code == 1
@@ -44,7 +47,7 @@ def test_gap_validate_oracle_generates_then_measures(tmp_path):
 def test_gap_validate_oracle_unparseable_reply_is_an_error(tmp_path):
     target = tmp_path / "target"
     shutil.copytree(GAP, target)
-    oracle = f"{sys.executable} -c \"import sys;sys.stdin.read();print('no json here')\""
+    oracle = python_command("import sys;sys.stdin.read();print('no json here')")
     res = CliRunner().invoke(app, [
         "copilot-gap-validate", "--target", str(target), "--truth",
         str(target / ".sre" / "gap-truth.json"), "--oracle", oracle,
@@ -102,7 +105,7 @@ def test_map_architecture_grounds_refutes_and_folds(tmp_path):
     target = tmp_path / "target"
     shutil.copytree(SPRING, target)
     publisher = target / "src/main/java/com/acme/order/events/OrderEventPublisher.java"
-    anchor = publisher.read_text().splitlines()[23].strip()
+    anchor = publisher.read_text(encoding="utf-8").splitlines()[23].strip()
     (target / ".sre").mkdir(exist_ok=True)
     (target / ".sre" / "architecture-proposals.json").write_text(json.dumps({"proposals": [
         {"pattern": "circuit-breaker", "anchor": anchor, "rationale": "dup"},
@@ -159,7 +162,7 @@ def test_graduation_draft_verifies_pattern_against_anchors(tmp_path):
     assert len(drafts) == 1
     d = drafts[0]
     assert d.fires_on == 2 and "fires on all 2" in d.note
-    text = d.path.read_text()
+    text = d.path.read_text(encoding="utf-8")
     assert "restTemplate" in text and "fires on all 2" in text
     assert "never auto-applied" in text.lower() or "auto-applied" in text
 
@@ -176,7 +179,7 @@ def test_graduation_draft_unparseable_reply_keeps_the_sketch(tmp_path):
     _ready_tracker(tmp_path, ["client.call(x)"])
     drafts = draft_candidates(tmp_path, StubProvider("I cannot help with that."), tmp_path / "out")
     assert drafts[0].pattern is None and "unparseable" in drafts[0].note
-    assert "Deterministic sketch" in drafts[0].path.read_text()
+    assert "Deterministic sketch" in drafts[0].path.read_text(encoding="utf-8")
 
 
 def test_cli_graduation_draft_without_candidates_or_oracle(tmp_path):

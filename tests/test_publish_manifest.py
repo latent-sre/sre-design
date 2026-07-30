@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from sre_kb.publish.forge.github import GitHubForge
 from sre_kb.publish.manifest import content_hash, dump_manifest, load_manifest, merge_tree
 
@@ -27,7 +29,10 @@ def test_merge_tree_skips_symlinks(tmp_path):
     staged, dest = tmp_path / "staged", tmp_path / "dest"
     staged.mkdir()
     (staged / "real.txt").write_text("x\n", encoding="utf-8")
-    (staged / "link.txt").symlink_to(staged / "real.txt")
+    try:
+        (staged / "link.txt").symlink_to(staged / "real.txt")
+    except OSError as exc:
+        pytest.skip(f"filesystem/account cannot create a symlink for this capability test: {exc}")
     res = merge_tree(staged, dest)
     assert "real.txt" in res.written
     assert "link.txt" not in res.written
@@ -40,7 +45,7 @@ def test_first_publish_writes_all_and_records_a_manifest(tmp_path):
     res = merge_tree(staged, dest)
     assert set(res.written) == {"catalog/a.yaml", "catalog/b.yaml"}
     assert not res.proposed and not res.removed
-    assert (dest / "catalog/a.yaml").read_text() == "a\n"
+    assert (dest / "catalog/a.yaml").read_text(encoding="utf-8") == "a\n"
     assert set(load_manifest(dest)) == {"catalog/a.yaml", "catalog/b.yaml"}
 
 
@@ -60,8 +65,8 @@ def test_operator_edit_is_preserved_and_the_draft_is_proposed(tmp_path):
     _tree(staged, {"catalog/a.yaml": "v2\n"})  # engine now wants v2
     res = merge_tree(staged, dest)
     assert res.proposed == ["catalog/a.yaml"] and res.written == []
-    assert (dest / "catalog/a.yaml").read_text() == "operator tuned\n"  # live edit preserved
-    assert (dest / ".proposed/catalog/a.yaml").read_text() == "v2\n"  # draft offered alongside
+    assert (dest / "catalog/a.yaml").read_text(encoding="utf-8") == "operator tuned\n"
+    assert (dest / ".proposed/catalog/a.yaml").read_text(encoding="utf-8") == "v2\n"
     # the manifest keeps the original hash, so the divergence keeps being detected on later runs
     assert load_manifest(dest)["catalog/a.yaml"] != content_hash(dest / "catalog/a.yaml")
 
@@ -85,7 +90,7 @@ def test_operator_edited_orphan_is_left_in_place(tmp_path):
     (staged / "catalog/old.yaml").unlink()  # engine stops producing it, but a human edited it
     res = merge_tree(staged, dest)
     assert "catalog/old.yaml" not in res.removed
-    assert (dest / "catalog/old.yaml").read_text() == "operator kept this\n"
+    assert (dest / "catalog/old.yaml").read_text(encoding="utf-8") == "operator kept this\n"
 
 
 def test_merge_tree_ignores_manifest_paths_escaping_dest(tmp_path):
@@ -137,7 +142,7 @@ def test_forge_publish_preserves_operator_edit_and_prunes_orphan(tmp_path):
             base = Path(cmd[2])
             snapshot.update(
                 {
-                    str(p.relative_to(base)).replace("\\", "/"): p.read_text()
+                    str(p.relative_to(base)).replace("\\", "/"): p.read_text(encoding="utf-8")
                     for p in base.rglob("*")
                     if p.is_file()
                 }

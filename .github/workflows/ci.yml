@@ -26,6 +26,8 @@ jobs:
         run: make install
       - name: Lint (make lint)
         run: make lint
+      - name: Codebase atlas drift (make atlas-check)
+        run: make atlas-check
       - name: Test + coverage floor (make cov)
         run: make cov
 

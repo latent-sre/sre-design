@@ -50,7 +50,9 @@ def test_narrations_apply_only_to_rendered_diagrams_and_are_labeled_advisory(tmp
     by = {o.diagram: o.result for o in result.outcomes}
     assert by == {"create-order": "applied", "order-service": "applied",
                   "ghost": "unknown-diagram", "not-a-diagram": "unknown-diagram"}
-    md = (layout.root / "projections" / "diagrams" / "create-order.md").read_text()
+    md = (layout.root / "projections" / "diagrams" / "create-order.md").read_text(
+        encoding="utf-8"
+    )
     assert "**Narration (LLM, advisory)**" in md
     # Sanitized: one plain paragraph — no backticks (fence injection), no raw newlines.
     caption = md.split("advisory)** — verify against the drawing: ", 1)[1]
@@ -85,5 +87,7 @@ def test_cli_ingest_renders_projections_on_a_validate_only_run(tmp_path):
                                  "--work-root", str(tmp_path / "w")])
     assert r.exit_code == 0, r.output
     assert "1 applied" in r.output
-    md = (tmp_path / "w" / "nv" / "projections" / "diagrams" / "create-order.md").read_text()
+    md = (
+        tmp_path / "w" / "nv" / "projections" / "diagrams" / "create-order.md"
+    ).read_text(encoding="utf-8")
     assert "Narration (LLM, advisory)" in md

@@ -22,6 +22,7 @@ Impls:
 from __future__ import annotations
 
 import hashlib
+import os
 import shlex
 import subprocess
 from pathlib import Path
@@ -71,18 +72,26 @@ class SubprocessProvider:
     interactive = False
 
     def __init__(self, cmd: str | list[str], *, timeout: float = 120.0):
-        self.argv = shlex.split(cmd) if isinstance(cmd, str) else list(cmd)
-        if not self.argv:
+        if isinstance(cmd, str):
+            if not cmd.strip():
+                raise ValueError("empty provider command")
+            self._run_args, self.argv = _prepare_command(cmd, windows=os.name == "nt")
+        else:
+            self.argv = list(cmd)
+            self._run_args = self.argv
+        if not self.argv or not self.argv[0]:
             raise ValueError("empty provider command")
         self.timeout = timeout
-        self.id = f"subprocess:{self.argv[0].rsplit('/', 1)[-1]}"
+        executable = self.argv[0].replace("\\", "/").rsplit("/", 1)[-1]
+        self.id = f"subprocess:{executable}"
 
     def complete(self, prompt: str) -> str:
         try:
             # argv is operator-configured (never target-derived) and the prompt is fed on STDIN, so
             # untrusted code in the pack can't break into the command line — see the class docstring.
             proc = subprocess.run(  # noqa: S603
-                self.argv, input=prompt, capture_output=True, text=True,
+                self._run_args, input=prompt, capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
                 timeout=self.timeout, check=False,
             )
         except (OSError, subprocess.TimeoutExpired):
@@ -95,6 +104,30 @@ class SubprocessProvider:
 
     def __call__(self, prompt: str) -> str:
         return self.complete(prompt)
+
+
+def _strip_outer_quotes(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return value
+
+
+def _prepare_command(
+    command: str,
+    *,
+    windows: bool,
+) -> tuple[str | list[str], list[str]]:
+    if windows:
+        # CreateProcess quoting is not POSIX shell syntax. shlex.split() treats backslashes in
+        # `C:\path\python.exe` as escapes and corrupts the executable. Keep the operator-configured
+        # Windows command line intact (still shell=False); tokenization here is display/id only.
+        try:
+            display_argv = shlex.split(command, posix=False)
+        except ValueError:
+            display_argv = [command.split(maxsplit=1)[0]]
+        return command, [_strip_outer_quotes(value) for value in display_argv]
+    argv = shlex.split(command)
+    return argv, argv
 
 
 class VertexProvider:

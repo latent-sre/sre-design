@@ -16,6 +16,14 @@ For "run the whole loop in one go", use the `sre-autopilot` skill — it works t
 scan-worklist end-to-end (or wraps `sre-kb autopilot --oracle '<llm-cli>'` when an oracle CLI is
 configured). The loop below is the same thing broken into concern-sized steps.
 
+For an explicit whole-repository mapping, visualization, or onboarding request, prefer the
+`sre-codebase-cartographer` agent with the `sre-codebase-atlas` skill. It freezes a
+source/configuration model before reading design intent, applies dedicated .NET 8 and
+Node/TypeScript resolution guidance, generates the versioned evidence graph with `sre-kb atlas`,
+coordinates the existing architecture/dependency/caller/diagram skills, and writes the seven-page
+`docs/codebase-atlas/` tour plus drift-gated projections. Do not invoke it for a narrow code question
+or ordinary feature work.
+
 ## Operating loop
 
 1. **Scan (deterministic):** run `sre-kb run --target <repo> --to-stage scaffold`. This

@@ -1,4 +1,4 @@
-.PHONY: install test cov lint fmt clean offline-wheel lock schema-ref
+.PHONY: install test cov lint fmt atlas atlas-check clean offline-wheel lock schema-ref
 
 install:
 	python -m pip install -e ".[dev]"
@@ -14,6 +14,12 @@ lint:
 
 fmt:
 	python -m ruff format src tests
+
+atlas:
+	python -m sre_kb.cli atlas --target .
+
+atlas-check:
+	python -m sre_kb.cli atlas-check --target .
 
 lock:
 	python -m pip install -q pip-tools

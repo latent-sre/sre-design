@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from sre_kb.llm.provider import (
@@ -11,8 +13,10 @@ from sre_kb.llm.provider import (
     LLMUnavailable,
     SubprocessProvider,
     VertexProvider,
+    _prepare_command,
     make_provider,
 )
+from tests.subprocess_helpers import stdin_echo_command
 
 
 class _CountingProvider:
@@ -43,12 +47,20 @@ def test_vertex_is_a_deferred_slot():
 
 
 def test_subprocess_provider_selected_by_command_or_config():
-    assert isinstance(make_provider(command="cat"), SubprocessProvider)
-    assert isinstance(make_provider({"llm": {"provider": "subprocess", "command": "cat"}}),
+    command = stdin_echo_command()
+    assert isinstance(make_provider(command=command), SubprocessProvider)
+    assert isinstance(make_provider({"llm": {"provider": "subprocess", "command": command}}),
                       SubprocessProvider)
-    assert make_provider(command="cat").complete("hello") == "hello"  # cat echoes stdin
+    assert make_provider(command=command).complete("hello") == "hello"
     with pytest.raises(ValueError):
         make_provider({"llm": {"provider": "subprocess"}})  # no command
+
+
+def test_windows_command_preparation_preserves_native_backslashes_and_command_line():
+    command = r'"C:\Program Files\Python\python.exe" -c "print(1)"'
+    run_args, display = _prepare_command(command, windows=True)
+    assert run_args == command
+    assert display[0] == r"C:\Program Files\Python\python.exe"
 
 
 def test_prompt_hash_cache_replays_without_recalling(tmp_path):
@@ -84,7 +96,7 @@ def test_transient_failure_is_not_cached(tmp_path):
 
 
 def test_make_provider_wraps_in_cache_when_configured(tmp_path):
-    p = make_provider({"llm": {"provider": "subprocess", "command": "cat",
+    p = make_provider({"llm": {"provider": "subprocess", "command": stdin_echo_command(),
                                "cache_dir": str(tmp_path)}})
     assert isinstance(p, CachingProvider)
     assert p.complete("x") == "x" and (tmp_path).exists()
@@ -103,5 +115,7 @@ def test_subprocess_oracle_alias_is_the_provider():
 def test_subprocess_nonzero_exit_is_a_failure_not_an_answer():
     """A failing oracle's stdout (an error banner before exit 1) must read as the failure signal
     "" — otherwise CachingProvider would cache the error text as the permanent answer."""
-    p = SubprocessProvider(["sh", "-c", "echo rate limit exceeded; exit 1"])
+    p = SubprocessProvider(
+        [sys.executable, "-c", "import sys;print('rate limit exceeded');sys.exit(1)"]
+    )
     assert p.complete("x") == ""

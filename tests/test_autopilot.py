@@ -17,9 +17,9 @@ FIXTURE = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
 # Verbatim fixture lines the stub quotes back as anchors — read at test time so the test can't
 # drift from the fixture bytes.
 _PUBLISH_LINE = (FIXTURE / "src/main/java/com/acme/order/events/OrderEventPublisher.java") \
-    .read_text().splitlines()[23].strip()
+    .read_text(encoding="utf-8").splitlines()[23].strip()
 _WARN_LOG_LINE = (FIXTURE / "src/main/java/com/acme/order/client/InventoryClient.java") \
-    .read_text().splitlines()[29].strip()
+    .read_text(encoding="utf-8").splitlines()[29].strip()
 
 _UNCOVERED_RE = re.compile(r"^- (\S+)\s+severity=", re.M)
 
@@ -100,17 +100,19 @@ def test_autopilot_converges_and_folds_every_channel_in(tmp_path):
     # declares disk_quota: 1G, so the claim dies at the engine's re-derivation gate
     assert result.pcf_review_routed == 0
     import json as _json
-    review = _json.loads((target / ".sre" / "pcf-review.json").read_text())
+    review = _json.loads((target / ".sre" / "pcf-review.json").read_text(encoding="utf-8"))
     assert review["findings"] == []
     # the valid narration decorated the rendered diagram; the bogus name was dropped
     assert result.narrations_applied == 1
-    flow_md = (layout.root / "projections" / "diagrams" / "create-order.md").read_text()
+    flow_md = (layout.root / "projections" / "diagrams" / "create-order.md").read_text(
+        encoding="utf-8"
+    )
     assert "Narration (LLM, advisory)" in flow_md
     assert list((layout.kb / "needs-review").rglob("Architecture/*proposed-patterns*.yaml"))
     assert not list((layout.kb / "verified").rglob("Runbook/create-order-latency-burn-rate.yaml"))
     # the narrative was grounded and rendered into the run's reports
     assert result.narrative_note and "resolve" in result.narrative_note
-    rendered = (layout.reports / "findings-narrative.md").read_text()
+    rendered = (layout.reports / "findings-narrative.md").read_text(encoding="utf-8")
     assert "Tier-B advisory" in rendered and "publish path" in rendered
 
 

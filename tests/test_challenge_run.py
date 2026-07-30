@@ -5,7 +5,6 @@ engine itself still embeds no LLM."""
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 from sre_kb.pipeline import run as run_pipeline
@@ -13,6 +12,7 @@ from sre_kb.pipeline.challenge_apply import apply_verdicts
 from sre_kb.pipeline.challenge_run import SubprocessOracle, run_worklist
 from sre_kb.validation.challenge import parse_verdict_reply as parse_reply
 from sre_kb.workspace import RunLayout
+from tests.subprocess_helpers import python_command, stdin_echo_command
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
 RUNBOOK = "Runbook/order-created-publish-failures"
@@ -57,8 +57,8 @@ def test_run_worklist_attaches_artifact_and_claim_and_is_apply_shaped():
 
 
 def test_subprocess_oracle_feeds_prompt_on_stdin_not_argv():
-    # `cat` echoes stdin: proves the prompt travels on stdin, never the command line.
-    oracle = SubprocessOracle("cat")
+    # A tiny cross-platform process echoes stdin, proving the prompt never enters argv.
+    oracle = SubprocessOracle(stdin_echo_command())
     assert "supported" in oracle("supported: ok")
     assert oracle.id.startswith("subprocess:")
 
@@ -72,7 +72,9 @@ def test_end_to_end_live_loop_downgrades_via_apply(tmp_path):
     rejects the runbook, proving the live path lands on the same monotonic gate."""
     run_pipeline(str(FIXTURE), work_root=str(tmp_path), run_id="lr", to_stage="validate")
     layout = RunLayout(Path(str(tmp_path)), "lr")
-    worklist = json.loads((layout.root / "challenge" / "worklist.json").read_text())
+    worklist = json.loads(
+        (layout.root / "challenge" / "worklist.json").read_text(encoding="utf-8")
+    )
 
     # a stub oracle standing in for the Copilot CLI: flags the runbook, passes the alert
     def stub(prompt: str) -> str:
@@ -89,7 +91,9 @@ def test_oracle_cannot_promote_only_downgrade(tmp_path):
     worklist items start at needs-review and the gate is downgrade-only."""
     run_pipeline(str(FIXTURE), work_root=str(tmp_path), run_id="lp", to_stage="validate")
     layout = RunLayout(Path(str(tmp_path)), "lp")
-    worklist = json.loads((layout.root / "challenge" / "worklist.json").read_text())
+    worklist = json.loads(
+        (layout.root / "challenge" / "worklist.json").read_text(encoding="utf-8")
+    )
     verdicts = run_worklist(worklist, lambda _p: "supported: looks good", oracle_id="stub")
     for s in apply_verdicts(layout, verdicts):
         assert s["new"] == s["old"]  # no promotion, ever
@@ -117,11 +121,11 @@ def test_cli_challenge_run_with_oracle_writes_verdicts(tmp_path):
 
     run_pipeline(str(FIXTURE), work_root=str(tmp_path), run_id="cw", to_stage="validate")
     # a tiny python oracle that always contradicts, invoked via this interpreter
-    oracle = f"{sys.executable} -c \"import sys;sys.stdin.read();print('contradicted: stub')\""
+    oracle = python_command("import sys;sys.stdin.read();print('contradicted: stub')")
     res = CliRunner().invoke(
         app, ["challenge-run", "--run", "cw", "--oracle", oracle, "--work-root", str(tmp_path)]
     )
     assert res.exit_code == 0, res.stdout
     vpath = Path(str(tmp_path)) / "cw" / "challenge" / "verdicts.json"
-    data = json.loads(vpath.read_text())
+    data = json.loads(vpath.read_text(encoding="utf-8"))
     assert data["verdicts"] and all(v["verdict"] == "contradicted" for v in data["verdicts"])

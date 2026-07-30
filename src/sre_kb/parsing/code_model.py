@@ -17,7 +17,8 @@ import tree_sitter_go as ts_go
 import tree_sitter_java as ts_java
 import tree_sitter_javascript as ts_js
 import tree_sitter_python as ts_py
-from tree_sitter import Language, Node, Parser
+import tree_sitter_typescript as ts_ts
+from tree_sitter import Language, Node, Parser, Tree
 
 _STR_KINDS = {"string_literal", "verbatim_string_literal", "raw_string_literal", "interpolated_string_expression"}
 _THROW = {"throw_statement", "throw_expression"}
@@ -84,12 +85,20 @@ class Module:
     types: list[TypeDecl]
 
 
-_GRAMMARS = {"java": ts_java, "csharp": ts_cs, "python": ts_py, "javascript": ts_js, "go": ts_go}
+_GRAMMAR_FACTORIES = {
+    "java": ts_java.language,
+    "csharp": ts_cs.language,
+    "python": ts_py.language,
+    "javascript": ts_js.language,
+    "typescript": ts_ts.language_typescript,
+    "tsx": ts_ts.language_tsx,
+    "go": ts_go.language,
+}
 
 
 @cache
 def _lang(language: str) -> Language:
-    return Language(_GRAMMARS[language].language())
+    return Language(_GRAMMAR_FACTORIES[language]())
 
 
 @cache
@@ -97,9 +106,19 @@ def _parser(language: str) -> Parser:
     return Parser(_lang(language))
 
 
+def syntax_tree(language: str, text: str) -> tuple[Tree, bytes]:
+    """Return the shared grammar's concrete syntax tree and its UTF-8 source bytes.
+
+    Atlas resolvers use this lower-level view for exact import nodes. Collectors continue to use
+    :func:`parse`, which projects only the language-neutral call/type model they need.
+    """
+    source = text.encode("utf-8")
+    return _parser(language).parse(source), source
+
+
 def parse(language: str, text: str) -> Module:
-    src = text.encode("utf-8")
-    root = _parser(language).parse(src).root_node
+    tree, src = syntax_tree(language, text)
+    root = tree.root_node
     return {
         "java": _parse_java, "csharp": _parse_csharp, "python": _parse_python,
         "javascript": _parse_javascript, "go": _parse_go,

@@ -22,6 +22,12 @@ When working in this repo:
   source/config first, apply its .NET/Node resolver guide when relevant, keep declared/resolved
   package, source, runtime, and operator scopes separate, generate from `.sre/atlas.yaml`, run
   `sre-kb atlas-check`, and record design-to-reality divergences instead of smoothing them over.
+- **External documentation and OSS evidence:** inspect the local checkout first. When available,
+  use Context7 for current official documentation, API references, configuration, and
+  version-specific usage; use GitHits for upstream source/tests, package metadata, dependency
+  graphs, vulnerabilities, changelogs, and real-world examples. When both apply, keep provenance
+  separate, compare the documented contract with implementation/adoption evidence, and report
+  disagreements. Neither service represents private or uncommitted local code.
 - Run `make test` (pytest) and `ruff check` before committing.
 
 Start with `docs/codebase-atlas/README.md` for the navigable source map; see `docs/DESIGN.md` for the

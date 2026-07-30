@@ -20,16 +20,25 @@ Two halves:
 
 The full design lives in [`docs/DESIGN.md`](docs/DESIGN.md).
 
+For a source-first visual tour of this repository, start with the
+[`docs/codebase-atlas/`](docs/codebase-atlas/README.md) entry map. The reusable
+[`sre-codebase-atlas`](.github/skills/sre-codebase-atlas/SKILL.md) skill refreshes the seven-page
+atlas for explicit codebase mapping, onboarding, and change-impact requests; the design and upstream
+source review are recorded in [`docs/CODEBASE-ATLAS.md`](docs/CODEBASE-ATLAS.md).
+The versioned machine snapshot, dependency metrics, schemas, Mermaid views, license inventory, and
+offline searchable explorer live under
+[`docs/codebase-atlas/generated/`](docs/codebase-atlas/generated/README.md).
+
 ## Status
 
-Working engine, tested offline (686 tests, ruff-clean) against bundled **Java/Spring**,
+Working engine with an offline pytest suite and Ruff gate across bundled **Java/Spring**,
 **.NET/Steeltoe**, **Python/FastAPI**, **Node/Express**, and **Go** fixtures — the same collectors
 emit the same KB across stacks (repo-neutrality). [`docs/DESIGN.md`](docs/DESIGN.md) holds the
 architecture; live status is tracked in [`docs/HYBRID-PLAN.md`](docs/HYBRID-PLAN.md) §8/§9.
 
 Implemented:
 - **AST-backed extraction** — code structure (classes, methods, calls, annotations,
-  try/catch) is read from a tree-sitter model (Java, C#, Python, JavaScript, and Go —
+  try/catch) is read from a tree-sitter model (Java, C#, Python, JavaScript, TypeScript/TSX, and Go —
   `parsing/code_model.py`) with per-class scoping and receiver→field-type call correlation; only
   config files use direct parsing. Python/FastAPI, Node/Express, and Go (gin) emit the same facts
   (endpoints, egress, tech stack) from the AST so the unchanged scaffolder produces the same KB.
@@ -56,6 +65,11 @@ Implemented:
   `--dry-run` stages locally; `--no-dry-run` opens a live PR via git + GitHub REST (`GITHUB_TOKEN`).
 - **Findings** (`sre-kb findings`) — ranked, evidence-linked risk digest (CI-gateable).
 - **Drift** (`sre-kb diff`) and **Estate** (`sre-kb estate`: cross-service topology + co-tenancy).
+- **Codebase atlas** (`sre-kb atlas` / `atlas-check`) — explicit project boundaries, structured
+  package adapters, npm and NuGet resolved lock graphs, .NET SDK/target-framework metadata,
+  TypeScript alias resolution, AST/tree-sitter source edges, runtime/SBOM/coverage/ownership
+  overlays, `Ca`/`Ce`/instability and SCCs, generated visual projections, and a CI drift gate. Use
+  the `sre-codebase-cartographer` agent for a full mixed-stack atlas.
 - **Security**: fail-closed publish-time secret-scan gate (redaction on the `--allow-secrets`
   override), non-escapable untrusted-input context packs, sanitized renderers, publish-repo
   allowlist with the token kept out of `git` argv, fan-out cap, dangerous-pattern output lint,
@@ -112,6 +126,8 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q                                                   # the test suite
 sre-kb schema list                                          # the kind registry
+sre-kb atlas --target .                                     # refresh codebase evidence + visuals
+sre-kb atlas-check --target .                               # fail if generated evidence drifted
 
 # scan -> scaffold -> validate -> render -> stage a PR tree (dry-run)
 sre-kb run --target tests/fixtures/sample-spring-pcf --run demo --to-stage publish
@@ -125,6 +141,16 @@ sre-kb run --target tests/fixtures/sample-dotnet-steeltoe --run net --to-stage v
 
 # cross-service co-tenancy blast radius
 sre-kb estate --target tests/fixtures/sample-spring-pcf --target tests/fixtures/sample-billing-pcf
+```
+
+On Windows PowerShell, use the declared Python 3.13 interpreter and call the environment directly;
+activation is optional and this avoids accidentally reusing an older `.venv`:
+
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m sre_kb.cli atlas-check --target .
 ```
 
 ### Offline / air-gapped install

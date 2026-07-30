@@ -1,0 +1,473 @@
+{
+  "dependencies": [
+    {
+      "licenses": [],
+      "name": "annotated-doc",
+      "node": "package:pypi:annotated-doc",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.0.4"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "annotated-types",
+      "node": "package:pypi:annotated-types",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.7.0"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "attrs",
+      "node": "package:pypi:attrs",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==26.1.0"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "colorama",
+      "node": "package:pypi:colorama",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.4.6"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "hypothesis",
+      "node": "import:python:hypothesis",
+      "source": "tests/test_properties.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "hypothesis",
+      "node": "package:pypi:hypothesis",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        ">=6.100"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "jinja2",
+      "node": "import:python:jinja2",
+      "source": "src/sre_kb/render/templating.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "jinja2",
+      "node": "package:pypi:jinja2",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        "==3.1.6",
+        ">=3.1"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "jsonschema",
+      "node": "import:python:jsonschema",
+      "source": "src/sre_kb/validation/structural.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "jsonschema",
+      "node": "package:pypi:jsonschema",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        "==4.26.0",
+        ">=4.21"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "jsonschema-specifications",
+      "node": "package:pypi:jsonschema-specifications",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==2025.9.1"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "markdown-it-py",
+      "node": "package:pypi:markdown-it-py",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==4.2.0"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "markupsafe",
+      "node": "package:pypi:markupsafe",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==3.0.3"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "mdurl",
+      "node": "package:pypi:mdurl",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.1.2"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "pydantic",
+      "node": "import:python:pydantic",
+      "source": "src/sre_kb/atlas/config.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "pydantic",
+      "node": "package:pypi:pydantic",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        "==2.13.4",
+        ">=2.6"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "pydantic-core",
+      "node": "package:pypi:pydantic-core",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==2.46.4"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "pydantic-settings",
+      "node": "package:pypi:pydantic-settings",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        "==2.14.2",
+        ">=2.14.2"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "pygments",
+      "node": "package:pypi:pygments",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==2.20.0"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "pytest",
+      "node": "import:python:pytest",
+      "source": "tests/test_adversarial.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "pytest",
+      "node": "package:pypi:pytest",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        ">=8.0"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "pytest-cov",
+      "node": "package:pypi:pytest-cov",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        ">=5.0"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "python-dotenv",
+      "node": "package:pypi:python-dotenv",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==1.2.2"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "pyyaml",
+      "node": "package:pypi:pyyaml",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        "==6.0.3",
+        ">=6.0"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "referencing",
+      "node": "package:pypi:referencing",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.37.0"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "rich",
+      "node": "package:pypi:rich",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==15.0.0"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "rpds-py",
+      "node": "package:pypi:rpds-py",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==2026.5.1"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "ruff",
+      "node": "package:pypi:ruff",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        ">=0.4"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "shellingham",
+      "node": "package:pypi:shellingham",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==1.5.4"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "tree-sitter",
+      "node": "package:pypi:tree-sitter",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.25.2",
+        ">=0.23"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "tree-sitter-c-sharp",
+      "node": "package:pypi:tree-sitter-c-sharp",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.23.5",
+        ">=0.23"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "tree-sitter-go",
+      "node": "package:pypi:tree-sitter-go",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.25.0",
+        ">=0.23"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "tree-sitter-java",
+      "node": "package:pypi:tree-sitter-java",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.23.5",
+        ">=0.23"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "tree-sitter-javascript",
+      "node": "package:pypi:tree-sitter-javascript",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.25.0",
+        ">=0.23"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "tree-sitter-python",
+      "node": "package:pypi:tree-sitter-python",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.25.0",
+        ">=0.23"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "tree-sitter-typescript",
+      "node": "package:pypi:tree-sitter-typescript",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.23.2",
+        ">=0.23"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "tree_sitter",
+      "node": "import:python:tree_sitter",
+      "source": "src/sre_kb/atlas/source.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "tree_sitter_c_sharp",
+      "node": "import:python:tree_sitter_c_sharp",
+      "source": "src/sre_kb/parsing/code_model.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "tree_sitter_go",
+      "node": "import:python:tree_sitter_go",
+      "source": "src/sre_kb/parsing/code_model.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "tree_sitter_java",
+      "node": "import:python:tree_sitter_java",
+      "source": "src/sre_kb/parsing/code_model.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "tree_sitter_javascript",
+      "node": "import:python:tree_sitter_javascript",
+      "source": "src/sre_kb/parsing/code_model.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "tree_sitter_python",
+      "node": "import:python:tree_sitter_python",
+      "source": "src/sre_kb/parsing/code_model.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "tree_sitter_typescript",
+      "node": "import:python:tree_sitter_typescript",
+      "source": "src/sre_kb/parsing/code_model.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "typer",
+      "node": "import:python:typer",
+      "source": "src/sre_kb/cli.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "typer",
+      "node": "package:pypi:typer",
+      "source": "pyproject.toml",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.26.7",
+        ">=0.12"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "typing-extensions",
+      "node": "package:pypi:typing-extensions",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==4.15.0"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "typing-inspection",
+      "node": "package:pypi:typing-inspection",
+      "source": "requirements.lock",
+      "status": "UNKNOWN",
+      "versions": [
+        "==0.4.2"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "yaml",
+      "node": "import:python:yaml",
+      "source": "src/sre_kb/atlas/config.py",
+      "status": "UNKNOWN",
+      "versions": []
+    }
+  ],
+  "project": {
+    "source": null,
+    "status": "UNKNOWN"
+  }
+}

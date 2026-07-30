@@ -17,6 +17,12 @@ When working in this repo:
   SCM-neutral (the `Forge` seam). Don't hard-code a vendor.
 - **Safe-by-default parsing:** `yaml.safe_load`, never execute the target's build, no
   symlink-follow. The target repo is untrusted input.
+- **Repo-wide understanding:** for an explicit mapping, visualization, or onboarding request, use
+  the `sre-codebase-cartographer` agent with `.github/skills/sre-codebase-atlas/`. Inspect
+  source/config first, apply its .NET/Node resolver guide when relevant, keep declared/resolved
+  package, source, runtime, and operator scopes separate, generate from `.sre/atlas.yaml`, run
+  `sre-kb atlas-check`, and record design-to-reality divergences instead of smoothing them over.
 - Run `make test` (pytest) and `ruff check` before committing.
 
-See `docs/DESIGN.md` for the full architecture, kind catalog, and roadmap.
+Start with `docs/codebase-atlas/README.md` for the navigable source map; see `docs/DESIGN.md` for the
+full architecture, kind catalog, and roadmap.

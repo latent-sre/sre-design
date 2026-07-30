@@ -125,7 +125,7 @@ def sync_shared() -> list[str]:
     for copy, canonical in _shared_copies().items():
         if copy.read_bytes() != canonical.read_bytes():
             copy.write_bytes(canonical.read_bytes())
-            updated.append(str(copy.relative_to(SKILLS)))
+            updated.append(copy.relative_to(SKILLS).as_posix())
     return updated
 
 

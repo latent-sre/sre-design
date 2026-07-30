@@ -1,0 +1,755 @@
+{
+  "$defs": {
+    "AtlasEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "annotations": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Annotations",
+          "type": "object"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/AtlasEvidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "minLength": 1,
+          "title": "Kind",
+          "type": "string"
+        },
+        "resolver": {
+          "minLength": 1,
+          "title": "Resolver",
+          "type": "string"
+        },
+        "scope": {
+          "minLength": 1,
+          "title": "Scope",
+          "type": "string"
+        },
+        "source": {
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "minLength": 1,
+          "title": "Target",
+          "type": "string"
+        },
+        "unresolved": {
+          "default": false,
+          "title": "Unresolved",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "target",
+        "kind",
+        "scope",
+        "resolver"
+      ],
+      "title": "AtlasEdge",
+      "type": "object"
+    },
+    "AtlasEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "detector": {
+          "minLength": 1,
+          "title": "Detector",
+          "type": "string"
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Environment"
+        },
+        "evidenceClass": {
+          "$ref": "#/$defs/EvidenceClass"
+        },
+        "excerptHash": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Excerpthash"
+        },
+        "lines": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AtlasLines"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "observedAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observedat"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "evidenceClass",
+        "detector"
+      ],
+      "title": "AtlasEvidence",
+      "type": "object"
+    },
+    "AtlasLines": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "minimum": 1,
+          "title": "End",
+          "type": "integer"
+        },
+        "start": {
+          "minimum": 1,
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "AtlasLines",
+      "type": "object"
+    },
+    "AtlasMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "configDigest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Configdigest",
+          "type": "string"
+        },
+        "configPath": {
+          "title": "Configpath",
+          "type": "string"
+        },
+        "projectLicense": {
+          "default": "UNKNOWN",
+          "title": "Projectlicense",
+          "type": "string"
+        },
+        "projectLicenseSource": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectlicensesource"
+        },
+        "repository": {
+          "title": "Repository",
+          "type": "string"
+        },
+        "treeDigest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Treedigest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "configPath",
+        "configDigest",
+        "treeDigest"
+      ],
+      "title": "AtlasMetadata",
+      "type": "object"
+    },
+    "AtlasMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "coupling": {
+          "items": {
+            "$ref": "#/$defs/CouplingMetric"
+          },
+          "title": "Coupling",
+          "type": "array"
+        },
+        "cycles": {
+          "items": {
+            "$ref": "#/$defs/CycleMetric"
+          },
+          "title": "Cycles",
+          "type": "array"
+        }
+      },
+      "title": "AtlasMetrics",
+      "type": "object"
+    },
+    "AtlasNode": {
+      "additionalProperties": false,
+      "properties": {
+        "annotations": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Annotations",
+          "type": "object"
+        },
+        "changes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Changes"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Coverage"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/AtlasEvidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "licenses": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Licenses",
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "owners": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Owners",
+          "type": "array"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "project": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project"
+        },
+        "type": {
+          "$ref": "#/$defs/NodeType"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "name"
+      ],
+      "title": "AtlasNode",
+      "type": "object"
+    },
+    "AtlasProject": {
+      "additionalProperties": false,
+      "properties": {
+        "manifests": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Manifests",
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "roots": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Roots",
+          "type": "array"
+        },
+        "testRoots": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Testroots",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "roots"
+      ],
+      "title": "AtlasProject",
+      "type": "object"
+    },
+    "AtlasUnknown": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/AtlasEvidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "message": {
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "neededEvidence": {
+          "minLength": 1,
+          "title": "Neededevidence",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "project": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "neededEvidence"
+      ],
+      "title": "AtlasUnknown",
+      "type": "object"
+    },
+    "CouplingMetric": {
+      "additionalProperties": false,
+      "properties": {
+        "afferent": {
+          "minimum": 0,
+          "title": "Afferent",
+          "type": "integer"
+        },
+        "efferent": {
+          "minimum": 0,
+          "title": "Efferent",
+          "type": "integer"
+        },
+        "granularity": {
+          "title": "Granularity",
+          "type": "string"
+        },
+        "instability": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instability"
+        },
+        "node": {
+          "title": "Node",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "node",
+        "scope",
+        "granularity",
+        "afferent",
+        "efferent"
+      ],
+      "title": "CouplingMetric",
+      "type": "object"
+    },
+    "CycleMetric": {
+      "additionalProperties": false,
+      "properties": {
+        "granularity": {
+          "title": "Granularity",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "title": "Members",
+          "type": "array"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "granularity",
+        "members"
+      ],
+      "title": "CycleMetric",
+      "type": "object"
+    },
+    "EvidenceClass": {
+      "enum": [
+        "MANIFEST_DECLARED",
+        "STATIC_EXTRACTED",
+        "STATIC_RESOLVED",
+        "ENGINE_CONFIRMED",
+        "RUNTIME_OBSERVED",
+        "OPERATOR_CONFIRMED",
+        "INFERRED",
+        "UNKNOWN"
+      ],
+      "title": "EvidenceClass",
+      "type": "string"
+    },
+    "LicenseRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "licenses": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Licenses",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "node": {
+          "title": "Node",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        },
+        "versions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Versions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "node",
+        "name",
+        "status",
+        "source"
+      ],
+      "title": "LicenseRecord",
+      "type": "object"
+    },
+    "NodeType": {
+      "enum": [
+        "project",
+        "module",
+        "test",
+        "package",
+        "namespace",
+        "service",
+        "datastore",
+        "queue",
+        "endpoint",
+        "unknown"
+      ],
+      "title": "NodeType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "sre.kb/atlas/v1alpha1",
+      "default": "sre.kb/atlas/v1alpha1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "edges": {
+      "items": {
+        "$ref": "#/$defs/AtlasEdge"
+      },
+      "title": "Edges",
+      "type": "array"
+    },
+    "kind": {
+      "const": "CodebaseAtlas",
+      "default": "CodebaseAtlas",
+      "title": "Kind",
+      "type": "string"
+    },
+    "licenses": {
+      "items": {
+        "$ref": "#/$defs/LicenseRecord"
+      },
+      "title": "Licenses",
+      "type": "array"
+    },
+    "metadata": {
+      "$ref": "#/$defs/AtlasMetadata"
+    },
+    "metrics": {
+      "$ref": "#/$defs/AtlasMetrics"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/AtlasNode"
+      },
+      "title": "Nodes",
+      "type": "array"
+    },
+    "projects": {
+      "items": {
+        "$ref": "#/$defs/AtlasProject"
+      },
+      "title": "Projects",
+      "type": "array"
+    },
+    "unknowns": {
+      "items": {
+        "$ref": "#/$defs/AtlasUnknown"
+      },
+      "title": "Unknowns",
+      "type": "array"
+    }
+  },
+  "required": [
+    "metadata",
+    "projects",
+    "nodes",
+    "edges"
+  ],
+  "title": "AtlasSnapshot",
+  "type": "object"
+}

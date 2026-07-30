@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import sys
 from pathlib import Path
 
 from sre_kb.pipeline import run as run_pipeline
@@ -16,6 +15,7 @@ from sre_kb.pipeline.worklist_run import (
     run_scan_worklist,
 )
 from sre_kb.workspace import RunLayout
+from tests.subprocess_helpers import python_command
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample-spring-pcf"
 
@@ -115,7 +115,7 @@ def test_runner_writes_every_output_where_the_manual_loop_would(tmp_path):
     shutil.copytree(FIXTURE, target)
     run_pipeline(str(target), work_root=str(tmp_path / "work"), run_id="wr", to_stage="validate")
     layout = RunLayout(tmp_path / "work", "wr")
-    worklist = json.loads((layout.root / "scan-worklist.json").read_text())
+    worklist = json.loads((layout.root / "scan-worklist.json").read_text(encoding="utf-8"))
     assert worklist["tasks"], "fixture run should produce LLM work"
 
     provider = StubProvider(_automated_oracle)
@@ -126,29 +126,45 @@ def test_runner_writes_every_output_where_the_manual_loop_would(tmp_path):
     assert all(s["status"] == "written" for s in summaries), summaries
     assert all(s["ingest"] for s in summaries)
     if "discover-gaps" in by_task:
-        proposals = json.loads((target / ".sre" / "gap-proposals.json").read_text())
+        proposals = json.loads(
+            (target / ".sre" / "gap-proposals.json").read_text(encoding="utf-8")
+        )
         assert proposals["proposals"][0]["category"] == "missing-timeout"
     if "confirm-challenge" in by_task:
-        verdicts = json.loads((layout.root / "challenge" / "verdicts.json").read_text())
+        verdicts = json.loads(
+            (layout.root / "challenge" / "verdicts.json").read_text(encoding="utf-8")
+        )
         assert verdicts["schema"] == "challenge.verdicts/v1" and verdicts["oracle"] == "stub"
     if "confirm-boundaries" in by_task:
-        verdicts = json.loads((layout.root / "confirm" / "verdicts.json").read_text())
+        verdicts = json.loads(
+            (layout.root / "confirm" / "verdicts.json").read_text(encoding="utf-8")
+        )
         assert verdicts["schema"] == "confirm.verdicts/v1"
         assert all(v["verdict"] == "affirm" for v in verdicts["verdicts"])
     if "draft-alerts" in by_task:
-        assert json.loads((target / ".sre" / "alert-proposals.json").read_text()) == {"proposals": []}
+        assert json.loads(
+            (target / ".sre" / "alert-proposals.json").read_text(encoding="utf-8")
+        ) == {"proposals": []}
     if "draft-runbooks" in by_task:
-        assert json.loads((target / ".sre" / "runbook-proposals.json").read_text()) == {"proposals": []}
+        assert json.loads(
+            (target / ".sre" / "runbook-proposals.json").read_text(encoding="utf-8")
+        ) == {"proposals": []}
     if "findings-narrative" in by_task:
-        text = (target / ".sre" / "findings-narrative.md").read_text()
+        text = (target / ".sre" / "findings-narrative.md").read_text(encoding="utf-8")
         assert "No significant risks" in text
     if "review-pcf" in by_task:
-        assert json.loads((target / ".sre" / "pcf-review-proposals.json").read_text()) == {"proposals": []}
+        assert json.loads(
+            (target / ".sre" / "pcf-review-proposals.json").read_text(encoding="utf-8")
+        ) == {"proposals": []}
     if "narrate-diagrams" in by_task:
-        narrations = json.loads((target / ".sre" / "diagram-narrations.json").read_text())
+        narrations = json.loads(
+            (target / ".sre" / "diagram-narrations.json").read_text(encoding="utf-8")
+        )
         assert narrations["narrations"][0]["diagram"] == "create-order"
     if "discover-areas" in by_task:
-        assert json.loads((target / ".sre" / "area-proposals.json").read_text()) == {"areas": []}
+        assert json.loads(
+            (target / ".sre" / "area-proposals.json").read_text(encoding="utf-8")
+        ) == {"areas": []}
 
 
 def test_runner_defers_discover_on_unparseable_reply_never_fabricates(tmp_path):
@@ -156,7 +172,7 @@ def test_runner_defers_discover_on_unparseable_reply_never_fabricates(tmp_path):
     shutil.copytree(FIXTURE, target)
     run_pipeline(str(target), work_root=str(tmp_path / "work"), run_id="wd", to_stage="validate")
     layout = RunLayout(tmp_path / "work", "wd")
-    worklist = json.loads((layout.root / "scan-worklist.json").read_text())
+    worklist = json.loads((layout.root / "scan-worklist.json").read_text(encoding="utf-8"))
 
     provider = StubProvider(lambda p: "I found nothing worth reporting."
                             if "Gap-finder context" in p else "affirm")
@@ -179,7 +195,9 @@ def test_runner_omits_unanswered_boundary_calls(tmp_path):
     worklist = {"tasks": [{"id": "confirm-boundaries", "ingest": "sre-kb confirm-apply --run wo"}]}
     provider = StubProvider(lambda p: "" if "A." in p else "affirm")
     run_scan_worklist(layout, worklist, provider, target=tmp_path)
-    verdicts = json.loads((tmp_path / "wo" / "confirm" / "verdicts.json").read_text())
+    verdicts = json.loads(
+        (tmp_path / "wo" / "confirm" / "verdicts.json").read_text(encoding="utf-8")
+    )
     assert [v["claimId"] for v in verdicts["verdicts"]] == ["b"]
 
 
@@ -230,10 +248,10 @@ def test_cli_worklist_run_with_oracle_writes_outputs_and_prints_ingest(tmp_path)
     shutil.copytree(FIXTURE, target)
     run_pipeline(str(target), work_root=str(tmp_path / "work"), run_id="cw", to_stage="validate")
     # a tiny oracle answering by prompt content, invoked via this interpreter
-    oracle = (
-        f"{sys.executable} -c \"import sys;p=sys.stdin.read();"
-        "print('{\\\"proposals\\\": []}' if ('Gap-finder' in p or '-draft context' in p or "
-        "'Contract-review' in p) else 'affirm' if 'Affirm' in p else 'supported: ok')\""
+    oracle = python_command(
+        "import sys;p=sys.stdin.read();"
+        "print('{\"proposals\": []}' if ('Gap-finder' in p or '-draft context' in p or "
+        "'Contract-review' in p) else 'affirm' if 'Affirm' in p else 'supported: ok')"
     )
     res = CliRunner().invoke(
         app, ["worklist-run", "--run", "cw", "--oracle", oracle,
@@ -241,5 +259,7 @@ def test_cli_worklist_run_with_oracle_writes_outputs_and_prints_ingest(tmp_path)
     )
     assert res.exit_code == 0, res.stdout
     assert "[written]" in res.stdout and "ingest" in res.stdout
-    assert json.loads((target / ".sre" / "gap-proposals.json").read_text()) == {"proposals": []}
+    assert json.loads(
+        (target / ".sre" / "gap-proposals.json").read_text(encoding="utf-8")
+    ) == {"proposals": []}
     assert (tmp_path / "work" / "cw" / "challenge" / "verdicts.json").exists()

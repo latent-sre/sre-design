@@ -1,0 +1,137 @@
+{
+  "$defs": {
+    "NodeType": {
+      "enum": [
+        "project",
+        "module",
+        "test",
+        "package",
+        "namespace",
+        "service",
+        "datastore",
+        "queue",
+        "endpoint",
+        "unknown"
+      ],
+      "title": "NodeType",
+      "type": "string"
+    },
+    "RuntimeEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "environment": {
+          "title": "Environment",
+          "type": "string"
+        },
+        "evidenceRef": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidenceref"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "observedAt": {
+          "title": "Observedat",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "sourceName": {
+          "title": "Sourcename",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "target",
+        "kind",
+        "sourceName",
+        "observedAt",
+        "environment"
+      ],
+      "title": "RuntimeEdge",
+      "type": "object"
+    },
+    "RuntimeNode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "project": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project"
+        },
+        "type": {
+          "$ref": "#/$defs/NodeType",
+          "default": "service"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "RuntimeNode",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "sre.kb/runtime-evidence/v1alpha1",
+      "default": "sre.kb/runtime-evidence/v1alpha1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "edges": {
+      "items": {
+        "$ref": "#/$defs/RuntimeEdge"
+      },
+      "title": "Edges",
+      "type": "array"
+    },
+    "kind": {
+      "const": "RuntimeEvidence",
+      "default": "RuntimeEvidence",
+      "title": "Kind",
+      "type": "string"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/RuntimeNode"
+      },
+      "title": "Nodes",
+      "type": "array"
+    }
+  },
+  "title": "RuntimeEvidence",
+  "type": "object"
+}

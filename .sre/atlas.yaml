@@ -1,0 +1,47 @@
+apiVersion: sre.kb/atlas-config/v1alpha1
+
+# This is the authoritative repository boundary for `sre-kb atlas`. Source outside these roots is
+# not silently treated as product code, and generated/fixture trees are explicitly excluded.
+projects:
+  - name: sre-kb
+    roots:
+      - src
+    testRoots:
+      - tests
+    manifests:
+      - requirements.lock
+      - pyproject.toml
+
+exclude:
+  - .git/**
+  - .work/**
+  - .venv/**
+  - venv/**
+  - node_modules/**
+  - target/**
+  - build/**
+  - dist/**
+  - "**/__pycache__/**"
+  - "**/.pytest_cache/**"
+  - "**/.ruff_cache/**"
+  - tests/fixtures/**
+
+overlays:
+  # Runtime evidence, CycloneDX JSON, and Cobertura XML are imported only when reviewed local
+  # files are listed here. Atlas generation never reaches into a live environment.
+  runtimeEvidence: []
+  sbom: []
+  coverage: []
+  codeowners:
+    - .github/CODEOWNERS
+    - CODEOWNERS
+    - docs/CODEOWNERS
+  # History is available through `sre-kb atlas --include-history`, but is not part of the
+  # drift-gated committed snapshot because commit history and checkout depth vary.
+  changeHistory: false
+  maxHistoryCommits: 200
+
+output:
+  path: docs/codebase-atlas/generated
+  maxDiagramNodes: 80
+  html: true

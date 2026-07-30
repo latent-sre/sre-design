@@ -8,6 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from sre_kb.cli import app
+from sre_kb.collectors.base import LOCAL_COMMIT, ScanContext
 from sre_kb.scan_plan import (
     ScanFanOutError,
     Service,
@@ -31,9 +32,21 @@ def test_discover_services_from_manifests(tmp_path):
     _manifest(tmp_path / "a", "svc-a")
     _manifest(tmp_path / "b", "svc-b")
     _manifest(tmp_path / "node_modules" / "junk", "junk-svc")  # under a skip-dir -> ignored
+    _manifest(tmp_path / ".work" / "prior-run", "recursive-output")  # engine output -> ignored
     svcs = discover_services(tmp_path)
     assert {s.name for s in svcs} == {"svc-a", "svc-b"}
     assert {s.path for s in svcs} == {tmp_path / "a", tmp_path / "b"}
+
+
+def test_scan_context_does_not_reingest_generated_work_tree(tmp_path):
+    (tmp_path / "source.py").write_text("print('source')\n", encoding="utf-8")
+    generated = tmp_path / ".work" / "prior-run" / "projections"
+    generated.mkdir(parents=True)
+    (generated / "generated.py").write_text("print('generated')\n", encoding="utf-8")
+
+    ctx = ScanContext(tmp_path, "file://target", LOCAL_COMMIT)
+
+    assert [ctx.rel(path) for path in ctx.files("*.py")] == ["source.py"]
 
 
 def test_discover_no_manifest_is_single_root_service(tmp_path):

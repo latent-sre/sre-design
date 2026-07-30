@@ -22,7 +22,25 @@ if TYPE_CHECKING:
     from sre_kb.parsing import Module
 
 LOCAL_COMMIT = "0" * 40  # sentinel commit for local working-tree scans
-_SKIP_DIRS = {".git", ".venv", "venv", "target", "build", "node_modules", "__pycache__"}
+# Generated dependency/build/cache trees are not target source. In particular `.work` is this
+# engine's own run handoff: descending into it makes a repeat scan ingest prior KB output (and any
+# verification venv placed there), recursively inflating the coverage ledger.
+_SKIP_DIRS = {
+    ".eggs",
+    ".git",
+    ".hypothesis",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    ".work",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+}
 _MAX_FILE_BYTES = 2_000_000  # skip pathologically large files (DoS / decompression-bomb guard)
 
 

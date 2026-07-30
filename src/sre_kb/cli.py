@@ -1261,6 +1261,108 @@ def discover_areas_cmd(
         typer.echo(f"  recommendations: {layout.reports / 'engine-recommendations.md'}")
 
 
+@app.command("atlas")
+def atlas_cmd(
+    target: Path = typer.Option(
+        Path("."),
+        "--target",
+        help="Repository with an explicit .sre/atlas.yaml boundary.",
+    ),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        help="Boundary config relative to the target (default .sre/atlas.yaml).",
+    ),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        help="Generated output relative to the target (default from atlas config).",
+    ),
+    include_history: bool = typer.Option(
+        False,
+        "--include-history",
+        help=(
+            "Import bounded local git change frequency. Without --output, writes under "
+            ".work so checkout-depth-sensitive data cannot replace the committed baseline."
+        ),
+    ),
+) -> None:
+    """Generate the versioned evidence graph and its Markdown, Mermaid, and HTML projections."""
+    from sre_kb.atlas import write_atlas
+    from sre_kb.atlas.config import AtlasConfigError
+
+    effective_output = (
+        output
+        if output is not None or not include_history
+        else Path(".work/codebase-atlas-history")
+    )
+    try:
+        snapshot, output_path = write_atlas(
+            target,
+            config_path=config,
+            output=effective_output,
+            include_history=True if include_history else None,
+        )
+    except AtlasConfigError as exc:
+        typer.echo(f"atlas configuration error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(
+        f"atlas: {len(snapshot.nodes)} nodes, {len(snapshot.edges)} edges, "
+        f"{len(snapshot.metrics.cycles)} source cycle(s), {len(snapshot.unknowns)} unknown(s)"
+    )
+    typer.echo(f"  output: {output_path}")
+
+
+@app.command("atlas-check")
+def atlas_check_cmd(
+    target: Path = typer.Option(
+        Path("."),
+        "--target",
+        help="Repository with an explicit .sre/atlas.yaml boundary.",
+    ),
+    config: Path | None = typer.Option(None, "--config"),
+    output: Path | None = typer.Option(None, "--output"),
+    report: Path | None = typer.Option(
+        Path(".work/atlas-drift.json"),
+        "--report",
+        help="Machine-readable drift report inside the target; pass an empty value only via API.",
+    ),
+    include_history: bool = typer.Option(False, "--include-history"),
+) -> None:
+    """Regenerate in memory and fail if committed atlas projections have drifted."""
+    from sre_kb.atlas import check_atlas
+    from sre_kb.atlas.config import AtlasConfigError
+
+    effective_output = (
+        output
+        if output is not None or not include_history
+        else Path(".work/codebase-atlas-history")
+    )
+    try:
+        drift = check_atlas(
+            target,
+            config_path=config,
+            output=effective_output,
+            report=report,
+            include_history=True if include_history else None,
+        )
+    except AtlasConfigError as exc:
+        typer.echo(f"atlas configuration error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(
+        f"atlas drift: +{len(drift.added)} -{len(drift.removed)} ~{len(drift.changed)}"
+    )
+    for label, paths in (
+        ("added", drift.added),
+        ("removed", drift.removed),
+        ("changed", drift.changed),
+    ):
+        for path in paths:
+            typer.echo(f"  {label}: {path}")
+    if drift.drifted:
+        raise typer.Exit(code=1)
+
+
 def main() -> None:
     app()
 

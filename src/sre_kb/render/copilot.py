@@ -99,9 +99,15 @@ def copilot_instructions(service: str, docs: list[dict]) -> str:
 
 
 def runbook_markdown(runbook: dict, flow: dict | None,
-                     known_targets: dict[str, str] | None = None) -> str:
+                     known_targets: dict[str, str] | None = None,
+                     target_root=None) -> str:
     """`known_targets` keeps the embedded flow diagram's cast identical to the projection's
-    (same named participants), so an operator can match the runbook to the flow drawing."""
+    (same named participants), so an operator can match the runbook to the flow drawing.
+    `target_root` (the scanned repo, when the caller still has it) additionally embeds the
+    plain-English flow narration's companion: the verbatim cited code, hash-checked — the
+    3am reader sees WHAT the code does without opening the repo."""
+    from sre_kb.render.plain import flow_plain_english, runbook_excerpts
+
     spec = runbook.get("spec", {})
     name = runbook["metadata"]["name"]
     out = render(
@@ -116,6 +122,8 @@ def runbook_markdown(runbook: dict, flow: dict | None,
         # Diagnosis items may be {"step": ...} dicts or plain strings (hand/LLM-authored).
         diagnosis=[d.get("step", "") if isinstance(d, dict) else d for d in spec.get("diagnosis", [])],
         remediation=spec.get("remediation", []),
+        plain_steps=flow_plain_english(flow) if flow is not None else [],
+        excerpts=runbook_excerpts(runbook, target_root),
         flow_diagram=mermaid_sequence(flow, known_targets=known_targets)
         if flow is not None else None,
     )

@@ -320,7 +320,8 @@ def run(target: str, *, work_root: str = ".work", run_id: str | None = None, to_
     if to_stage in ("render", "publish"):
         from sre_kb.render import render_projections
 
-        projections = render_projections(layout, docs)
+        # target_root lets runbooks embed the hash-checked verbatim code they cite.
+        projections = render_projections(layout, docs, target_root=target_path)
     if to_stage == "publish":
         from sre_kb.publish import assemble_pr
 

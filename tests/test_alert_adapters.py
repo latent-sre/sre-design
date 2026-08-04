@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from sre_kb.render.alerts import (
     BurnRateIntent,
+    DependencyFailureIntent,
     LogPatternIntent,
     render_burn_rate,
+    render_dependency_failure,
     render_log_pattern,
     rendered_targets,
 )
@@ -165,3 +167,27 @@ def test_thousandeyes_is_a_labelled_synthetic_rule_not_a_burn_rate():
     assert "not a query" in te["mechanism"]
     assert "no passive multi-window error-budget burn-rate" in te["mechanism"]
     assert rendered_targets(expr) == ["thousandeyes"]
+
+
+# --- dependency-failure intent (cause-class 5xx on the flow's route) ------------------------------
+def test_dependency_failure_default_tools_render_splunk_and_prometheus():
+    expr = render_dependency_failure(DependencyFailureIntent("order-service", "/api/v1/orders"))
+    assert expr["prometheus"] == (
+        'sum(rate(http_server_requests_seconds_count{uri="/api/v1/orders",'
+        'outcome="SERVER_ERROR"}[5m])) > 0'
+    )
+    spl = expr["splunk"]
+    assert spl["search"] == ('index=app sourcetype=order-service uri="/api/v1/orders" '
+                             "status>=500 | stats count by status")
+    # The request-log field convention is stated, never hidden (AppDynamics-adapter precedent).
+    assert "status/uri" in spl["mechanism"] and "tune" in spl["mechanism"]
+    assert rendered_targets(expr) == ["prometheus", "splunk"]
+
+
+def test_dependency_failure_without_route_stays_service_wide_and_escapes_literals():
+    expr = render_dependency_failure(DependencyFailureIntent("svc", None), tools=("splunk",))
+    assert "uri=" not in expr["splunk"]["search"]
+    hostile = render_dependency_failure(
+        DependencyFailureIntent('svc" | delete', '/x/"} or vector(1)'))
+    assert 'sourcetype="svc\\" | delete"' in hostile["splunk"]["search"]
+    assert 'uri="/x/\\"} or vector(1)"' in hostile["prometheus"]

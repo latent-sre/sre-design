@@ -164,6 +164,17 @@ class LogPatternIntent:
     group_by: str = "host"
 
 
+@dataclass(frozen=True)
+class DependencyFailureIntent:
+    """A cause-class alert for a flow whose dependency failures surface as HTTP 5xx on its
+    route (timeouts, open circuits, unreachable datastores). A server-error count cannot
+    attribute WHICH dependency failed — that is the dependency map / runbook's job — so the
+    intent is route-scoped, one per flow, never a fabricated per-dependency query each."""
+
+    service: str
+    route: str | None
+
+
 # --- Prometheus adapter ---------------------------------------------------------------------------
 def _prometheus_burn(intent: BurnRateIntent) -> dict:
     uri_sel = _label_match("uri", intent.route) if intent.route else ""
@@ -195,6 +206,18 @@ def _prometheus_log(_: LogPatternIntent) -> dict:
     return {"prometheus": None}  # a pure log pattern has no metric to query
 
 
+def _prometheus_dependency(intent: DependencyFailureIntent) -> dict:
+    """Server-error rate on the route, from the same Micrometer HTTP server timer the burn
+    rate uses (`outcome="SERVER_ERROR"` is Micrometer's canonical 5xx outcome). The `> 0`
+    trigger is the deterministic floor — any server error over 5m — stated in the alert's
+    rationale for the reviewer to tune, never silently guessed higher."""
+    sel = _sel(
+        _label_match("uri", intent.route) if intent.route else "",
+        _label_match("outcome", "SERVER_ERROR"),
+    )
+    return {"prometheus": f"sum(rate({_BURN_METRIC}_count{sel}[5m])) > 0"}
+
+
 # --- Splunk adapter -------------------------------------------------------------------------------
 def _splunk_burn(_: BurnRateIntent) -> dict:
     return {}  # no derived metric search for a burn-rate; Prometheus owns the metric path
@@ -206,6 +229,27 @@ def _splunk_log(intent: LogPatternIntent) -> dict:
             f"index=app {_spl_field_eq('sourcetype', intent.service)} "
             f"{_query_string(intent.search)} | stats count by {_group_field(intent.group_by)}"
         )
+    }
+
+
+def _splunk_dependency(intent: DependencyFailureIntent) -> dict:
+    """SPL over the service's request logs: 5xx count on the flow's route. The field names
+    (status/uri) and index follow the same request-log convention as `_splunk_log`'s
+    index/sourcetype; the mechanism string states the assumption instead of hiding it —
+    the reviewer binds it to the deployment's real fields (AppDynamics-adapter precedent)."""
+    scope = f" {_spl_field_eq('uri', intent.route)}" if intent.route else ""
+    return {
+        "splunk": {
+            "search": (
+                f"index=app {_spl_field_eq('sourcetype', intent.service)}{scope} "
+                f"status>=500 | stats count by status"
+            ),
+            "mechanism": (
+                "Splunk search over request logs (index=app convention); requires status/uri "
+                "fields — bind index/sourcetype/fields to your logging config and tune the "
+                "trigger threshold to this route's traffic before enabling"
+            ),
+        }
     }
 
 
@@ -372,6 +416,10 @@ _LOG_ADAPTERS: dict[str, Callable[[LogPatternIntent], dict]] = {
     "splunk": _splunk_log,
     "grafana": _grafana_log,
 }
+_DEPENDENCY_ADAPTERS: dict[str, Callable[[DependencyFailureIntent], dict]] = {
+    "prometheus": _prometheus_dependency,
+    "splunk": _splunk_dependency,
+}
 
 
 def _tools(tools: tuple[str, ...] | None) -> tuple[str, ...]:
@@ -394,6 +442,17 @@ def render_log_pattern(intent: LogPatternIntent, tools: tuple[str, ...] | None =
     for t in _tools(tools):
         if t in _LOG_ADAPTERS:
             expr.update(_LOG_ADAPTERS[t](intent))
+    return expr
+
+
+def render_dependency_failure(
+    intent: DependencyFailureIntent, tools: tuple[str, ...] | None = None
+) -> dict:
+    """Render a dependency-failure intent into an `expr` dict across the selected backends."""
+    expr: dict = {}
+    for t in _tools(tools):
+        if t in _DEPENDENCY_ADAPTERS:
+            expr.update(_DEPENDENCY_ADAPTERS[t](intent))
     return expr
 
 

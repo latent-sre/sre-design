@@ -39999,7 +39999,7 @@
     "configDigest": "sha256:1bdefb262299dd0541c533b9223055edb1847c8073a321b08714ca65dba99876",
     "configPath": ".sre/atlas.yaml",
     "projectLicense": "UNKNOWN",
-    "repository": "workspace",
+    "repository": "sre-design",
     "treeDigest": "sha256:2dd3e699e8fe234b18dd08550a4dd6586aad0322498bc41aedceb87d572c4470"
   },
   "metrics": {

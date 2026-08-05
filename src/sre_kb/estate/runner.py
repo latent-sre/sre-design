@@ -138,8 +138,13 @@ def run_estate(targets: list[str], *, work_root: str = ".work", run_id: str | No
 
     topo = next((d for d in docs if d["kind"] == "Topology"), None)
     if topo:
+        from sre_kb.render.depmap import estate_dependency_map_markdown
+
         diagrams = layout.root / "projections" / "diagrams"
         diagrams.mkdir(parents=True, exist_ok=True)
+        # Per-service upstream/downstream map (both directions, resolved across repos).
+        (layout.root / "projections" / "DEPENDENCY-MAP.md").write_text(
+            estate_dependency_map_markdown(topo, docs), encoding="utf-8")
         # Data-loss styling joins from the co-tenancy BlastRadius docs; tier coloring from each
         # service's declared criticality — authoritative (Tier-A) declarations only, mirroring
         # the severity-floor rule (an LLM-proposed tier stays advisory, never amplified).

@@ -80,6 +80,43 @@ sequenceDiagram
 The stage vocabulary is `scan → scaffold → validate → render → publish`.
 [`STATIC_EXTRACTED`: `src/sre_kb/pipeline/orchestrator.py:48-334`]
 
+### Resilience lens for operators
+
+This view answers “what protection does the tool look for, and how far can SRE trust the result?”
+It describes the analyzer's behavior; it is **not** evidence that this repository runs these
+patterns in production.
+
+```mermaid
+flowchart LR
+  code["Application code + config"] --> present["Protections found<br/>breaker / fallback / timeout<br/>DLQ / retry / idempotency"]
+  code --> absent["Bounded gaps found<br/>missing or disabled protection<br/>unsafe default parameters"]
+  proposal["LLM/operator proposal"] --> reground["Locate + deterministic<br/>confirm/refute where possible"]
+  present --> facts["Provenance-bearing facts"]
+  absent --> facts
+  reground --> review["Needs review when judgment remains"]
+  facts --> gates["Schema + provenance +<br/>safety + challenge gates"]
+  review --> gates
+  gates --> outputs["Findings / diagrams /<br/>plain-English runbooks / alerts"]
+  telemetry["Runtime telemetry"] -. "not configured in this atlas" .-> outputs
+```
+
+| SRE question | What the engine can establish statically | Important boundary |
+|---|---|---|
+| Will a synchronous dependency failure be contained? | Java/Resilience4j and .NET/Polly breaker/fallback declarations; selected timeout and unguarded-dependency gaps | Presence does not prove correct thresholds, production enablement, or successful degradation |
+| Can retries amplify an outage? | A Java retry lacking explicit wait/backoff is a deterministic parameter-completeness gap | .NET/Polly inline parameter completeness is not yet covered |
+| Can duplicate requests repeat a write? | A mutating HTTP route without a nearby idempotency signal becomes a deterministic gap | A gateway/global filter outside the inspected scope can refute the finding |
+| Can a poison message or redelivery hurt processing? | Java consumers are checked for a dead-letter route and idempotency; retry is recorded | Ordering, poison-pill adequacy, and saga compensation remain judgment calls |
+| Is the service healthy now? | Nothing from source alone | Requires deployment evidence, metrics, logs, traces, SLOs, and operator confirmation |
+
+Evidence: resilience facts and gaps enter the same candidate and gate path
+[`STATIC_EXTRACTED`: `src/sre_kb/pipeline/orchestrator.py:92-110,130-134,171-220`]; Java consumer
+checks cover DLQ and idempotency while explicitly routing semantic adequacy to review
+[`STATIC_EXTRACTED`: `src/sre_kb/collectors/java_spring/messaging.py:1-19,109-142`]; retry/backoff,
+breaker thresholds, and disabled mechanisms are configuration-resolved Java checks
+[`STATIC_EXTRACTED`: `src/sre_kb/collectors/java_spring/resiliency_params.py:31-52,96-112,127-194`];
+mutating-route idempotency uses a deliberately conservative local scope
+[`STATIC_EXTRACTED`: `src/sre_kb/collectors/common/idempotency.py:1-12,42-67`].
+
 ## Trust boundaries
 
 - **Target filesystem:** collectors prune generated/cache trees, skip symlinks and files over 2 MB,

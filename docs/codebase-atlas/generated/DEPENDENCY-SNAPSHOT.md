@@ -31,7 +31,7 @@ Evidence scope: resolver-backed production source edges only for coupling and cy
 | `group:sre-kb:sre_kb.render` | group | 5 | 7 | 0.583 |
 | `src/sre_kb/render/project.py` | module | 5 | 7 | 0.583 |
 | `src/sre_kb/collectors/common/openapi.py` | module | 5 | 3 | 0.375 |
-| `src/sre_kb/reporting/__init__.py` | module | 5 | 2 | 0.286 |
+| `src/sre_kb/reporting/__init__.py` | module | 5 | 3 | 0.375 |
 | `group:sre-kb:sre_kb.models` | group | 5 | 0 | 0.000 |
 | `src/sre_kb/models/envelope.py` | module | 5 | 0 | 0.000 |
 | `group:sre-kb:sre_kb.pipeline` | group | 4 | 16 | 0.800 |
@@ -156,6 +156,7 @@ Evidence scope: resolver-backed production source edges only for coupling and cy
 | `src/sre_kb/publish/forge/local.py` | module | 1 | 0 | 0.000 |
 | `src/sre_kb/publish/manifest.py` | module | 1 | 0 | 0.000 |
 | `src/sre_kb/render/catalog.py` | module | 1 | 0 | 0.000 |
+| `src/sre_kb/reporting/human_report.py` | module | 1 | 0 | 0.000 |
 | `src/sre_kb/scoring/risk.py` | module | 1 | 0 | 0.000 |
 | `src/sre_kb/security/secret_scan.py` | module | 1 | 0 | 0.000 |
 | `src/sre_kb/synth/worklist.py` | module | 1 | 0 | 0.000 |

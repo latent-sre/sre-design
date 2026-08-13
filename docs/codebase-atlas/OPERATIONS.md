@@ -62,6 +62,9 @@ publication is explicitly selected through the publish command/configuration.
 Useful declared inspection paths:
 
 - `sre-kb schema list` — registry/kind inventory;
+- `sre-kb human-report --target <repo>` — safely scan a checkout and produce a five-pass
+  plain-language report covering purpose, flows, external dependencies/service destinations,
+  resilience, and next actions (`--run <id>` reuses a scan; `--format json` is also available);
 - `sre-kb atlas --target <repo>` — generate the bounded codebase evidence graph;
 - `sre-kb atlas-check --target <repo>` — fail on stale generated projections;
 - `sre-kb findings --run <id>` — ranked evidence-linked findings;
@@ -72,6 +75,25 @@ These commands are `MANIFEST_DECLARED`/`STATIC_EXTRACTED`, not freshly runtime-v
 snapshot.
 
 ## Diagnose
+
+### SRE triage path
+
+```mermaid
+flowchart TD
+  symptom["Operational symptom"] --> now{"Need current production truth?"}
+  now -- "yes" --> runtime["Start with metrics, logs, traces,<br/>deployment state, and SLO burn"]
+  now -- "no / planning" --> atlas["Use atlas for code ownership,<br/>change impact, and known unknowns"]
+  runtime --> correlate["Correlate affected dependency or flow<br/>with generated findings and runbooks"]
+  atlas --> scan["Run bounded scan against the service repo"]
+  scan --> status{"Artifact status"}
+  status -- "verified" --> inspect["Inspect cited source and protection parameters"]
+  status -- "needs-review" --> review["Operator/engineer reviews judgment and scope"]
+  status -- "rejected" --> reject["Do not operationalize the claim"]
+```
+
+The atlas is best used to form and bound hypotheses. It cannot answer whether a circuit breaker is
+currently open, retries are exhausting a dependency, a DLQ is growing, or an SLO is burning because
+no live runtime evidence is configured. [`UNKNOWN`: needs deployment and telemetry evidence]
 
 1. Check interpreter compatibility before debugging engine behavior: `python --version` must satisfy
    `pyproject.toml`.

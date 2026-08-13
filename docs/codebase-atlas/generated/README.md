@@ -11,6 +11,6 @@ source, or imported evidence and regenerate.
 - License inventory: [`licenses.json`](licenses.json)
 - Searchable explorer: [`atlas.html`](atlas.html)
 
-Snapshot: 316 nodes, 1703 edges, 448 resolved production
+Snapshot: 318 nodes, 1715 edges, 449 resolved production
 source edges, 2 source cycle(s), and 2 explicit
 unknown(s).

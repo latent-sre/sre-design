@@ -226,6 +226,28 @@
       "evidence": [
         {
           "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:bf33f9206bbf810f80e9c63d59fdf4be1514a1f0bb77b555fc86c5390b2ea146",
+          "lines": {
+            "end": 511,
+            "start": 511
+          },
+          "path": "src/sre_kb/cli.py"
+        }
+      ],
+      "id": "edge:018bfcb20159cd4d",
+      "kind": "imports",
+      "resolver": "python:ast",
+      "scope": "source-external",
+      "source": "module:sre-kb:src/sre_kb/cli.py",
+      "target": "package:python-stdlib:time",
+      "unresolved": false
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:882076d3003fe86eaf8147916e4d8071b995d5a5859d32b5251aabfacf308691",
           "lines": {
@@ -1495,8 +1517,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:52ff6a990c9c01ef8b804c67124e6d1bbf9d68e5238104828a53f2eb22ffc057",
           "lines": {
-            "end": 1160,
-            "start": 1160
+            "end": 1199,
+            "start": 1199
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -1505,8 +1527,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:d2e962633169d50ccfdd609652b7dba6c0166ee0356c3b6cedac79b88e5e0cc0",
           "lines": {
-            "end": 1225,
-            "start": 1225
+            "end": 1264,
+            "start": 1264
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -1547,6 +1569,16 @@
           "lines": {
             "end": 451,
             "start": 451
+          },
+          "path": "src/sre_kb/cli.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_RESOLVED",
+          "excerptHash": "sha256:52ff6a990c9c01ef8b804c67124e6d1bbf9d68e5238104828a53f2eb22ffc057",
+          "lines": {
+            "end": 501,
+            "start": 501
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -1677,8 +1709,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:0828bc4eec10427aa277dd97d53abdf25ac532192b713b7b60591d577c68c4d9",
           "lines": {
-            "end": 604,
-            "start": 604
+            "end": 643,
+            "start": 643
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -3183,6 +3215,28 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f",
           "lines": {
+            "end": 3,
+            "start": 3
+          },
+          "path": "src/sre_kb/reporting/human_report.py"
+        }
+      ],
+      "id": "edge:138b4b8f40b58f7d",
+      "kind": "imports",
+      "resolver": "python:ast",
+      "scope": "source-external",
+      "source": "module:sre-kb:src/sre_kb/reporting/human_report.py",
+      "target": "package:python-stdlib:__future__",
+      "unresolved": false
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f",
+          "lines": {
             "end": 19,
             "start": 19
           },
@@ -3217,6 +3271,28 @@
       "scope": "test",
       "source": "test:sre-kb:tests/test_e2e_scan.py",
       "target": "module:sre-kb:src/sre_kb/validation/provenance.py",
+      "unresolved": false
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:261a9112a2918e2aba03e19a2f221a027ab4b6f9e946a6c39814f54e18e07dfc",
+          "lines": {
+            "end": 5,
+            "start": 5
+          },
+          "path": "tests/test_human_report.py"
+        }
+      ],
+      "id": "edge:141d96e3a4a3bfdf",
+      "kind": "imports",
+      "resolver": "python:ast",
+      "scope": "source-external",
+      "source": "test:sre-kb:tests/test_human_report.py",
+      "target": "package:python-stdlib:json",
       "unresolved": false
     },
     {
@@ -3964,6 +4040,28 @@
       "scope": "test",
       "source": "test:sre-kb:tests/test_clone.py",
       "target": "module:sre-kb:src/sre_kb/pipeline/__init__.py",
+      "unresolved": false
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:bb1f90f316d74ca87cf0ba496a6bdc60e4759cdeff8d3be3533707ca6ec37da9",
+          "lines": {
+            "end": 1,
+            "start": 1
+          },
+          "path": "src/sre_kb/reporting/human_report.py"
+        }
+      ],
+      "id": "edge:19ad7642fa1f4c0f",
+      "kind": "contains",
+      "resolver": "atlas:scope",
+      "scope": "structure",
+      "source": "project:sre-kb",
+      "target": "module:sre-kb:src/sre_kb/reporting/human_report.py",
       "unresolved": false
     },
     {
@@ -4976,6 +5074,28 @@
         {
           "detector": "atlas.source.python-import",
           "evidenceClass": "STATIC_RESOLVED",
+          "excerptHash": "sha256:74456ee8c55e93b378b720e40ba956ca973ca9056e35992308ee8e389936732d",
+          "lines": {
+            "end": 17,
+            "start": 17
+          },
+          "path": "src/sre_kb/reporting/__init__.py"
+        }
+      ],
+      "id": "edge:1f9d8d8b479d98e4",
+      "kind": "imports",
+      "resolver": "python:ast",
+      "scope": "source",
+      "source": "module:sre-kb:src/sre_kb/reporting/__init__.py",
+      "target": "module:sre-kb:src/sre_kb/reporting/human_report.py",
+      "unresolved": false
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:997ec010d8827dd1de751077c33d1b37a96f57d9d0052b65b58d0b114b0b6e53",
           "lines": {
             "end": 62,
@@ -5186,8 +5306,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:e7bf34f572291f5ea1364642b833b34f2221c7389e7232f9c453264a7563ebe8",
           "lines": {
-            "end": 1250,
-            "start": 1250
+            "end": 1289,
+            "start": 1289
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -6899,8 +7019,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:04ce989fa4e0269d039431b5a8b30c1a1159715905a4c31a2f700fb3088356ca",
           "lines": {
-            "end": 985,
-            "start": 985
+            "end": 1024,
+            "start": 1024
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -7109,6 +7229,28 @@
       "scope": "source",
       "source": "module:sre-kb:src/sre_kb/pipeline/contract.py",
       "target": "module:sre-kb:src/sre_kb/tiers.py",
+      "unresolved": false
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_RESOLVED",
+          "excerptHash": "sha256:626e5064fe1bec72e022c777d6e476cd666577b2fd62d8bc168c163ef40f0bbf",
+          "lines": {
+            "end": 10,
+            "start": 10
+          },
+          "path": "tests/test_human_report.py"
+        }
+      ],
+      "id": "edge:2cfdaf6f5af29c38",
+      "kind": "imports",
+      "resolver": "python:ast",
+      "scope": "test",
+      "source": "test:sre-kb:tests/test_human_report.py",
+      "target": "module:sre-kb:src/sre_kb/reporting/__init__.py",
       "unresolved": false
     },
     {
@@ -10709,6 +10851,28 @@
         {
           "detector": "atlas.source.python-import",
           "evidenceClass": "STATIC_RESOLVED",
+          "excerptHash": "sha256:a969a7e08c983c4f040b28cfc21fc242ba83ad59dd6a7fb888276917b08353be",
+          "lines": {
+            "end": 11,
+            "start": 11
+          },
+          "path": "tests/test_human_report.py"
+        }
+      ],
+      "id": "edge:454df331f03213f7",
+      "kind": "imports",
+      "resolver": "python:ast",
+      "scope": "test",
+      "source": "test:sre-kb:tests/test_human_report.py",
+      "target": "module:sre-kb:src/sre_kb/reporting/human_report.py",
+      "unresolved": false
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:53477cacfb7ea09e3e2af20a378153bbd13bcb5f95b3dd4c7e6ec6afe1debb9d",
           "lines": {
             "end": 7,
@@ -11642,8 +11806,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:eb65d588f29a9dddcdec3c89d34e225654e4c0575a1adcf2e8dfd04e449eaf41",
           "lines": {
-            "end": 1291,
-            "start": 1291
+            "end": 1330,
+            "start": 1330
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -11652,8 +11816,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:fc3d96832f261ef29f86b3ddb2f153d72ca1de2c56c7d6fff458e49f2cfa0e2b",
           "lines": {
-            "end": 1333,
-            "start": 1333
+            "end": 1372,
+            "start": 1372
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -12757,6 +12921,28 @@
       "evidence": [
         {
           "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:6164efa8ac293fd717375182410539407182c82e17c93798b8bb1081d333abce",
+          "lines": {
+            "end": 5,
+            "start": 5
+          },
+          "path": "src/sre_kb/reporting/human_report.py"
+        }
+      ],
+      "id": "edge:52e508ddcab06fe8",
+      "kind": "imports",
+      "resolver": "python:ast",
+      "scope": "source-external",
+      "source": "module:sre-kb:src/sre_kb/reporting/human_report.py",
+      "target": "package:python-stdlib:collections",
+      "unresolved": false
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:bb0ba87ca4c610704548e938046780280e22a15deae41ac389e9cb64da94b7cd",
           "lines": {
@@ -12772,6 +12958,28 @@
       "scope": "source",
       "source": "module:sre-kb:src/sre_kb/pipeline/autopilot.py",
       "target": "module:sre-kb:src/sre_kb/pipeline/contract.py",
+      "unresolved": false
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_RESOLVED",
+          "excerptHash": "sha256:c86444e7673a75dcf2785295c879fb7b55533a2b42985785861bfd252610c03a",
+          "lines": {
+            "end": 9,
+            "start": 9
+          },
+          "path": "tests/test_human_report.py"
+        }
+      ],
+      "id": "edge:5348cb8bdf14b2e5",
+      "kind": "imports",
+      "resolver": "python:ast",
+      "scope": "test",
+      "source": "test:sre-kb:tests/test_human_report.py",
+      "target": "module:sre-kb:src/sre_kb/cli.py",
       "unresolved": false
     },
     {
@@ -12804,8 +13012,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:fbbdda919877082a5ac31d2282204e9ef3a9fdc85c18d7adcad2c60fbb01a610",
           "lines": {
-            "end": 1130,
-            "start": 1130
+            "end": 1169,
+            "start": 1169
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -15298,8 +15506,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:ba93149531020ac0c9085851bea3103db2e915d88b26188ff4df7a0ca973e8b8",
           "lines": {
-            "end": 1158,
-            "start": 1158
+            "end": 1197,
+            "start": 1197
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -15889,8 +16097,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:1e338b48a659de500ad34e72a86e7cc05c09c99fc34a910511c295004b6c2ee4",
           "lines": {
-            "end": 841,
-            "start": 841
+            "end": 880,
+            "start": 880
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -19183,6 +19391,16 @@
             "start": 452
           },
           "path": "src/sre_kb/cli.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_RESOLVED",
+          "excerptHash": "sha256:0cbc672c50935dad7d52c6b4f8d1b71d19d0cf18818ccdc390f916251e9d6c52",
+          "lines": {
+            "end": 502,
+            "start": 502
+          },
+          "path": "src/sre_kb/cli.py"
         }
       ],
       "id": "edge:7aa266d47c73fce5",
@@ -20513,8 +20731,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:1988db023bbb1403b4804b30d11dc751ac2cf01821647b7e7a8ed32679dbe22c",
           "lines": {
-            "end": 814,
-            "start": 814
+            "end": 853,
+            "start": 853
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -21901,8 +22119,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:25524285a8e83f0158e50f2f34874ce5769a3bfb3def6b9900f3e157c6ee92c3",
           "lines": {
-            "end": 949,
-            "start": 949
+            "end": 988,
+            "start": 988
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -22163,8 +22381,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:5d829f14d0f6d55304485acc5ba850d3769a368baeb4f8db683d4dd3a83c969f",
           "lines": {
-            "end": 1292,
-            "start": 1292
+            "end": 1331,
+            "start": 1331
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -22173,8 +22391,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:5d829f14d0f6d55304485acc5ba850d3769a368baeb4f8db683d4dd3a83c969f",
           "lines": {
-            "end": 1334,
-            "start": 1334
+            "end": 1373,
+            "start": 1373
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -22677,8 +22895,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:965557b02ab2ce4b55d9e7671155441a7c8c30a050a83f497a013af61648078e",
           "lines": {
-            "end": 723,
-            "start": 723
+            "end": 762,
+            "start": 762
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -23203,8 +23421,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:0bcb7dc518c1e1c6bcd56b1116169a2884252cebc412cb8c7dd1c4e5aa2ddec4",
           "lines": {
-            "end": 1047,
-            "start": 1047
+            "end": 1086,
+            "start": 1086
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -23213,8 +23431,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:dafc68f014630ff551dbcafdf2679fdbe8cf8d8f4bbc1228c0f30076d00239b6",
           "lines": {
-            "end": 541,
-            "start": 541
+            "end": 580,
+            "start": 580
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -23727,8 +23945,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:6fe6164c1098b46e5865504a534bc045aae42dad0fc106dec7bc6aced1e489d4",
           "lines": {
-            "end": 682,
-            "start": 682
+            "end": 721,
+            "start": 721
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -23903,8 +24121,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:43552486d3d2748c4e7c2d171c5a520d19b3df1be304815ee7b81638ee67e7b1",
           "lines": {
-            "end": 1108,
-            "start": 1108
+            "end": 1147,
+            "start": 1147
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -24801,8 +25019,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:4618d3ce0627cf1e038d50129d0aac01ee63e1941a9ce91353d3f79b13f83532",
           "lines": {
-            "end": 1048,
-            "start": 1048
+            "end": 1087,
+            "start": 1087
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -27302,8 +27520,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:1c63baaf065357bef42e8c8836be46ca0b2318d0c4b324465869ff94a23547e8",
           "lines": {
-            "end": 1040,
-            "start": 1040
+            "end": 1079,
+            "start": 1079
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -28881,8 +29099,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 1038,
-            "start": 1038
+            "end": 1077,
+            "start": 1077
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -28941,8 +29159,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 493,
-            "start": 493
+            "end": 499,
+            "start": 499
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -28951,8 +29169,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 538,
-            "start": 538
+            "end": 532,
+            "start": 532
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -28961,8 +29179,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 642,
-            "start": 642
+            "end": 577,
+            "start": 577
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -28971,8 +29189,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 679,
-            "start": 679
+            "end": 681,
+            "start": 681
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -28981,8 +29199,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 721,
-            "start": 721
+            "end": 718,
+            "start": 718
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -28991,8 +29209,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 749,
-            "start": 749
+            "end": 760,
+            "start": 760
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -29001,8 +29219,18 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 778,
-            "start": 778
+            "end": 788,
+            "start": 788
+          },
+          "path": "src/sre_kb/cli.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
+          "lines": {
+            "end": 817,
+            "start": 817
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -29395,8 +29623,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:e6cbc1430a36cac75a0529448eafc4fdd0f1ed82af2cb4eba04cb97b21607821",
           "lines": {
-            "end": 780,
-            "start": 780
+            "end": 819,
+            "start": 819
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -29405,8 +29633,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:f17b5f4bf9de682480848a2ee6ba8f12482b340bbe8c21c9e49974fb2663da3c",
           "lines": {
-            "end": 806,
-            "start": 806
+            "end": 845,
+            "start": 845
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -29779,8 +30007,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:5592a95e9f1263cc397fb505f2ac46526898af2dd0d803ce21977ec73df661e3",
           "lines": {
-            "end": 912,
-            "start": 912
+            "end": 951,
+            "start": 951
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -30618,6 +30846,28 @@
       "unresolved": false
     },
     {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f",
+          "lines": {
+            "end": 3,
+            "start": 3
+          },
+          "path": "tests/test_human_report.py"
+        }
+      ],
+      "id": "edge:c2b1435ed726fb29",
+      "kind": "imports",
+      "resolver": "python:ast",
+      "scope": "source-external",
+      "source": "test:sre-kb:tests/test_human_report.py",
+      "target": "package:python-stdlib:__future__",
+      "unresolved": false
+    },
+    {
       "annotations": {
         "lifecycles": [
           "locked"
@@ -31312,6 +31562,28 @@
         {
           "detector": "atlas.source.python",
           "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:0fa2dce3a021f9a9aad4bc8956e70ad20aeae0fc6312a8e1ab5cc0275458928f",
+          "lines": {
+            "end": 1,
+            "start": 1
+          },
+          "path": "tests/test_human_report.py"
+        }
+      ],
+      "id": "edge:c93db24e961db826",
+      "kind": "contains",
+      "resolver": "atlas:scope",
+      "scope": "structure",
+      "source": "project:sre-kb",
+      "target": "test:sre-kb:tests/test_human_report.py",
+      "unresolved": false
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python",
+          "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:fa5cc7364aeb3491583e33284c42ba3d47a47c354a8bc53931f83b4b58e89b10",
           "lines": {
             "end": 1,
@@ -31416,6 +31688,16 @@
             "start": 453
           },
           "path": "src/sre_kb/cli.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_RESOLVED",
+          "excerptHash": "sha256:b57a5677d90f840b72ac268b9f48552b348e0ecb6a24d0b42b68597f6be00583",
+          "lines": {
+            "end": 503,
+            "start": 503
+          },
+          "path": "src/sre_kb/cli.py"
         }
       ],
       "id": "edge:ca642ea4f0bd930c",
@@ -31500,8 +31782,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:8dfde3ae1105a23ab3ce6edd32c74cf7fcde0f03e22a3cefd87b5da25f1443aa",
           "lines": {
-            "end": 1226,
-            "start": 1226
+            "end": 1265,
+            "start": 1265
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -31510,8 +31792,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:8dfde3ae1105a23ab3ce6edd32c74cf7fcde0f03e22a3cefd87b5da25f1443aa",
           "lines": {
-            "end": 1251,
-            "start": 1251
+            "end": 1290,
+            "start": 1290
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -31560,8 +31842,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:8dfde3ae1105a23ab3ce6edd32c74cf7fcde0f03e22a3cefd87b5da25f1443aa",
           "lines": {
-            "end": 495,
-            "start": 495
+            "end": 504,
+            "start": 504
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -31570,8 +31852,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:8dfde3ae1105a23ab3ce6edd32c74cf7fcde0f03e22a3cefd87b5da25f1443aa",
           "lines": {
-            "end": 542,
-            "start": 542
+            "end": 534,
+            "start": 534
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -31580,8 +31862,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:8dfde3ae1105a23ab3ce6edd32c74cf7fcde0f03e22a3cefd87b5da25f1443aa",
           "lines": {
-            "end": 605,
-            "start": 605
+            "end": 581,
+            "start": 581
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -31610,8 +31892,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:8dfde3ae1105a23ab3ce6edd32c74cf7fcde0f03e22a3cefd87b5da25f1443aa",
           "lines": {
-            "end": 724,
-            "start": 724
+            "end": 722,
+            "start": 722
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -31620,8 +31902,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:8dfde3ae1105a23ab3ce6edd32c74cf7fcde0f03e22a3cefd87b5da25f1443aa",
           "lines": {
-            "end": 751,
-            "start": 751
+            "end": 763,
+            "start": 763
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -31630,8 +31912,18 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:8dfde3ae1105a23ab3ce6edd32c74cf7fcde0f03e22a3cefd87b5da25f1443aa",
           "lines": {
-            "end": 781,
-            "start": 781
+            "end": 790,
+            "start": 790
+          },
+          "path": "src/sre_kb/cli.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_RESOLVED",
+          "excerptHash": "sha256:8dfde3ae1105a23ab3ce6edd32c74cf7fcde0f03e22a3cefd87b5da25f1443aa",
+          "lines": {
+            "end": 820,
+            "start": 820
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -34269,8 +34561,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:eda3806efdbf8b208b7a8eb1b239bb449f96f0e4d85f9eca6ef2751108d363a2",
           "lines": {
-            "end": 1043,
-            "start": 1043
+            "end": 1082,
+            "start": 1082
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -34983,8 +35275,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:a479f73d0e0eff55699c1371216ada59b5bf19b06d15566f1dccb499ce67d527",
           "lines": {
-            "end": 1159,
-            "start": 1159
+            "end": 1198,
+            "start": 1198
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -35005,6 +35297,16 @@
           "lines": {
             "end": 331,
             "start": 331
+          },
+          "path": "src/sre_kb/cli.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_RESOLVED",
+          "excerptHash": "sha256:3989b1bee2a0009533ac2099e013c48422178b43101ea2ef30bf29c44fa7f639",
+          "lines": {
+            "end": 513,
+            "start": 513
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -36517,8 +36819,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:f29767f6e0aa1a048e7912e022d76325b5830b96bbf0e5d15222f100fd6ba92d",
           "lines": {
-            "end": 1224,
-            "start": 1224
+            "end": 1263,
+            "start": 1263
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -36693,8 +36995,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:a4edd61c00e136f62508e8750704577dfa65cc7e8744f746cadf6851af47d179",
           "lines": {
-            "end": 873,
-            "start": 873
+            "end": 912,
+            "start": 912
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -37344,8 +37646,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:fde45123b59638013b3c295c3e7793493cdb9671c267f37dcb44db41b8f34046",
           "lines": {
-            "end": 1202,
-            "start": 1202
+            "end": 1241,
+            "start": 1241
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -37960,6 +38262,28 @@
         {
           "detector": "atlas.source.python-import",
           "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:599dd1aaf9c5019ce36bac7a1cb2a0a4836673ca8eef9de273c77c3dccf66bec",
+          "lines": {
+            "end": 7,
+            "start": 7
+          },
+          "path": "tests/test_human_report.py"
+        }
+      ],
+      "id": "edge:f53fdf88c165e654",
+      "kind": "imports",
+      "resolver": "python:ast",
+      "scope": "source-external",
+      "source": "test:sre-kb:tests/test_human_report.py",
+      "target": "import:python:typer",
+      "unresolved": true
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f",
           "lines": {
             "end": 9,
@@ -38468,8 +38792,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:517e0e92acf2801a84ebce9a7e2057cbda3522cb259407be243f80f0eb3f7f94",
           "lines": {
-            "end": 1045,
-            "start": 1045
+            "end": 1084,
+            "start": 1084
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -38964,8 +39288,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:fb41c6713700392d1dd235adba2e785862467bd2eba9f54893f19bac1d79aa0e",
           "lines": {
-            "end": 1044,
-            "start": 1044
+            "end": 1083,
+            "start": 1083
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -39220,8 +39544,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:4676ec2673ce9e91b462c32a8ab7f455e8b86b7fd3f34523f6f4e84ded60dd61",
           "lines": {
-            "end": 1046,
-            "start": 1046
+            "end": 1085,
+            "start": 1085
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -39240,8 +39564,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:35ae8cb1fc5da417ebe8c25f8d1d5116e85ce69cd87cf56cdceb1709b0776958",
           "lines": {
-            "end": 540,
-            "start": 540
+            "end": 579,
+            "start": 579
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -39250,8 +39574,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:35ae8cb1fc5da417ebe8c25f8d1d5116e85ce69cd87cf56cdceb1709b0776958",
           "lines": {
-            "end": 603,
-            "start": 603
+            "end": 642,
+            "start": 642
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -39260,8 +39584,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:35ae8cb1fc5da417ebe8c25f8d1d5116e85ce69cd87cf56cdceb1709b0776958",
           "lines": {
-            "end": 681,
-            "start": 681
+            "end": 720,
+            "start": 720
           },
           "path": "src/sre_kb/cli.py"
         }
@@ -39999,8 +40323,8 @@
     "configDigest": "sha256:1bdefb262299dd0541c533b9223055edb1847c8073a321b08714ca65dba99876",
     "configPath": ".sre/atlas.yaml",
     "projectLicense": "UNKNOWN",
-    "repository": "workspace",
-    "treeDigest": "sha256:2dd3e699e8fe234b18dd08550a4dd6586aad0322498bc41aedceb87d572c4470"
+    "repository": "sre-design",
+    "treeDigest": "sha256:d87dcca19d6335e3feba12bc730fc5ee5b5f674c71cf026eb0df54935e602fd6"
   },
   "metrics": {
     "coupling": [
@@ -40758,9 +41082,9 @@
       },
       {
         "afferent": 5,
-        "efferent": 2,
+        "efferent": 3,
         "granularity": "module",
-        "instability": 0.285714,
+        "instability": 0.375,
         "node": "module:sre-kb:src/sre_kb/reporting/__init__.py",
         "scope": "source"
       },
@@ -40778,6 +41102,14 @@
         "granularity": "module",
         "instability": 0.6,
         "node": "module:sre-kb:src/sre_kb/reporting/findings.py",
+        "scope": "source"
+      },
+      {
+        "afferent": 1,
+        "efferent": 0,
+        "granularity": "module",
+        "instability": 0.0,
+        "node": "module:sre-kb:src/sre_kb/reporting/human_report.py",
         "scope": "source"
       },
       {
@@ -42071,6 +42403,16 @@
             "start": 6
           },
           "path": "tests/test_graduation.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:599dd1aaf9c5019ce36bac7a1cb2a0a4836673ca8eef9de273c77c3dccf66bec",
+          "lines": {
+            "end": 7,
+            "start": 7
+          },
+          "path": "tests/test_human_report.py"
         },
         {
           "detector": "atlas.source.python-import",
@@ -45426,6 +45768,32 @@
     },
     {
       "annotations": {
+        "module": "sre_kb.reporting.human_report"
+      },
+      "evidence": [
+        {
+          "detector": "atlas.source.python",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:bb1f90f316d74ca87cf0ba496a6bdc60e4759cdeff8d3be3533707ca6ec37da9",
+          "lines": {
+            "end": 1,
+            "start": 1
+          },
+          "path": "src/sre_kb/reporting/human_report.py"
+        }
+      ],
+      "group": "sre_kb.reporting",
+      "id": "module:sre-kb:src/sre_kb/reporting/human_report.py",
+      "language": "python",
+      "licenses": [],
+      "name": "human_report.py",
+      "owners": [],
+      "path": "src/sre_kb/reporting/human_report.py",
+      "project": "sre-kb",
+      "type": "module"
+    },
+    {
+      "annotations": {
         "module": "sre_kb.reporting.narrative"
       },
       "evidence": [
@@ -48258,6 +48626,16 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f",
           "lines": {
+            "end": 3,
+            "start": 3
+          },
+          "path": "src/sre_kb/reporting/human_report.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f",
+          "lines": {
             "end": 19,
             "start": 19
           },
@@ -48971,6 +49349,16 @@
             "end": 3,
             "start": 3
           },
+          "path": "tests/test_human_report.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f",
+          "lines": {
+            "end": 3,
+            "start": 3
+          },
           "path": "tests/test_idempotency_route.py"
         },
         {
@@ -49630,6 +50018,16 @@
             "start": 16
           },
           "path": "src/sre_kb/reporting/coverage.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:6164efa8ac293fd717375182410539407182c82e17c93798b8bb1081d333abce",
+          "lines": {
+            "end": 5,
+            "start": 5
+          },
+          "path": "src/sre_kb/reporting/human_report.py"
         },
         {
           "detector": "atlas.source.python-import",
@@ -50542,8 +50940,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 1038,
-            "start": 1038
+            "end": 1077,
+            "start": 1077
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -50602,8 +51000,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 493,
-            "start": 493
+            "end": 499,
+            "start": 499
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -50612,8 +51010,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 538,
-            "start": 538
+            "end": 532,
+            "start": 532
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -50622,8 +51020,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 642,
-            "start": 642
+            "end": 577,
+            "start": 577
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -50632,8 +51030,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 679,
-            "start": 679
+            "end": 681,
+            "start": 681
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -50642,8 +51040,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 721,
-            "start": 721
+            "end": 718,
+            "start": 718
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -50652,8 +51050,8 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 749,
-            "start": 749
+            "end": 760,
+            "start": 760
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -50662,8 +51060,18 @@
           "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
           "lines": {
-            "end": 778,
-            "start": 778
+            "end": 788,
+            "start": 788
+          },
+          "path": "src/sre_kb/cli.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:ad2bb67ea2f49d60260a1462768f222c6f538e35ce67c34c880625fdbcca8827",
+          "lines": {
+            "end": 817,
+            "start": 817
           },
           "path": "src/sre_kb/cli.py"
         },
@@ -51166,6 +51574,16 @@
             "start": 527
           },
           "path": "tests/test_gap_finder.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:261a9112a2918e2aba03e19a2f221a027ab4b6f9e946a6c39814f54e18e07dfc",
+          "lines": {
+            "end": 5,
+            "start": 5
+          },
+          "path": "tests/test_human_report.py"
         },
         {
           "detector": "atlas.source.python-import",
@@ -53266,6 +53684,16 @@
         {
           "detector": "atlas.source.python-import",
           "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:bf33f9206bbf810f80e9c63d59fdf4be1514a1f0bb77b555fc86c5390b2ea146",
+          "lines": {
+            "end": 511,
+            "start": 511
+          },
+          "path": "src/sre_kb/cli.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:7b2ddb8a2e64c6166feedaf30ee50ac62165fe149fdd8b0d7b777ebee21ca34d",
           "lines": {
             "end": 6,
@@ -54837,6 +55265,32 @@
       "name": "test_graduation.py",
       "owners": [],
       "path": "tests/test_graduation.py",
+      "project": "sre-kb",
+      "type": "test"
+    },
+    {
+      "annotations": {
+        "module": "tests.test_human_report"
+      },
+      "evidence": [
+        {
+          "detector": "atlas.source.python",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:0fa2dce3a021f9a9aad4bc8956e70ad20aeae0fc6312a8e1ab5cc0275458928f",
+          "lines": {
+            "end": 1,
+            "start": 1
+          },
+          "path": "tests/test_human_report.py"
+        }
+      ],
+      "group": "tests.test_human_report",
+      "id": "test:sre-kb:tests/test_human_report.py",
+      "language": "python",
+      "licenses": [],
+      "name": "test_human_report.py",
+      "owners": [],
+      "path": "tests/test_human_report.py",
       "project": "sre-kb",
       "type": "test"
     },

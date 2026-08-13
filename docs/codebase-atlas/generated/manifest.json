@@ -2,15 +2,15 @@
   "apiVersion": "sre.kb/atlas-render/v1alpha1",
   "files": {
     "CodebaseAtlas.schema.json": "sha256:b665edeeed9013a7e12011f6a99a5c0448556c0e83c62d55e445c23c64d74c43",
-    "DEPENDENCY-SNAPSHOT.md": "sha256:dd33546158c8a1b5e35df0b4e639d59a2d66aff79c782e32c322e73e727a18db",
-    "README.md": "sha256:fa0ad06e1736c437b61e9d679634f5ffc2dcb3c38923f27d4de732e0e8cc230f",
+    "DEPENDENCY-SNAPSHOT.md": "sha256:29fac9091e54a40e91001c12721ab6c3017f0ecb857aaeacd29ef7417b2c019f",
+    "README.md": "sha256:e68970238c6cf52768c48f0606b1536f626a000e1b8f67aa07752f6e0efaf887",
     "RuntimeEvidence.schema.json": "sha256:3d9c8c6d54e883380ee998346bf0c6537654c8522964c411d0d1eede2a643235",
-    "atlas.html": "sha256:4bfefb68ff77c495bd54255a24301ae81675dc428b902ebb0f1cf3f85bfb771b",
-    "atlas.json": "sha256:3e6a435bfdf5558c07ee1b717932b9353fcf0dfc72c74ab669098409741a3969",
+    "atlas.html": "sha256:e44606e224c274f36fa3feacdade6a3aef92b14a15d5db8bcd184ca7a7b2f9cf",
+    "atlas.json": "sha256:e562df39847e9f34bd62db9d7b373078acff36fcd34efcf422366121a02ff38e",
     "licenses.json": "sha256:3f6c6defbaa787bbba9178642aef80b97a7f80a9b66eae61c86ab5a316637e3e",
     "runtime-graph.md": "sha256:8b9f040846e720be88a47ef8fd4c54253a58f0c8ed6ec3fb6a35fee5780f5810",
     "runtime-graph.mmd": "sha256:b9ae3527ec59f284337308be20279cdac7ecc0b26e9023da83c219305f002576",
-    "source-graph.md": "sha256:cfe22e1c996cbd0a1b81f0c6e6c0ecdb95fd099aa9b4a61e9f45bc621e6e41f2",
-    "source-graph.mmd": "sha256:62c4433673db19da2dd54f93f7bef643b295b375957a513320798bf4b5dc93d0"
+    "source-graph.md": "sha256:b923cfbbe6f2ca4f1129266335442d107c893b03a65ca2ed99667bc4f5226f6d",
+    "source-graph.mmd": "sha256:a6b2368138ea1a10ffb14843e10c364edbaba8dca74da23dcf553c4ed53da6b9"
   }
 }

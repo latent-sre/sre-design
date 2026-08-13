@@ -18,6 +18,9 @@ DOCS = [
      "status": "verified", "spec": {}},
     {"kind": "ResiliencyGap", "metadata": {"name": "orders-missing-idempotency"},
      "status": "needs-review", "spec": {}},
+    {"kind": "Dependency", "metadata": {"name": "payments-http"}, "status": "verified",
+     "spec": {"name": "payments", "type": "http",
+              "baseUrl": "https://user:secret@payments.internal/api", "source": "config"}},
     {"kind": "BlastRadius", "metadata": {"name": "payments"}, "status": "verified",
      "spec": {"node": {"name": "payments"}, "severityHint": "high",
               "dependencyCriticality": "critical", "impactedFlows": ["place-order"]}},
@@ -30,6 +33,8 @@ def test_report_has_exactly_five_deepening_passes_and_traceable_claims():
     assert [p["number"] for p in report["passes"]] == [1, 2, 3, 4, 5]
     assert "POST /orders" in report["passes"][1]["details"][0]
     assert "payments" in report["passes"][1]["details"][0]
+    assert "https://payments.internal/api" in report["passes"][2]["details"][0]
+    assert "secret" not in report["passes"][2]["details"][0]
     assert "1 resilience protection" in report["passes"][3]["answer"]
     assert "1 resilience gap" in report["passes"][3]["answer"]
     assert report["passes"][4]["evidence"] == ["BlastRadius/payments"]
@@ -65,6 +70,26 @@ def test_cli_can_scan_a_target_then_report_it(monkeypatch, tmp_path):
     assert result.exit_code == 0 and result.stdout.count("## Pass ") == 5
     assert calls[0][0] == str(tmp_path)
     assert calls[0][1]["to_stage"] == "validate"
+
+
+def test_cli_accepts_remote_repository_target(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr("sre_kb.pipeline.run", lambda target, **kwargs: calls.append(target))
+    monkeypatch.setattr("sre_kb.render.load_kb", lambda _: DOCS)
+    result = CliRunner().invoke(
+        app, ["human-report", "--target", "https://example.test/org/repo.git",
+              "--work-root", str(tmp_path)]
+    )
+    assert result.exit_code == 0
+    assert calls == ["https://example.test/org/repo.git"]
+
+
+def test_markdown_sanitizes_repository_supplied_labels():
+    docs = [{"kind": "Flow", "metadata": {"name": "safe\n# injected"}, "status": "verified",
+             "spec": {"trigger": {"method": "GET", "path": "/ok\n# injected"},
+                      "steps": [], "sinks": [{"target": "backend\n# injected"}]}}]
+    text = render_human_report(build_human_report("svc\n# injected", "r1", docs, []))
+    assert "\n# injected" not in text
 
 
 def test_cli_requires_exactly_one_input(tmp_path):

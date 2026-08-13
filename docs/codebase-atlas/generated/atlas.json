@@ -226,28 +226,6 @@
       "evidence": [
         {
           "detector": "atlas.source.python-import",
-          "evidenceClass": "STATIC_EXTRACTED",
-          "excerptHash": "sha256:bf33f9206bbf810f80e9c63d59fdf4be1514a1f0bb77b555fc86c5390b2ea146",
-          "lines": {
-            "end": 511,
-            "start": 511
-          },
-          "path": "src/sre_kb/cli.py"
-        }
-      ],
-      "id": "edge:018bfcb20159cd4d",
-      "kind": "imports",
-      "resolver": "python:ast",
-      "scope": "source-external",
-      "source": "module:sre-kb:src/sre_kb/cli.py",
-      "target": "package:python-stdlib:time",
-      "unresolved": false
-    },
-    {
-      "annotations": {},
-      "evidence": [
-        {
-          "detector": "atlas.source.python-import",
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:882076d3003fe86eaf8147916e4d8071b995d5a5859d32b5251aabfacf308691",
           "lines": {
@@ -2039,6 +2017,28 @@
       "scope": "source-external",
       "source": "test:sre-kb:tests/test_depmap.py",
       "target": "package:python-stdlib:__future__",
+      "unresolved": false
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_RESOLVED",
+          "excerptHash": "sha256:03363c624ddc37702650af604798b55128c7981a825f3cb48931d5bc7f2cb2af",
+          "lines": {
+            "end": 8,
+            "start": 8
+          },
+          "path": "src/sre_kb/reporting/human_report.py"
+        }
+      ],
+      "id": "edge:0bbb41dab57b3ad2",
+      "kind": "imports",
+      "resolver": "python:ast",
+      "scope": "source",
+      "source": "module:sre-kb:src/sre_kb/reporting/human_report.py",
+      "target": "module:sre-kb:src/sre_kb/render/templating.py",
       "unresolved": false
     },
     {
@@ -22378,6 +22378,28 @@
       "evidence": [
         {
           "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:d487556b041686b606c085395f3f9d0c265467b63ef3b88be77fd19964634672",
+          "lines": {
+            "end": 6,
+            "start": 6
+          },
+          "path": "src/sre_kb/reporting/human_report.py"
+        }
+      ],
+      "id": "edge:8c7c05b59c446888",
+      "kind": "imports",
+      "resolver": "python:ast",
+      "scope": "source-external",
+      "source": "module:sre-kb:src/sre_kb/reporting/human_report.py",
+      "target": "package:python-stdlib:urllib",
+      "unresolved": false
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:5d829f14d0f6d55304485acc5ba850d3769a368baeb4f8db683d4dd3a83c969f",
           "lines": {
@@ -36168,6 +36190,28 @@
       "evidence": [
         {
           "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:4174cf73c7d46161e58e68c2f97c323ee17dd71a72bdbee09b21cb6f55d82ea0",
+          "lines": {
+            "end": 511,
+            "start": 511
+          },
+          "path": "src/sre_kb/cli.py"
+        }
+      ],
+      "id": "edge:e96699efbfb36ff9",
+      "kind": "imports",
+      "resolver": "python:ast",
+      "scope": "source-external",
+      "source": "module:sre-kb:src/sre_kb/cli.py",
+      "target": "package:python-stdlib:uuid",
+      "unresolved": false
+    },
+    {
+      "annotations": {},
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:32251a12cd74bf82b93525c872fbcbf1d442ce27a5e1bae370357c4a19ca32cf",
           "lines": {
@@ -40324,7 +40368,7 @@
     "configPath": ".sre/atlas.yaml",
     "projectLicense": "UNKNOWN",
     "repository": "sre-design",
-    "treeDigest": "sha256:d87dcca19d6335e3feba12bc730fc5ee5b5f674c71cf026eb0df54935e602fd6"
+    "treeDigest": "sha256:edf3855c4efd862d0e74d866cecd27eb209a971cdea0c02812040e3c27d8c34a"
   },
   "metrics": {
     "coupling": [
@@ -41073,7 +41117,7 @@
         "scope": "source"
       },
       {
-        "afferent": 4,
+        "afferent": 5,
         "efferent": 0,
         "granularity": "module",
         "instability": 0.0,
@@ -41106,9 +41150,9 @@
       },
       {
         "afferent": 1,
-        "efferent": 0,
+        "efferent": 1,
         "granularity": "module",
-        "instability": 0.0,
+        "instability": 0.5,
         "node": "module:sre-kb:src/sre_kb/reporting/human_report.py",
         "scope": "source"
       },
@@ -41505,18 +41549,18 @@
         "scope": "source"
       },
       {
-        "afferent": 5,
+        "afferent": 6,
         "efferent": 7,
         "granularity": "group",
-        "instability": 0.583333,
+        "instability": 0.538462,
         "node": "group:sre-kb:sre_kb.render",
         "scope": "source"
       },
       {
         "afferent": 3,
-        "efferent": 4,
+        "efferent": 5,
         "granularity": "group",
-        "instability": 0.571429,
+        "instability": 0.625,
         "node": "group:sre-kb:sre_kb.reporting",
         "scope": "source"
       },
@@ -41616,6 +41660,7 @@
           "group:sre-kb:sre_kb.pipeline",
           "group:sre-kb:sre_kb.publish",
           "group:sre-kb:sre_kb.render",
+          "group:sre-kb:sre_kb.reporting",
           "group:sre-kb:sre_kb.synth",
           "group:sre-kb:sre_kb.validation"
         ],
@@ -53684,16 +53729,6 @@
         {
           "detector": "atlas.source.python-import",
           "evidenceClass": "STATIC_EXTRACTED",
-          "excerptHash": "sha256:bf33f9206bbf810f80e9c63d59fdf4be1514a1f0bb77b555fc86c5390b2ea146",
-          "lines": {
-            "end": 511,
-            "start": 511
-          },
-          "path": "src/sre_kb/cli.py"
-        },
-        {
-          "detector": "atlas.source.python-import",
-          "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:7b2ddb8a2e64c6166feedaf30ee50ac62165fe149fdd8b0d7b777ebee21ca34d",
           "lines": {
             "end": 6,
@@ -53978,6 +54013,16 @@
         {
           "detector": "atlas.source.python-import",
           "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:d487556b041686b606c085395f3f9d0c265467b63ef3b88be77fd19964634672",
+          "lines": {
+            "end": 6,
+            "start": 6
+          },
+          "path": "src/sre_kb/reporting/human_report.py"
+        },
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
           "excerptHash": "sha256:617f0769d8419af1a1148cbe45e6e4529b4385813d4a05b983204bb6243e1c91",
           "lines": {
             "end": 72,
@@ -53990,6 +54035,32 @@
       "id": "package:python-stdlib:urllib",
       "licenses": [],
       "name": "urllib",
+      "owners": [],
+      "type": "package"
+    },
+    {
+      "annotations": {
+        "importName": "uuid",
+        "importedBy": [
+          "sre-kb"
+        ]
+      },
+      "evidence": [
+        {
+          "detector": "atlas.source.python-import",
+          "evidenceClass": "STATIC_EXTRACTED",
+          "excerptHash": "sha256:4174cf73c7d46161e58e68c2f97c323ee17dd71a72bdbee09b21cb6f55d82ea0",
+          "lines": {
+            "end": 511,
+            "start": 511
+          },
+          "path": "src/sre_kb/cli.py"
+        }
+      ],
+      "group": "python-stdlib",
+      "id": "package:python-stdlib:uuid",
+      "licenses": [],
+      "name": "uuid",
       "owners": [],
       "type": "package"
     },

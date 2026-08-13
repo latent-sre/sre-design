@@ -485,7 +485,7 @@ def findings_narrative(
 @app.command("human-report")
 def human_report(
     run_id: str = typer.Option(None, "--run", help="Existing validated run to report."),
-    target: Path = typer.Option(
+    target: str = typer.Option(
         None, "--target", help="Repository to scan safely before building the report."
     ),
     fmt: str = typer.Option("md", "--format", help="Output format: md | json"),
@@ -508,12 +508,12 @@ def human_report(
     if (run_id is None) == (target is None):
         raise typer.BadParameter("provide exactly one of --target or --run")
     if target is not None:
-        import time
+        from uuid import uuid4
 
         from sre_kb.pipeline import run
 
-        run_id = f"human-report-{time.strftime('%Y%m%d-%H%M%S')}"
-        run(str(target), work_root=work_root, run_id=run_id, to_stage="validate")
+        run_id = f"human-report-{uuid4().hex}"
+        run(target, work_root=work_root, run_id=run_id, to_stage="validate")
     selected_run = run_id or ""  # exclusivity check above guarantees a generated or supplied id
     layout = RunLayout(Path(work_root), selected_run)
     docs = load_kb(layout.root)

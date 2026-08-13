@@ -22,18 +22,19 @@ Evidence scope: resolver-backed production source edges only for coupling and cy
 | `group:sre-kb:sre_kb.tiers` | group | 7 | 0 | 0.000 |
 | `src/sre_kb/atlas/model.py` | module | 7 | 0 | 0.000 |
 | `src/sre_kb/collectors/__init__.py` | module | 6 | 29 | 0.829 |
+| `group:sre-kb:sre_kb.render` | group | 6 | 7 | 0.538 |
 | `src/sre_kb/validation/structural.py` | module | 6 | 1 | 0.143 |
 | `group:sre-kb:sre_kb.util` | group | 6 | 0 | 0.000 |
 | `group:sre-kb:sre_kb.workspace` | group | 6 | 0 | 0.000 |
 | `src/sre_kb/atlas/config.py` | module | 6 | 0 | 0.000 |
 | `src/sre_kb/scoring/confidence.py` | module | 6 | 0 | 0.000 |
 | `src/sre_kb/pipeline/confirm.py` | module | 5 | 12 | 0.706 |
-| `group:sre-kb:sre_kb.render` | group | 5 | 7 | 0.583 |
 | `src/sre_kb/render/project.py` | module | 5 | 7 | 0.583 |
 | `src/sre_kb/collectors/common/openapi.py` | module | 5 | 3 | 0.375 |
-| `src/sre_kb/reporting/__init__.py` | module | 5 | 2 | 0.286 |
+| `src/sre_kb/reporting/__init__.py` | module | 5 | 3 | 0.375 |
 | `group:sre-kb:sre_kb.models` | group | 5 | 0 | 0.000 |
 | `src/sre_kb/models/envelope.py` | module | 5 | 0 | 0.000 |
+| `src/sre_kb/render/templating.py` | module | 5 | 0 | 0.000 |
 | `group:sre-kb:sre_kb.pipeline` | group | 4 | 16 | 0.800 |
 | `src/sre_kb/synth/scaffold.py` | module | 4 | 13 | 0.765 |
 | `src/sre_kb/pipeline/gap_finder.py` | module | 4 | 11 | 0.733 |
@@ -52,7 +53,6 @@ Evidence scope: resolver-backed production source edges only for coupling and cy
 | `group:sre-kb:sre_kb.inventory_signatures` | group | 4 | 0 | 0.000 |
 | `group:sre-kb:sre_kb.signatures` | group | 4 | 0 | 0.000 |
 | `src/sre_kb/inventory_signatures.py` | module | 4 | 0 | 0.000 |
-| `src/sre_kb/render/templating.py` | module | 4 | 0 | 0.000 |
 | `src/sre_kb/reporting/narrative.py` | module | 4 | 0 | 0.000 |
 | `src/sre_kb/validation/gating.py` | module | 4 | 0 | 0.000 |
 | `src/sre_kb/pipeline/worklist_run.py` | module | 3 | 20 | 0.870 |
@@ -60,7 +60,7 @@ Evidence scope: resolver-backed production source edges only for coupling and cy
 | `src/sre_kb/pipeline/alerts_draft.py` | module | 3 | 9 | 0.750 |
 | `src/sre_kb/pipeline/architecture.py` | module | 3 | 8 | 0.727 |
 | `src/sre_kb/pipeline/runbooks_draft.py` | module | 3 | 7 | 0.700 |
-| `group:sre-kb:sre_kb.reporting` | group | 3 | 4 | 0.571 |
+| `group:sre-kb:sre_kb.reporting` | group | 3 | 5 | 0.625 |
 | `src/sre_kb/atlas/manifests.py` | module | 3 | 4 | 0.571 |
 | `src/sre_kb/pipeline/pcf_review.py` | module | 3 | 3 | 0.500 |
 | `src/sre_kb/pipeline/areas.py` | module | 3 | 2 | 0.400 |
@@ -149,6 +149,7 @@ Evidence scope: resolver-backed production source edges only for coupling and cy
 | `src/sre_kb/parsing/__init__.py` | module | 1 | 1 | 0.500 |
 | `src/sre_kb/render/dashboards.py` | module | 1 | 1 | 0.500 |
 | `src/sre_kb/reporting/coverage.py` | module | 1 | 1 | 0.500 |
+| `src/sre_kb/reporting/human_report.py` | module | 1 | 1 | 0.500 |
 | `src/sre_kb/synth/context_pack.py` | module | 1 | 1 | 0.500 |
 | `src/sre_kb/validation/__init__.py` | module | 1 | 1 | 0.500 |
 | `group:sre-kb:sre_kb.drift` | group | 1 | 0 | 0.000 |
@@ -170,7 +171,7 @@ Evidence scope: resolver-backed production source edges only for coupling and cy
 ## Strongly connected components
 
 1. **group** — `group:sre-kb:sre_kb.collectors` → `group:sre-kb:sre_kb.flow`
-2. **group** — `group:sre-kb:sre_kb.pipeline` → `group:sre-kb:sre_kb.publish` → `group:sre-kb:sre_kb.render` → `group:sre-kb:sre_kb.synth` → `group:sre-kb:sre_kb.validation`
+2. **group** — `group:sre-kb:sre_kb.pipeline` → `group:sre-kb:sre_kb.publish` → `group:sre-kb:sre_kb.render` → `group:sre-kb:sre_kb.reporting` → `group:sre-kb:sre_kb.synth` → `group:sre-kb:sre_kb.validation`
 
 ## Resolver blind spots
 

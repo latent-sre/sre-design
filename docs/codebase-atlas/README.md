@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Repository | `sre-design` / Python package `sre-kb` |
-| Baseline Git HEAD | merge of call-graph/operational-signal work with `origin/main` `039e195` |
+| Baseline Git HEAD | `00fda28` plus the current `deps`-matrix atlas refresh |
 | Baseline commit date | 2026-08-29 |
 | Atlas date | 2026-08-29 |
 | Scope | Explicit projects/roots in [`.sre/atlas.yaml`](../../.sre/atlas.yaml), plus reviewed docs and operational evidence |

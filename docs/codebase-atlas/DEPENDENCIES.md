@@ -53,7 +53,10 @@ The package-level strongly connected groups remain:
 
 These are not Python circular-import failures: the module graph is acyclic. Package collapsing
 exposes architectural bidirectionality useful for ownership and extraction planning. No incident
-severity or health grade is inferred.
+severity or health grade is inferred. Cycle-closing import sites (`path:line`) are listed under
+**Cycle-closing imports** in the generated snapshot. The collectors/flow loop is
+`src/sre_kb/collectors/__init__.py:36` ↔ `src/sre_kb/flow/budget_check.py:6`. The larger pipeline
+SCC is closed in part by `src/sre_kb/validation/copilot_gap.py:16` importing pipeline.
 
 ```mermaid
 flowchart LR
@@ -99,6 +102,29 @@ The graph contains repository-local incoming imports and conservative source/tes
 consumers remain `UNKNOWN` until fleet search, package-consumer data, contracts, gateway records,
 or traces are imported. A repository cannot prove its complete downstream consumer set from its
 own source.
+
+The generated snapshot lists incoming and outgoing **package** neighbors with import counts. Those
+are in-repo consumers/providers, not fleet callers.
+
+## Cross-package import matrix
+
+This repository has no domain map. The `sre_kb.*` packages are **layers** (`collectors`,
+`pipeline`, `render`, `validation`, `synth`, `publish`) rather than DDD domains such as
+`order`/`payment`. The generated
+[dependency snapshot](generated/DEPENDENCY-SNAPSHOT.md) therefore emits a cross-**package** import
+matrix (row depends on column). Cell values are resolver-backed production import counts.
+
+Re-inspected [`deps` 1.1.0](https://github.com/insightflo/claude-impl-tools/blob/d1630064c80e9f86eea797a8b5bf4fea04272f57/plugin/skills/deps/SKILL.md)
+at `insightflo/claude-impl-tools@d163006`. Reused matrix, weighted edges, incoming/outgoing lists,
+and cycle-closing file citations. Rejected grep import parsing, directory-name domains, and
+Loose/Tight/Tangled or CRITICAL/HIGH/MEDIUM grades.
+
+## Highest-traffic cross-package imports
+
+Ranked import-count hotspots live in the generated snapshot. They are weights, not a refactoring
+mandate. The current self-atlas leaders are `sre_kb.pipeline` → `sre_kb.collectors` (36),
+`sre_kb.collectors` → `sre_kb.models` (33), `sre_kb.collectors` → `sre_kb.util` (24), and
+`sre_kb.cli` → `sre_kb.pipeline` (22).
 
 ## Runtime and service graph
 

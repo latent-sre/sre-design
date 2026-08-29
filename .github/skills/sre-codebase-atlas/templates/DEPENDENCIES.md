@@ -16,6 +16,14 @@
 
 <!-- Internal callers, fleet consumers, and evidence blind spots. -->
 
+## Cross-package import matrix
+
+<!-- Link generated snapshot matrix; raw import counts only, no health grade. -->
+
+## Highest-traffic cross-package imports
+
+<!-- Ranked resolver-backed import weights. -->
+
 ## Cycles
 
 <!-- SCC results at each analyzed granularity. -->

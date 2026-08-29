@@ -121,9 +121,13 @@ Follow [dependency-analysis.md](references/dependency-analysis.md). At minimum:
 
 - show outgoing and incoming relationships separately;
 - distinguish declared packages, source imports/calls, and runtime/service dependencies;
+- emit a cross-package import matrix and weighted hotspots from resolver-backed edges;
 - run strongly connected component analysis when a resolver-backed graph is available;
+- cite cycle-closing imports with `path:line` evidence;
 - report raw afferent coupling (`Ca`), efferent coupling (`Ce`), and instability
   (`I = Ce / (Ca + Ce)`) without inventing health grades;
+- treat `pipeline/`, `render/`, `collectors/` and similar names as layers unless an explicit
+  domain map exists;
 - state what dynamic loading, reflection, aliases, generated code, or missing sibling repos hides.
 
 ### 6. Enhance with existing repository capabilities

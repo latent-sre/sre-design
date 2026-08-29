@@ -8,7 +8,7 @@ source, or imported evidence and regenerate.
 - Source graph: [`source-graph.md`](source-graph.md)
 - Cross-file call graph: [`call-graph.md`](call-graph.md)
 - Runtime graph: [`runtime-graph.md`](runtime-graph.md)
-- Dependency metrics: [`DEPENDENCY-SNAPSHOT.md`](DEPENDENCY-SNAPSHOT.md)
+- Dependency metrics, import matrix, and cycle-closing citations: [`DEPENDENCY-SNAPSHOT.md`](DEPENDENCY-SNAPSHOT.md)
 - Static operational signals: [`OPERATIONAL-SIGNALS.md`](OPERATIONAL-SIGNALS.md)
 - License inventory: [`licenses.json`](licenses.json)
 - Searchable explorer: [`atlas.html`](atlas.html)

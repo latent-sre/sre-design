@@ -5242,8 +5242,8 @@
           "evidenceClass": "STATIC_RESOLVED",
           "excerptHash": "sha256:c016bba4efc7c8cd154af2bba269c8ed763b481fc67f425ccf359c3fd80a03e5",
           "lines": {
-            "end": 632,
-            "start": 632
+            "end": 653,
+            "start": 653
           },
           "path": "tests/test_atlas_engine.py"
         }
@@ -17755,7 +17755,7 @@
         {
           "detector": "atlas.source.python-import",
           "evidenceClass": "STATIC_EXTRACTED",
-          "excerptHash": "sha256:6164efa8ac293fd717375182410539407182c82e17c93798b8bb1081d333abce",
+          "excerptHash": "sha256:2005f965e5e6e538c8c389788c75a3cc763714aaef60660c0af3d37a4e81c386",
           "lines": {
             "end": 9,
             "start": 9
@@ -66866,7 +66866,7 @@
     "configPath": ".sre/atlas.yaml",
     "projectLicense": "UNKNOWN",
     "repository": "sre-design",
-    "treeDigest": "sha256:bbceb741ae166265cbe7841336930a27fbbf904de1d21c9b37ef18ea03efa5a9"
+    "treeDigest": "sha256:4cfa92a61cdf40bad5284808acf9773c6c9bec50b3af7ac106eabd3da4e743e8"
   },
   "metrics": {
     "coupling": [
@@ -77370,7 +77370,7 @@
         {
           "detector": "atlas.source.python-import",
           "evidenceClass": "STATIC_EXTRACTED",
-          "excerptHash": "sha256:6164efa8ac293fd717375182410539407182c82e17c93798b8bb1081d333abce",
+          "excerptHash": "sha256:2005f965e5e6e538c8c389788c75a3cc763714aaef60660c0af3d37a4e81c386",
           "lines": {
             "end": 9,
             "start": 9

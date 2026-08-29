@@ -93,6 +93,27 @@ def test_python_graph_schema_and_drift_are_deterministic(tmp_path: Path):
     assert "manifest.json" in drift.changed
 
 
+def test_dependency_snapshot_emits_matrix_weights_and_cycle_citations(tmp_path: Path):
+    _write(tmp_path / "src" / "order.py", "import payment\nimport payment as pay\n")
+    _write(tmp_path / "src" / "payment.py", "import order\n")
+    _config(
+        tmp_path,
+        [{"name": "fixture", "roots": ["src"], "manifests": []}],
+    )
+
+    _, output = write_atlas(tmp_path)
+    report = (output / "DEPENDENCY-SNAPSHOT.md").read_text(encoding="utf-8")
+
+    assert "## Cross-package import matrix" in report
+    assert "## Highest-traffic cross-package imports" in report
+    assert "src/order.py:1" in report
+    assert "src/payment.py:1" in report
+    assert "Loose" not in report
+    assert "Tangled" not in report
+    assert "CRITICAL" not in report
+    assert "| `order` | `payment` | 2 |" in report
+
+
 @pytest.mark.parametrize("unsafe_root", ["../outside", r"C:\outside"])
 def test_boundary_rejects_parent_and_drive_paths(tmp_path: Path, unsafe_root: str):
     _config(

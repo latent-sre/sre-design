@@ -34,7 +34,7 @@ This avoids silently reusing a stale environment and does not require activation
 | `python -m ruff check src tests` | `VERIFIED`: passed | Full source/test lint |
 | Hash-verified `requirements.lock` install | `VERIFIED` in an isolated Python 3.13 environment | Locked artifact integrity and platform availability |
 | `pip-audit -r requirements.lock --no-deps` | `VERIFIED`: no known vulnerabilities found | Current locked-runtime advisory check |
-| Full pytest + coverage floor | `VERIFIED`: 873 passed, 2 capability skips; coverage 91.10% | Full repository regression and 90% floor |
+| Full pytest + coverage floor | `VERIFIED`: 903 passed, 2 capability skips; coverage 91.34% | Full repository regression and 90% floor |
 | Clean `sre-kb run … --to-stage publish` self-scan | `VERIFIED`: completed | End-to-end stage and output contract |
 
 The original `.venv` remains stale (Python 3.12.10, missing declared grammars/dev packages). An
@@ -180,7 +180,7 @@ for this atlas.
 - `.github/workflows/ci.yml:12-72` — declared CI Python and checks.
   [`MANIFEST_DECLARED`]
 - `Makefile:3-29` — declared developer operations. [`MANIFEST_DECLARED`]
-- Local 2026-07-30 Python 3.13.14 run — Ruff passed; 873 tests passed, 2 capability skips; 91.10%
+- Local 2026-08-29 Python 3.13.14 run — Ruff passed; 903 tests passed, 2 capability skips; 91.34%
   coverage. [`RUNTIME_OBSERVED`, development workstation only]
 - Local Node/npm version checks, `dotnet --info`, hash-verified lock install, and `pip-audit`
   — Node `v24.16.0`, npm `11.13.0`, .NET 8 runtime present with no SDK, lock install passed, and no

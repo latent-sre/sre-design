@@ -44,7 +44,25 @@ The built-in resolver matrix is deliberately finite:
 | CycloneDX JSON | component `bom-ref`, licenses, and `dependencies[].dependsOn` |
 | MSBuild conditions/imports/solution-only dependencies, Gradle executable build logic, reflection, dynamic imports | explicit unresolved/unknown until an evaluated build graph or runtime input exists |
 
-Never convert an unsupported row into a best-effort generic import regex.
+Never convert an unsupported row into a best-effort generic import regex. Do not run
+`grep`/`rg` import patterns as the graph; they are candidate discovery at most and remain
+`INFERRED`.
+
+## Package matrix, weights, and trees
+
+After the resolver-backed graph exists, emit these views from that graph — not from domain-folder
+heuristics:
+
+1. **Cross-package import matrix** — row depends on column; cells are production import counts.
+2. **Weighted hotspots** — highest-count cross-package edges, still unlabeled as severity.
+3. **Incoming and outgoing lists** — distinct neighbors plus import counts per package/group.
+4. **File-level trees** — only when a caller asks about one file or an SCC needs cycle-closing
+   citations (`path:line` from edge evidence).
+5. **Layer versus domain** — `api/`, `services/`, `pipeline/`, `render/`, and similar names are
+   layers unless an explicit domain map exists. Do not invent `order`/`payment` domains from
+   directory names.
+
+The generated `DEPENDENCY-SNAPSHOT.md` is the canonical matrix/weight/citation ledger.
 
 ## Direction
 

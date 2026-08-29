@@ -176,6 +176,102 @@ Evidence scope: resolver-backed production source edges only for coupling and cy
 1. **group** — `group:sre-kb:sre_kb.collectors` → `group:sre-kb:sre_kb.flow`
 2. **group** — `group:sre-kb:sre_kb.pipeline` → `group:sre-kb:sre_kb.publish` → `group:sre-kb:sre_kb.render` → `group:sre-kb:sre_kb.reporting` → `group:sre-kb:sre_kb.synth` → `group:sre-kb:sre_kb.validation`
 
+## Cross-package import matrix
+
+Row depends on column. Cell values are resolver-backed production import counts, not API calls
+and not a health grade. The matrix shows 14 of 30 packages (SCC members first, then highest import traffic); 16 lower-traffic package(s) remain in the incoming/outgoing list.
+
+| | `sre_kb.pipeline` | `sre_kb.collectors` | `sre_kb.synth` | `sre_kb.render` | `sre_kb.validation` | `sre_kb.reporting` | `sre_kb.publish` | `sre_kb.flow` | `sre_kb.cli` | `sre_kb.models` | `sre_kb.util` | `sre_kb.workspace` | `sre_kb.estate` | `sre_kb.config` |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `sre_kb.pipeline` | - | 36 | 19 | 11 | 16 | 8 | 1 | 0 | 0 | 7 | 6 | 5 | 0 | 4 |
+| `sre_kb.collectors` | 0 | - | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 33 | 24 | 0 | 0 | 0 |
+| `sre_kb.synth` | 0 | 7 | - | 3 | 0 | 0 | 0 | 0 | 0 | 5 | 3 | 0 | 0 | 1 |
+| `sre_kb.render` | 0 | 1 | 0 | - | 1 | 0 | 0 | 0 | 0 | 0 | 2 | 1 | 0 | 0 |
+| `sre_kb.validation` | 1 | 2 | 0 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
+| `sre_kb.reporting` | 0 | 0 | 0 | 1 | 0 | - | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
+| `sre_kb.publish` | 0 | 0 | 0 | 1 | 0 | 1 | - | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
+| `sre_kb.flow` | 0 | 1 | 0 | 0 | 0 | 0 | 0 | - | 0 | 1 | 1 | 0 | 0 | 0 |
+| `sre_kb.cli` | 22 | 5 | 1 | 10 | 2 | 3 | 2 | 0 | - | 0 | 0 | 15 | 1 | 2 |
+| `sre_kb.models` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0 |
+| `sre_kb.util` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| `sre_kb.workspace` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | - | 0 | 0 |
+| `sre_kb.estate` | 0 | 2 | 1 | 2 | 4 | 0 | 0 | 0 | 0 | 0 | 2 | 1 | - | 1 |
+| `sre_kb.config` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | - |
+
+## Highest-traffic cross-package imports
+
+| From | To | Import count |
+|---|---|---:|
+| `sre_kb.pipeline` | `sre_kb.collectors` | 36 |
+| `sre_kb.collectors` | `sre_kb.models` | 33 |
+| `sre_kb.collectors` | `sre_kb.util` | 24 |
+| `sre_kb.cli` | `sre_kb.pipeline` | 22 |
+| `sre_kb.pipeline` | `sre_kb.synth` | 19 |
+| `sre_kb.pipeline` | `sre_kb.validation` | 16 |
+| `sre_kb.cli` | `sre_kb.workspace` | 15 |
+| `sre_kb.pipeline` | `sre_kb.render` | 11 |
+| `sre_kb.cli` | `sre_kb.render` | 10 |
+| `sre_kb.pipeline` | `sre_kb.reporting` | 8 |
+| `sre_kb.synth` | `sre_kb.collectors` | 7 |
+| `sre_kb.pipeline` | `sre_kb.models` | 7 |
+| `sre_kb.pipeline` | `sre_kb.tiers` | 6 |
+| `sre_kb.pipeline` | `sre_kb.util` | 6 |
+| `sre_kb.cli` | `sre_kb.graduation` | 6 |
+
+Counts are edge weights. They do not assign severity or a refactoring mandate.
+
+## Incoming and outgoing by package
+
+- `sre_kb` — outgoing: _none_; incoming: `sre_kb.cli` (1), `sre_kb.publish` (1), `sre_kb.synth` (1)
+- `sre_kb.atlas` — outgoing: `sre_kb.parsing` (4), `sre_kb.collectors` (1); incoming: `sre_kb.cli` (4)
+- `sre_kb.cli` — outgoing: `sre_kb.pipeline` (22), `sre_kb.workspace` (15), `sre_kb.render` (10), `sre_kb.graduation` (6), `sre_kb.collectors` (5), `sre_kb.llm` (5), `sre_kb.atlas` (4), `sre_kb.reporting` (3), `sre_kb.config` (2), `sre_kb.publish` (2), `sre_kb.scan_plan` (2), `sre_kb.security` (2), `sre_kb.validation` (2), `sre_kb` (1), `sre_kb.drift` (1), `sre_kb.estate` (1), `sre_kb.eval` (1), `sre_kb.synth` (1); incoming: _none_
+- `sre_kb.clone` — outgoing: _none_; incoming: `sre_kb.estate` (1), `sre_kb.pipeline` (1)
+- `sre_kb.collectors` — outgoing: `sre_kb.models` (33), `sre_kb.util` (24), `sre_kb.signatures` (5), `sre_kb.parsing` (2), `sre_kb.tiers` (2), `sre_kb.flow` (1), `sre_kb.inventory_signatures` (1), `sre_kb.taxonomy` (1); incoming: `sre_kb.pipeline` (36), `sre_kb.synth` (7), `sre_kb.cli` (5), `sre_kb.estate` (2), `sre_kb.validation` (2), `sre_kb.atlas` (1), `sre_kb.flow` (1), `sre_kb.render` (1), `sre_kb.scan_plan` (1)
+- `sre_kb.config` — outgoing: _none_; incoming: `sre_kb.pipeline` (4), `sre_kb.cli` (2), `sre_kb.estate` (1), `sre_kb.graduation` (1), `sre_kb.publish` (1), `sre_kb.registry` (1), `sre_kb.reporting` (1), `sre_kb.scan_plan` (1), `sre_kb.synth` (1), `sre_kb.taxonomy` (1), `sre_kb.validation` (1)
+- `sre_kb.drift` — outgoing: _none_; incoming: `sre_kb.cli` (1)
+- `sre_kb.estate` — outgoing: `sre_kb.validation` (4), `sre_kb.collectors` (2), `sre_kb.render` (2), `sre_kb.util` (2), `sre_kb.clone` (1), `sre_kb.config` (1), `sre_kb.inventory_signatures` (1), `sre_kb.synth` (1), `sre_kb.tiers` (1), `sre_kb.workspace` (1); incoming: `sre_kb.cli` (1)
+- `sre_kb.eval` — outgoing: `sre_kb.pipeline` (1), `sre_kb.workspace` (1); incoming: `sre_kb.cli` (1)
+- `sre_kb.flow` — outgoing: `sre_kb.collectors` (1), `sre_kb.models` (1), `sre_kb.util` (1); incoming: `sre_kb.collectors` (1)
+- `sre_kb.graduation` — outgoing: `sre_kb.config` (1); incoming: `sre_kb.cli` (6), `sre_kb.pipeline` (2), `sre_kb.reporting` (2)
+- `sre_kb.inventory_signatures` — outgoing: _none_; incoming: `sre_kb.collectors` (1), `sre_kb.estate` (1), `sre_kb.scoring` (1), `sre_kb.synth` (1)
+- `sre_kb.llm` — outgoing: _none_; incoming: `sre_kb.cli` (5), `sre_kb.pipeline` (1)
+- `sre_kb.models` — outgoing: _none_; incoming: `sre_kb.collectors` (33), `sre_kb.pipeline` (7), `sre_kb.synth` (5), `sre_kb.flow` (1), `sre_kb.scoring` (1)
+- `sre_kb.parsing` — outgoing: _none_; incoming: `sre_kb.atlas` (4), `sre_kb.collectors` (2), `sre_kb.synth` (2)
+- `sre_kb.pipeline` — outgoing: `sre_kb.collectors` (36), `sre_kb.synth` (19), `sre_kb.validation` (16), `sre_kb.render` (11), `sre_kb.reporting` (8), `sre_kb.models` (7), `sre_kb.tiers` (6), `sre_kb.util` (6), `sre_kb.scoring` (5), `sre_kb.workspace` (5), `sre_kb.config` (4), `sre_kb.graduation` (2), `sre_kb.clone` (1), `sre_kb.llm` (1), `sre_kb.publish` (1), `sre_kb.signatures` (1); incoming: `sre_kb.cli` (22), `sre_kb.eval` (1), `sre_kb.scan_plan` (1), `sre_kb.validation` (1)
+- `sre_kb.publish` — outgoing: `sre_kb` (1), `sre_kb.config` (1), `sre_kb.registry` (1), `sre_kb.render` (1), `sre_kb.reporting` (1), `sre_kb.security` (1), `sre_kb.tiers` (1), `sre_kb.workspace` (1); incoming: `sre_kb.cli` (2), `sre_kb.pipeline` (1)
+- `sre_kb.registry` — outgoing: `sre_kb.config` (1); incoming: `sre_kb.publish` (1), `sre_kb.render` (1), `sre_kb.reporting` (1), `sre_kb.synth` (1)
+- `sre_kb.render` — outgoing: `sre_kb.util` (2), `sre_kb.collectors` (1), `sre_kb.registry` (1), `sre_kb.taxonomy` (1), `sre_kb.tiers` (1), `sre_kb.validation` (1), `sre_kb.workspace` (1); incoming: `sre_kb.pipeline` (11), `sre_kb.cli` (10), `sre_kb.synth` (3), `sre_kb.estate` (2), `sre_kb.publish` (1), `sre_kb.reporting` (1)
+- `sre_kb.reporting` — outgoing: `sre_kb.graduation` (2), `sre_kb.config` (1), `sre_kb.registry` (1), `sre_kb.render` (1), `sre_kb.tiers` (1); incoming: `sre_kb.pipeline` (8), `sre_kb.cli` (3), `sre_kb.publish` (1)
+- `sre_kb.scan_plan` — outgoing: `sre_kb.collectors` (1), `sre_kb.config` (1), `sre_kb.pipeline` (1); incoming: `sre_kb.cli` (2)
+- `sre_kb.scoring` — outgoing: `sre_kb.inventory_signatures` (1), `sre_kb.models` (1); incoming: `sre_kb.pipeline` (5), `sre_kb.synth` (4)
+- `sre_kb.security` — outgoing: _none_; incoming: `sre_kb.cli` (2), `sre_kb.publish` (1)
+- `sre_kb.signatures` — outgoing: _none_; incoming: `sre_kb.collectors` (5), `sre_kb.pipeline` (1), `sre_kb.synth` (1), `sre_kb.validation` (1)
+- `sre_kb.synth` — outgoing: `sre_kb.collectors` (7), `sre_kb.models` (5), `sre_kb.scoring` (4), `sre_kb.render` (3), `sre_kb.util` (3), `sre_kb.parsing` (2), `sre_kb` (1), `sre_kb.config` (1), `sre_kb.inventory_signatures` (1), `sre_kb.registry` (1), `sre_kb.signatures` (1), `sre_kb.tiers` (1); incoming: `sre_kb.pipeline` (19), `sre_kb.cli` (1), `sre_kb.estate` (1)
+- `sre_kb.taxonomy` — outgoing: `sre_kb.config` (1); incoming: `sre_kb.collectors` (1), `sre_kb.render` (1)
+- `sre_kb.tiers` — outgoing: _none_; incoming: `sre_kb.pipeline` (6), `sre_kb.collectors` (2), `sre_kb.estate` (1), `sre_kb.publish` (1), `sre_kb.render` (1), `sre_kb.reporting` (1), `sre_kb.synth` (1)
+- `sre_kb.util` — outgoing: _none_; incoming: `sre_kb.collectors` (24), `sre_kb.pipeline` (6), `sre_kb.synth` (3), `sre_kb.estate` (2), `sre_kb.render` (2), `sre_kb.flow` (1)
+- `sre_kb.validation` — outgoing: `sre_kb.collectors` (2), `sre_kb.config` (1), `sre_kb.pipeline` (1), `sre_kb.signatures` (1); incoming: `sre_kb.pipeline` (16), `sre_kb.estate` (4), `sre_kb.cli` (2), `sre_kb.render` (1)
+- `sre_kb.workspace` — outgoing: _none_; incoming: `sre_kb.cli` (15), `sre_kb.pipeline` (5), `sre_kb.estate` (1), `sre_kb.eval` (1), `sre_kb.publish` (1), `sre_kb.render` (1)
+
+## Cycle-closing imports
+
+1. `sre_kb.collectors` → `sre_kb.flow`
+  - `sre_kb.collectors` → `sre_kb.flow`: `src/sre_kb/collectors/__init__.py:36`
+  - `sre_kb.flow` → `sre_kb.collectors`: `src/sre_kb/flow/budget_check.py:6`
+2. `sre_kb.pipeline` → `sre_kb.publish` → `sre_kb.render` → `sre_kb.reporting` → `sre_kb.synth` → `sre_kb.validation`
+  - `sre_kb.pipeline` → `sre_kb.publish`: `src/sre_kb/pipeline/orchestrator.py:326`
+  - `sre_kb.pipeline` → `sre_kb.render`: `src/sre_kb/pipeline/autopilot.py:131`, `src/sre_kb/pipeline/autopilot.py:90`, `src/sre_kb/pipeline/alerts_draft.py:31`, `src/sre_kb/pipeline/worklist_run.py:216`, `src/sre_kb/pipeline/worklist_run.py:160`, `src/sre_kb/pipeline/worklist_run.py:178`, `src/sre_kb/pipeline/worklist_run.py:215`, `src/sre_kb/pipeline/worklist_run.py:256`, `src/sre_kb/pipeline/diagram_narration.py:20`, `src/sre_kb/pipeline/orchestrator.py:321`, `src/sre_kb/pipeline/autopilot.py:91`
+  - `sre_kb.pipeline` → `sre_kb.reporting`: `src/sre_kb/pipeline/worklist_run.py:218`, `src/sre_kb/pipeline/orchestrator.py:288`, `src/sre_kb/pipeline/orchestrator.py:26`, `src/sre_kb/pipeline/autopilot.py:92`, `src/sre_kb/pipeline/worklist_run.py:217`, `src/sre_kb/pipeline/runbooks_draft.py:28`, `src/sre_kb/pipeline/autopilot.py:93`, `src/sre_kb/pipeline/orchestrator.py:286`
+  - `sre_kb.pipeline` → `sre_kb.synth`: `src/sre_kb/pipeline/orchestrator.py:28`, `src/sre_kb/pipeline/runbooks_draft.py:31`, `src/sre_kb/pipeline/architecture.py:30`, `src/sre_kb/pipeline/orchestrator.py:287`, `src/sre_kb/pipeline/alerts_draft.py:33`, `src/sre_kb/pipeline/graduation_draft.py:23`, `src/sre_kb/pipeline/runbooks_draft.py:30`, `src/sre_kb/pipeline/architecture.py:29`, `src/sre_kb/pipeline/worklist_run.py:143`, `src/sre_kb/pipeline/worklist_run.py:161`, `src/sre_kb/pipeline/worklist_run.py:179`, `src/sre_kb/pipeline/worklist_run.py:200` (+7 more)
+  - `sre_kb.pipeline` → `sre_kb.validation`: `src/sre_kb/pipeline/orchestrator.py:43`, `src/sre_kb/pipeline/orchestrator.py:44`, `src/sre_kb/pipeline/orchestrator.py:32`, `src/sre_kb/pipeline/challenge_apply.py:10`, `src/sre_kb/pipeline/orchestrator.py:42`, `src/sre_kb/pipeline/confirm.py:332`, `src/sre_kb/pipeline/orchestrator.py:40`, `src/sre_kb/pipeline/gap_finder.py:27`, `src/sre_kb/pipeline/orchestrator.py:41`, `src/sre_kb/pipeline/confirm.py:331`, `src/sre_kb/pipeline/gap_finder.py:26`, `src/sre_kb/pipeline/orchestrator.py:39` (+4 more)
+  - `sre_kb.publish` → `sre_kb.render`: `src/sre_kb/publish/pr_builder.py:14`
+  - `sre_kb.publish` → `sre_kb.reporting`: `src/sre_kb/publish/pr_builder.py:262`
+  - `sre_kb.render` → `sre_kb.validation`: `src/sre_kb/render/project.py:31`
+  - `sre_kb.reporting` → `sre_kb.render`: `src/sre_kb/reporting/human_report.py:8`
+  - `sre_kb.synth` → `sre_kb.render`: `src/sre_kb/synth/scaffold.py:19`, `src/sre_kb/synth/scaffold.py:578`, `src/sre_kb/synth/scaffold.py:8`
+  - `sre_kb.validation` → `sre_kb.pipeline`: `src/sre_kb/validation/copilot_gap.py:16`
+
+
 ## Resolver blind spots
 
 | Unknown code | Count |

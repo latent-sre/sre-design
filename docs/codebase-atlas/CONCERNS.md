@@ -30,7 +30,7 @@ delay was supplied.
   backslashes/quoting while the prompt remains on stdin and `shell=False`.
 - Oracle tests use a cross-platform Python echo process instead of Unix `cat`.
 - UTF-8 generated artifacts are read explicitly as UTF-8.
-- Symlink safety tests are capability-aware; the full Windows gate is green with 873 passes, two
+- Symlink safety tests are capability-aware; the full Windows gate is green with 903 passes, two
   privilege-dependent skips, and 91.10% coverage.
 - README/operations guidance now gives a direct Python 3.13 PowerShell environment path, so a stale
   older `.venv` is not mistaken for product behavior.
@@ -125,7 +125,7 @@ Refresh the atlas when any of these change:
 - `pyproject.toml`, `THIRD_PARTY_NOTICES.md`, and `evidence/structural-search.cdx.json` — project
   license gap plus the reviewed direct structural-search license declarations.
   [`MANIFEST_DECLARED` / `STATIC_EXTRACTED`]
-- Local Python 3.13.14 verification and clean self-scan reports — portability fixes, 873 passing
+- Local Python 3.13.14 verification and clean self-scan reports — portability fixes, 903 passing
   tests, two capability skips, 91.10% coverage, artifact counts, and fixture-derived target identity.
   [`RUNTIME_OBSERVED` / `ENGINE_CONFIRMED`]
 - [`generated/atlas.json`](generated/atlas.json) and

@@ -482,6 +482,45 @@ def findings_narrative(
         raise typer.Exit(code=1)  # a narrative citing an artifact not in the run is a defect
 
 
+@app.command("human-report")
+def human_report(
+    run_id: str = typer.Option(None, "--run", help="Existing validated run to report."),
+    target: str = typer.Option(
+        None, "--target", help="Repository to scan safely before building the report."
+    ),
+    fmt: str = typer.Option("md", "--format", help="Output format: md | json"),
+    work_root: str = typer.Option(".work", "--work-root"),
+) -> None:
+    """Explain a validated run in five deepening, human-readable passes.
+
+    The deterministic passes cover purpose, execution flows, dependencies, resilience, and actions
+    while keeping repository evidence separate from current production health.
+    """
+    import json
+
+    from sre_kb.render import load_kb
+    from sre_kb.render.project import service_name
+    from sre_kb.reporting import build_human_report, collect_findings, render_human_report
+    from sre_kb.workspace import RunLayout
+
+    if fmt not in {"md", "json"}:
+        raise typer.BadParameter("must be md or json", param_hint="--format")
+    if (run_id is None) == (target is None):
+        raise typer.BadParameter("provide exactly one of --target or --run")
+    if target is not None:
+        from uuid import uuid4
+
+        from sre_kb.pipeline import run
+
+        run_id = f"human-report-{uuid4().hex}"
+        run(target, work_root=work_root, run_id=run_id, to_stage="validate")
+    selected_run = run_id or ""  # exclusivity check above guarantees a generated or supplied id
+    layout = RunLayout(Path(work_root), selected_run)
+    docs = load_kb(layout.root)
+    report = build_human_report(service_name(docs), selected_run, docs, collect_findings(docs))
+    typer.echo(json.dumps(report, indent=2) if fmt == "json" else render_human_report(report))
+
+
 @app.command("scan-worklist")
 def scan_worklist_cmd(
     run_id: str = typer.Option(..., "--run"),

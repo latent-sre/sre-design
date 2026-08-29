@@ -5,9 +5,9 @@
 | Field | Value |
 |---|---|
 | Repository | `sre-design` / Python package `sre-kb` |
-| Baseline Git HEAD | `bd567e7c0d9db7d63db1054a8dd0f772a85906f5` (the current atlas refresh is still an uncommitted working-tree change) |
-| Baseline commit date | 2026-07-30 |
-| Atlas date | 2026-07-30 |
+| Baseline Git HEAD | merge of call-graph/operational-signal work with `origin/main` `039e195` |
+| Baseline commit date | 2026-08-29 |
+| Atlas date | 2026-08-29 |
 | Scope | Explicit projects/roots in [`.sre/atlas.yaml`](../../.sre/atlas.yaml), plus reviewed docs and operational evidence |
 | Excluded | `.git/`, `.venv/`, `.work/`, caches, generated artifacts, and live systems |
 | Machine snapshot | [`generated/atlas.json`](generated/atlas.json), with bundled schema and file hashes |
@@ -38,6 +38,35 @@ bounded judgment tasks with an LLM/operator, and renders/publishes operational p
 | LLM/Agent Skill maintainer | [ARCHITECTURE.md](ARCHITECTURE.md#llm-and-engine-responsibilities) | `sre-codebase-cartographer` → `.github/skills/sre-codebase-atlas/` → `tests/test_skills.py` |
 | Anyone exploring interactively | [Generated HTML atlas](generated/atlas.html) | Filter nodes, edges, scopes, owners, and explicit unknowns offline |
 | SRE drafting a runbook | [Static operational signals](generated/OPERATIONAL-SIGNALS.md) | [Static call graph](generated/call-graph.md) -> [OPERATIONS.md](OPERATIONS.md) |
+
+### A two-minute, non-developer tour
+
+Think of `sre-kb` as an **evidence-to-operations assembly line**, not as a production service that
+handles customer traffic:
+
+1. **Read:** it reads a bounded checkout without running the target application's build.
+2. **Describe:** it records small facts such as “this route calls that dependency,” each tied to the
+   exact source lines that support it.
+3. **Check resilience:** it identifies protections it can prove are present and flags bounded gaps
+   such as a write without nearby idempotency, a message consumer without a dead-letter route, or a
+   retry without configured backoff.
+4. **Challenge:** schemas, provenance checks, safety checks, and an adversarial grounding pass decide
+   whether each generated artifact is verified, needs review, or rejected.
+5. **Explain:** it turns accepted artifacts into diagrams, plain-English flows, runbooks, alerts, and
+   a staged publication tree.
+
+Point the command directly at a checkout with `sre-kb human-report --target <repo>`. It safely scans
+the repository and performs five deterministic passes that go from system purpose to flows,
+dependencies and service destinations, resilience, and prioritized action. Use `--run <id>` to
+report an existing validated run, or `--format json` when another tool needs the same model.
+
+[`STATIC_EXTRACTED`: `src/sre_kb/pipeline/orchestrator.py:76-125,130-220`,
+`src/sre_kb/render/plain.py:1-93`, `src/sre_kb/reporting/human_report.py`]
+
+For a visual SRE view, go directly to the
+[resilience lens](ARCHITECTURE.md#resilience-lens-for-operators). It separates **a pattern found in
+code**, **a suspected or deterministic gap**, and **actual runtime proof** so an operator does not
+mistake static analysis for production health.
 
 ## System map
 

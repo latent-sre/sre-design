@@ -251,6 +251,8 @@ def _stage_pr_tree(stage: Path, layout: RunLayout, proj: Path, service: str, doc
     _claim_tree(produced, proj / "runbooks", Path("runbooks"))
     _claim_tree(produced, proj / "diagrams", Path("diagrams"))
     _claim_file(produced, proj / "catalog-info.yaml", Path("catalog-info.yaml"))
+    if (proj / "DEPENDENCIES.md").exists():
+        _claim_file(produced, proj / "DEPENDENCIES.md", Path("DEPENDENCIES.md"))
 
     review = stage / "_generated" / "REVIEW.md"
     review.parent.mkdir(parents=True, exist_ok=True)

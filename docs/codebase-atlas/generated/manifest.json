@@ -2,18 +2,18 @@
   "apiVersion": "sre.kb/atlas-render/v1alpha1",
   "files": {
     "CodebaseAtlas.schema.json": "sha256:22c404710d80e341ae388267a107bd44ba5a4b5dd466ad2c5f339641f9d47144",
-    "DEPENDENCY-SNAPSHOT.md": "sha256:d16812d7fc66865666e80309f4ae12a5cc4362a9e8ba28bdf4bdc6302633edfb",
+    "DEPENDENCY-SNAPSHOT.md": "sha256:684db7439b9015833ad201b2414927ab5d9bc38fda995eb8f04cc05991d1fca9",
     "OPERATIONAL-SIGNALS.md": "sha256:b2327987abe19c90058aa95272a81918675337799ed39e72ec00ca99c0845340",
-    "README.md": "sha256:5220091dc0d6406403e812006ad223f87b771f20b7f38c6d6c048812e2adda4a",
+    "README.md": "sha256:005f5780b0dc8b8c428c8a1b925c2f7391d2fdb81af6eedfebad286a48ef0025",
     "RuntimeEvidence.schema.json": "sha256:1ae2cf5c5a3eb52fcd6450740bdfcf37c4f218a8591cd5955ce7b6d2765c0fe5",
-    "atlas.html": "sha256:68e6748de6768e61d9d301f808efffc803cf2778ba089e74263630969253fbbc",
-    "atlas.json": "sha256:0b4af7d300b54dfd98bf207a1293c3f1d3a1621d3acf6be6f730591412302ad8",
-    "call-graph.md": "sha256:7a7e6298df05ebf684a1930e7d3179bbe3ad2e7fad29212233e89faba5661297",
-    "call-graph.mmd": "sha256:1b00830bbd57ad7c682e6f9ea24e26b112dbdfa36a303686ff500345374042ae",
+    "atlas.html": "sha256:e6784532ec20821da40887e4001e2a858d1f43928f1ff3ffad943cc083595eac",
+    "atlas.json": "sha256:190b59041f0601e5fcf77cc67a99b83cfcdcc8f10be3b6308715432c64221758",
+    "call-graph.md": "sha256:ec8398130852f8f63b1e5215f67f45954929f839bf441366c7447b6e9ad772ae",
+    "call-graph.mmd": "sha256:a97501b575ae9313136640269fb362ba3d827b379bf4645cff820576f6d4f148",
     "licenses.json": "sha256:1f1481b508fe73e4c7a2a39e0b924caa8ed49012dc7d8a96309f0f5014e2eff3",
     "runtime-graph.md": "sha256:8b9f040846e720be88a47ef8fd4c54253a58f0c8ed6ec3fb6a35fee5780f5810",
     "runtime-graph.mmd": "sha256:b9ae3527ec59f284337308be20279cdac7ecc0b26e9023da83c219305f002576",
-    "source-graph.md": "sha256:8d4fac69f441e5100219c3d4b251478568eeb50c4e13271d92bb2db45b264964",
-    "source-graph.mmd": "sha256:37e14696aeaffe74d1df1f75a0b014c5f20a5232d5d21f5db90dce5a648ed3a2"
+    "source-graph.md": "sha256:9e5af6cdbe74bd9903160ad1699fefa291dc9705df6205f4768d8f964b1829cf",
+    "source-graph.mmd": "sha256:d365a7e908debf3af5c20567e8b26b5881894bad60485b2da36d9931fe949b32"
   }
 }

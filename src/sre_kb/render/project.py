@@ -46,7 +46,8 @@ def service_name(docs: list[dict]) -> str:
     return "service"
 
 
-def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
+def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict],
+                    target_root: Path | None = None) -> None:
     stem = DIAGRAM_FILE_STEM["Flow"].format(doc["metadata"]["name"])
     name = doc["metadata"]["name"]
     src = mermaid_sequence(doc, known_targets=known_http_clients(docs))
@@ -56,14 +57,17 @@ def _render_diagram(doc: dict, proj: Path, flows: dict[str, dict], docs: list[di
     )
 
 
-def _render_runbook(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
+def _render_runbook(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict],
+                    target_root: Path | None = None) -> None:
     related = flows.get(doc["spec"].get("relatedFlow"))
     (proj / "runbooks" / f"{doc['metadata']['name']}.md").write_text(
-        runbook_markdown(doc, related, known_targets=known_http_clients(docs)), encoding="utf-8"
+        runbook_markdown(doc, related, known_targets=known_http_clients(docs),
+                         target_root=target_root), encoding="utf-8"
     )
 
 
-def _render_topology(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
+def _render_topology(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict],
+                     target_root: Path | None = None) -> None:
     stem = DIAGRAM_FILE_STEM["Topology"].format(doc["metadata"]["name"])
     name = doc["metadata"]["name"]
     tiers, lossy = topology_overlays(doc, docs)
@@ -74,7 +78,8 @@ def _render_topology(doc: dict, proj: Path, flows: dict[str, dict], docs: list[d
     )
 
 
-def _render_architecture(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict]) -> None:
+def _render_architecture(doc: dict, proj: Path, flows: dict[str, dict], docs: list[dict],
+                         target_root: Path | None = None) -> None:
     stem = DIAGRAM_FILE_STEM["Architecture"].format(doc["metadata"]["name"])
     name = doc["metadata"]["name"]
     src = mermaid_architecture(doc)
@@ -91,7 +96,13 @@ _PROJECTION_RENDERERS = {"diagram": _render_diagram, "runbook": _render_runbook,
                          "topology": _render_topology, "architecture": _render_architecture}
 
 
-def render_projections(layout: RunLayout, docs: list[dict] | None = None) -> Path:
+def render_projections(layout: RunLayout, docs: list[dict] | None = None,
+                       target_root: Path | None = None) -> Path:
+    """`target_root` (the scanned repo, when the caller still has it) lets the runbook
+    projection embed hash-checked verbatim code excerpts; without it every projection
+    renders identically minus the excerpts."""
+    from sre_kb.render.depmap import dependency_map_markdown
+
     docs = docs if docs is not None else load_kb(layout.root)
     proj = layout.root / "projections"
     (proj / ".github").mkdir(parents=True, exist_ok=True)
@@ -108,10 +119,13 @@ def render_projections(layout: RunLayout, docs: list[dict] | None = None) -> Pat
     (proj / "catalog-info.yaml").write_text(
         yaml.safe_dump(catalog_info(service, docs), sort_keys=False), encoding="utf-8"
     )
+    (proj / "DEPENDENCIES.md").write_text(
+        dependency_map_markdown(service, docs), encoding="utf-8"
+    )
 
     # Per-kind projections, dispatched by the kind's registry-declared renderer.
     for d in docs:
         handler = _PROJECTION_RENDERERS.get(renderer_for(d.get("kind")))
         if handler:
-            handler(d, proj, flows, docs)
+            handler(d, proj, flows, docs, target_root)
     return proj

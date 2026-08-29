@@ -4,6 +4,10 @@
   "artifacts": [
     {"kind": "Flow", "name": "open-account"},
     {"kind": "Flow", "name": "close-account"},
+    {"kind": "Alert", "name": "open-account-dependency-failures"},
+    {"kind": "Alert", "name": "close-account-dependency-failures"},
+    {"kind": "Runbook", "name": "open-account-dependency-failures"},
+    {"kind": "Runbook", "name": "close-account-dependency-failures"},
     {"kind": "Dependency", "name": "accounts-db"},
     {"kind": "BlastRadius", "name": "account-repository"},
     {"kind": "TechStack", "name": "account-service"},

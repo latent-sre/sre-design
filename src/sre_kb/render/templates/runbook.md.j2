@@ -21,6 +21,29 @@
 {% for r in remediation %}1. {{ r | inline }}
 {% else %}1. (none)
 {% endfor %}
+{%- if plain_steps %}
+
+## What this flow does (plain English)
+
+{% for line in plain_steps %}{{ line }}
+{% endfor %}
+{%- endif %}
+{%- if excerpts %}
+
+## The code this runbook points at
+
+The exact lines the knowledge base cites, verbatim from the scanned commit (shown only
+while the file still matches the citation hash). You do not need to change them at 3am —
+they tell you what the service will and will not do on its own.
+
+{% for x in excerpts %}**`{{ x.header | inline }}`**
+
+{{ x.fence }}{{ x.lang }}
+{{ x.code }}
+{{ x.fence }}
+
+{% endfor %}
+{%- endif %}
 {%- if flow_diagram %}
 
 ## Flow

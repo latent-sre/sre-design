@@ -12,6 +12,18 @@
 The coupling concern is not assigned an incident severity: no build failure, runtime fault, or change
 delay was supplied.
 
+### Resilience interpretation risks
+
+| Risk when using the atlas for operations | Guardrail in this atlas |
+|---|---|
+| Treating a detected annotation as proof that protection works under load | Presence, parameter completeness, runtime behavior, and operator intent are reported as separate evidence scopes |
+| Treating a static absence as exhaustive | Each gap names its checked scope; dynamic wiring, platform policy, and out-of-repository controls remain unknown |
+| Treating a clean scan as a health check | The operator view explicitly redirects current-health questions to telemetry, deployment state, and SLO evidence |
+| Auto-acting on model judgment | Judgment-only gaps remain `needs-review`; deterministic confirmation is additive and the runtime gates can still downgrade or reject artifacts |
+
+[`STATIC_EXTRACTED`: `src/sre_kb/collectors/llm/gap_finder.py:58-83`,
+`src/sre_kb/pipeline/orchestrator.py:94-110,171-220`]
+
 ## Resolved during this refresh
 
 - Windows subprocess commands no longer pass through POSIX `shlex`; native command lines preserve

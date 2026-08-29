@@ -60,6 +60,28 @@ def test_alert_and_runbook_from_swallowed_failure(result):
     assert any(k == "Runbook" for (k, _) in docs)
 
 
+def test_dependency_failure_alert_and_runbook_per_flow(result):
+    docs = _load(result.root)
+    alert = docs[("Alert", "create-order-dependency-failures")]
+    assert alert["status"] == "needs-review" and alert["spec"]["class"] == "cause"
+    assert alert["unverifiedAgainstLive"] is True
+    # Route-scoped 5xx signal in both configured backends; suspects named in plain English.
+    assert 'uri="/api/v1/orders"' in alert["spec"]["expr"]["prometheus"]
+    assert "status>=500" in alert["spec"]["expr"]["splunk"]["search"]
+    assert "inventory:" in alert["spec"]["rationale"]
+    assert "order-repository:" in alert["spec"]["rationale"]
+    assert "cannot attribute" in alert["spec"]["rationale"]
+
+    runbook = docs[("Runbook", "create-order-dependency-failures")]
+    steps = [d["step"] for d in runbook["spec"]["diagnosis"]]
+    # One diagnosis step per suspect dependency, in flow order, in plain English —
+    # the swallowed publish step is NOT a suspect here (it has its own alert).
+    assert steps[0].startswith("Check inventory:") and "timeout" in steps[0]
+    assert steps[1].startswith("Check order-repository:") and "database is unreachable" in steps[1]
+    assert len(steps) == 2
+    assert runbook["spec"]["relatedFlow"] == "create-order"
+
+
 def test_burn_rate_alert_from_slo_catalog(result):
     docs = _load(result.root)
     burn = docs[("Alert", "create-order-latency-burn-rate")]

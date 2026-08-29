@@ -8,9 +8,11 @@ from sre_kb.models.facts import FactSet
 from sre_kb.render.alerts import (
     BURN_WINDOWS,
     BurnRateIntent,
+    DependencyFailureIntent,
     LogPatternIntent,
     effective_severity,
     render_burn_rate,
+    render_dependency_failure,
     render_log_pattern,
     rendered_targets,
 )
@@ -566,6 +568,90 @@ def scaffold(fs: FactSet, ctx: ScanContext) -> list[dict]:
         }, [sw.evidence], "needs-review", confidence(Signal.INFERRED), service,
             cross_refs=[{"kind": "Alert", "name": a_name, "relation": "covers"},
                         {"kind": "Flow", "name": for_flow, "relation": "covers"}]))
+
+    # --- Alert + Runbook, one per flow whose dependency failures surface as HTTP 5xx ---
+    # The cause-class complement to the burn rate (which needs an SLO): timeouts, open
+    # circuits, and unreachable datastores all surface as server errors on the flow's own
+    # route — one honest route-scoped signal. A 5xx count can't attribute WHICH dependency
+    # failed, so the alert never pretends to: the suspects are enumerated in plain English
+    # in the rationale and walked one-by-one in the runbook's diagnosis (3am mode).
+    from sre_kb.render.plain import mode_phrase, surfaced_phrase
+
+    for ff in flows:
+        steps, sinks = ff.attrs["steps"], ff.attrs.get("sinks", [])
+        paired = sinks if len(sinks) == len(steps) else [None] * len(steps)
+        suspects: list[tuple[str, dict, list[dict]]] = []  # (target label, step, http modes)
+        for step, sink in zip(steps, paired):
+            http_modes = [fm for fm in step.get("failureModes", [])
+                          if str(fm.get("surfacedAs", "")).startswith("http-")]
+            if http_modes:
+                target = str(sink.get("target")) if isinstance(sink, dict) else step["name"]
+                suspects.append((target, step, http_modes))
+        if not suspects:
+            continue
+        fname = ff.attrs["name"]
+        a_name = f"{slug(fname)}-dependency-failures"
+        route = (ff.attrs.get("trigger") or {}).get("path")
+        method = (ff.attrs.get("trigger") or {}).get("method", "")
+        dep_expr = render_dependency_failure(DependencyFailureIntent(service, route), alert_tools)
+        suspect_modes = [
+            (target, "; ".join(
+                f"{mode_phrase(fm.get('mode'))} — {surfaced_phrase(fm.get('surfacedAs'))}"
+                for fm in http_modes
+            ))
+            for target, _step, http_modes in suspects
+        ]
+        suspect_phrases = [f"{target}: {modes}" for target, modes in suspect_modes]
+        dep_ev = [ff.evidence] + [
+            ctx.evidence(ff.attrs["path"], s["line"], s["line"], "java_spring.flow_builder")
+            for _t, s, _m in suspects if s.get("line")
+        ]
+        docs.append(_doc("Alert", a_name, {
+            "alertType": "threshold",
+            "sloRef": None,
+            "signalSource": "metric",
+            "severity": effective_severity("medium", floor_tier),
+            "forFlow": fname,
+            "logFormatRef": None,
+            "expr": dep_expr,
+            "rationale": (
+                f"Dependency failures on this flow surface as server errors on its route. "
+                f"Suspects (from code): {' | '.join(suspect_phrases)}. The signal cannot "
+                f"attribute which dependency failed — the runbook walks them in order. "
+                f"Fires on any 5xx over 5m; tune to this route's traffic (needs-review)."
+            ),
+            "class": "cause",
+            "signal": {
+                "type": "metric",
+                "route": route,
+                "metric": "http_server_requests_seconds_count",
+                "description": "server-error (5xx) responses on the flow's route",
+            },
+            "renderTargets": rendered_targets(dep_expr),
+        }, dep_ev, "needs-review", confidence(Signal.INFERRED), service,
+            cross_refs=[{"kind": "Flow", "name": fname, "relation": "alerts-on"}],
+            unverified_against_live=True))
+        docs.append(_doc("Runbook", a_name, {
+            "banner": "GENERATED — verify before executing",
+            "trigger": {"alertRef": a_name},
+            "symptoms": [
+                f"HTTP 5xx responses on {method} {route}".strip() if route
+                else f"HTTP 5xx responses from the {fname} flow",
+                "callers report errors or slow responses for this flow",
+            ],
+            "diagnosis": [
+                {"step": f"Check {target}: {modes}"} for target, modes in suspect_modes
+            ],
+            "remediation": [
+                "Verify each suspect dependency's health and service binding, in order",
+                "An open circuit breaker re-closes on its own once the downstream recovers",
+                "Escalate to the service owner if no suspect is confirmed",
+            ],
+            "escalation": "service owner (needs-review)",
+            "relatedFlow": fname,
+        }, dep_ev, "needs-review", confidence(Signal.INFERRED), service,
+            cross_refs=[{"kind": "Alert", "name": a_name, "relation": "covers"},
+                        {"kind": "Flow", "name": fname, "relation": "covers"}]))
 
     # --- Alert (SLO burn-rate, when a full objective exists) ---
     # The burn-rate signal must match the SLI the SLO names (latency -> histogram buckets, else

@@ -61,7 +61,10 @@ Implemented:
   ResiliencyPattern, Observability, SloSli, ReadinessScore (PRR grade), TechStack, Criticality,
   ScheduledJob, Dashboard, ResiliencyGap, Architecture, Deployment, Dependency, Interface,
   DataStore, ConfigManagement.
-- **Render**: Mermaid sequence + topology diagrams, Copilot reliability guardrails, runbooks.
+- **Render**: Mermaid sequence + topology diagrams, Copilot reliability guardrails, runbooks
+  (with a plain-English flow narration and hash-checked verbatim code excerpts for
+  non-developer responders), and per-service upstream/downstream dependency maps
+  (`DEPENDENCIES.md`; estate runs add the cross-repo `DEPENDENCY-MAP.md`).
 - **Publish**: Backstage per-service PR tree + REVIEW.md + FINDINGS.md; SCM-neutral Forge.
   `--dry-run` stages locally; `--no-dry-run` opens a live PR via git + GitHub REST (`GITHUB_TOKEN`).
 - **Findings** (`sre-kb findings`) — ranked, evidence-linked risk digest (CI-gateable).

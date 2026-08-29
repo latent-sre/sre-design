@@ -155,11 +155,15 @@ def _run_draft_alerts(layout: RunLayout, provider, target: Path) -> dict:
 def _run_draft_runbooks(layout: RunLayout, provider, target: Path) -> dict:
     """Ask for runbook drafts over the run's uncovered Alerts; the ingest
     (`sre-kb generate-runbooks`) grounds every citation closed-world against the run."""
+    from sre_kb.collectors.base import ScanContext
     from sre_kb.pipeline.runbooks_draft import PROPOSALS_REL
     from sre_kb.render import load_kb
     from sre_kb.synth.draft_prompts import build_runbook_prompt
 
-    data = extract_json_object(provider(build_runbook_prompt(load_kb(layout.root))))
+    ctx = ScanContext(root=target, repo=f"file://{target.name}")
+    data = extract_json_object(
+        provider(build_runbook_prompt(load_kb(layout.root), ctx=ctx))
+    )
     if data is None:
         return {"task": "draft-runbooks", "status": "deferred",
                 "note": "unparseable reply — task left to the manual loop"}

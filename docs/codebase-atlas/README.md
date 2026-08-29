@@ -5,9 +5,9 @@
 | Field | Value |
 |---|---|
 | Repository | `sre-design` / Python package `sre-kb` |
-| Baseline commit | `1713dc5f64d293c0e3b8a4bccf56809eecdd8406` |
-| Baseline commit date | 2026-08-05 |
-| Atlas date | 2026-08-13 |
+| Baseline Git HEAD | `00fda28` plus the current `deps`-matrix atlas refresh |
+| Baseline commit date | 2026-08-29 |
+| Atlas date | 2026-08-29 |
 | Scope | Explicit projects/roots in [`.sre/atlas.yaml`](../../.sre/atlas.yaml), plus reviewed docs and operational evidence |
 | Excluded | `.git/`, `.venv/`, `.work/`, caches, generated artifacts, and live systems |
 | Machine snapshot | [`generated/atlas.json`](generated/atlas.json), with bundled schema and file hashes |
@@ -37,6 +37,7 @@ bounded judgment tasks with an LLM/operator, and renders/publishes operational p
 | Operator diagnosing a run | [OPERATIONS.md](OPERATIONS.md) | [ARCHITECTURE.md](ARCHITECTURE.md#main-execution-path) → [CONCERNS.md](CONCERNS.md) |
 | LLM/Agent Skill maintainer | [ARCHITECTURE.md](ARCHITECTURE.md#llm-and-engine-responsibilities) | `sre-codebase-cartographer` → `.github/skills/sre-codebase-atlas/` → `tests/test_skills.py` |
 | Anyone exploring interactively | [Generated HTML atlas](generated/atlas.html) | Filter nodes, edges, scopes, owners, and explicit unknowns offline |
+| SRE drafting a runbook | [Static operational signals](generated/OPERATIONAL-SIGNALS.md) | [Static call graph](generated/call-graph.md) -> [OPERATIONS.md](OPERATIONS.md) |
 
 ### A two-minute, non-developer tour
 
@@ -113,8 +114,9 @@ are `RUNTIME_OBSERVED`. No deployed service or production behavior was observed.
 - Skills and agent instructions now consistently use the LLM-first, engine-enhances contract. The
   provider and orchestrator runtime still gate, reject, or downgrade artifacts, so instruction and
   executable trust boundaries remain intentionally distinct in this atlas.
-- Project license terms and dependency license assertions remain unknown until maintainers choose a
-  project license and import a reviewed SBOM/license source.
+- Project license terms remain unknown. The structural-search additions have reviewed MIT notices
+  and a scoped CycloneDX overlay; dependency identities outside that reviewed scope may still have
+  unknown license assertions.
 
 ## Atlas pages
 

@@ -41,9 +41,10 @@ class ProjectConfig(_Strict):
     name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
     roots: list[str] = Field(min_length=1)
     testRoots: list[str] = Field(default_factory=list)
+    operationalRoots: list[str] = Field(default_factory=list)
     manifests: list[str] = Field(default_factory=list)
 
-    @field_validator("roots", "testRoots", "manifests")
+    @field_validator("roots", "testRoots", "operationalRoots", "manifests")
     @classmethod
     def relative_paths_only(cls, values: list[str]) -> list[str]:
         for value in values:

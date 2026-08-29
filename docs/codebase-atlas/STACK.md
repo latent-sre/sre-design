@@ -10,7 +10,8 @@
 | Data contracts | Pydantic + JSON Schema | direct dependencies `>=2.6`, `>=4.21` | Fact/artifact models and structural validation |
 | Serialization/config | PyYAML + pydantic-settings | direct dependencies `>=6.0`, `>=2.14.2` | YAML KB/config loading |
 | Rendering | Jinja2 + Mermaid text | Jinja2 `>=3.1`; Mermaid is emitted text, not a Python package | Markdown, runbooks, diagrams, and projections |
-| Static parsing | tree-sitter plus six grammar packages | each declared `>=0.23` | Java, C#, Python, JavaScript, TypeScript/TSX, and Go source models |
+| Static parsing | tree-sitter plus nine grammar packages | code grammars `>=0.23`; Bash `>=0.25`, SQL `>=0.3`, YAML `>=0.7` | Source models plus Bash/SQL/YAML operational queries |
+| Structural search | `ast-grep-py` | direct dependency `>=0.45` | Read-only in-process structural matching; no CLI, daemon, target grammar registration, or rewrites |
 | Codebase atlas | Pydantic model + stdlib AST/XML/TOML/JSON + tree-sitter | `sre.kb/atlas/v1alpha1` | Versioned evidence graph, metrics, overlays, drift gate, and offline explorer |
 
 All version values above are declarations, not claims about the active environment.
@@ -23,7 +24,9 @@ The direct runtime dependency groups are:
 - schema/model: `jsonschema`, `pydantic`, `pydantic-settings`;
 - interface/config/render: `typer`, `pyyaml`, `jinja2`;
 - syntax extraction: `tree-sitter`, `tree-sitter-java`, `tree-sitter-c-sharp`,
-  `tree-sitter-python`, `tree-sitter-javascript`, `tree-sitter-typescript`, `tree-sitter-go`.
+  `tree-sitter-python`, `tree-sitter-javascript`, `tree-sitter-typescript`, `tree-sitter-go`,
+  `tree-sitter-bash`, `tree-sitter-sql`, `tree-sitter-yaml`;
+- structural discovery: `ast-grep-py`.
 
 The development group declares `pytest`, `pytest-cov`, `hypothesis`, and `ruff`.
 [`MANIFEST_DECLARED`: `pyproject.toml:13-31`]

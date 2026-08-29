@@ -9,6 +9,7 @@ from sre_kb.atlas.model import (
     AtlasEdge,
     AtlasEvidence,
     AtlasNode,
+    AtlasSignal,
     AtlasUnknown,
     CouplingMetric,
     CycleMetric,
@@ -25,6 +26,7 @@ class Graph:
     def __init__(self) -> None:
         self.nodes: dict[str, AtlasNode] = {}
         self.edges: dict[tuple[str, str, str, str, str], AtlasEdge] = {}
+        self.signals: dict[str, AtlasSignal] = {}
         self.unknowns: dict[tuple[str, str | None, str | None], AtlasUnknown] = {}
 
     def add_node(self, node: AtlasNode) -> AtlasNode:
@@ -97,6 +99,9 @@ class Graph:
             return
         existing.evidence = _merge_evidence(existing.evidence, unknown.evidence)
 
+    def add_signal(self, signal: AtlasSignal) -> None:
+        self.signals.setdefault(signal.id, signal)
+
 
 def _merge_evidence(
     left: list[AtlasEvidence],
@@ -130,9 +135,14 @@ def coupling_and_cycles(
     *,
     scope: str = "source",
     granularity: str = "module",
+    kinds: frozenset[str] = frozenset({"imports"}),
 ) -> tuple[list[CouplingMetric], list[CycleMetric]]:
-    """Compute Ca, Ce, instability, and non-trivial SCCs over one explicitly named scope."""
-    selected = [edge for edge in edges if edge.scope == scope and not edge.unresolved]
+    """Compute metrics over one explicitly named evidence scope and relationship kind."""
+    selected = [
+        edge
+        for edge in edges
+        if edge.scope == scope and edge.kind in kinds and not edge.unresolved
+    ]
     node_by_id = {node.id: node for node in nodes}
 
     def metric_node(node_id: str) -> str:

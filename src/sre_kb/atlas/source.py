@@ -1,7 +1,9 @@
-"""Language-aware source dependency resolvers.
+"""Language-aware source, call, and static operational-evidence resolvers.
 
 Python uses the standard AST. Java, C#, JavaScript, TypeScript/TSX, and Go use the same tree-sitter
-grammars as the deterministic collectors. Dynamic loading remains explicit unknown evidence.
+grammars as the deterministic collectors. Bash, SQL, and YAML use MIT grammar wheels; Dockerfiles
+use a narrow instruction parser because the available MIT grammar wheel does not support Windows.
+Dynamic loading and ambiguous call targets remain explicit unknown evidence.
 """
 
 from __future__ import annotations
@@ -23,10 +25,12 @@ from sre_kb.atlas.config import (
     resolve_local_path,
 )
 from sre_kb.atlas.evidence import EvidenceStore, MAX_ATLAS_FILE_BYTES
-from sre_kb.atlas.graph import Graph
+from sre_kb.atlas.graph import Graph, stable_id
 from sre_kb.atlas.manifests import ManifestIndex
-from sre_kb.atlas.model import AtlasNode, AtlasUnknown, EvidenceClass, NodeType
+from sre_kb.atlas.model import AtlasNode, AtlasSignal, AtlasUnknown, EvidenceClass, NodeType
 from sre_kb.parsing.code_model import syntax_tree
+from sre_kb.parsing.operational import find_operational_signals, language_for_path
+from sre_kb.parsing.structural import StructuralQueryError
 
 _LANGUAGE_BY_SUFFIX = {
     ".py": "python",
@@ -77,6 +81,13 @@ def collect_source(
         manifests,
     )
     _resolve_go(by_language.get("go", []), store, graph, manifests)
+    # Import here to avoid a module-initialization cycle: the call resolver reuses SourceRecord and
+    # the path-resolution helpers below, but collect_source runs only after this module is loaded.
+    from sre_kb.atlas.calls import resolve_cross_file_calls
+
+    resolve_cross_file_calls(records, store, graph, manifests)
+    operational = discover_operational(root, config, store, graph, records)
+    _collect_operational_signals([*records, *operational], store, graph)
     return records
 
 
@@ -154,6 +165,159 @@ def discover_source(
                         evidence=[evidence],
                     )
     return [records[key] for key in sorted(records)]
+
+
+def discover_operational(
+    root: Path,
+    config: AtlasConfig,
+    store: EvidenceStore,
+    graph: Graph,
+    source_records: list[SourceRecord],
+) -> list[SourceRecord]:
+    """Discover explicitly rooted operational files without treating them as runtime evidence."""
+    claimed = {record.relative for record in source_records}
+    records: dict[str, SourceRecord] = {}
+    for project in config.projects:
+        for operational_root in project.operationalRoots:
+            absolute = resolve_local_path(root, operational_root, must_exist=True)
+            if not absolute.is_dir():
+                raise AtlasConfigError(
+                    f"configured operational root is not a directory: {operational_root}"
+                )
+            for dirpath, dirnames, filenames in absolute.walk():
+                dirnames[:] = [
+                    name
+                    for name in dirnames
+                    if not is_excluded(
+                        (dirpath / name).relative_to(root).as_posix(),
+                        config.exclude,
+                    )
+                ]
+                for filename in sorted(filenames):
+                    path = dirpath / filename
+                    relative = path.relative_to(root).as_posix()
+                    if (
+                        relative in claimed
+                        or relative in records
+                        or is_excluded(relative, config.exclude)
+                        or path.is_symlink()
+                        or not path.is_file()
+                        or path.stat().st_size > MAX_ATLAS_FILE_BYTES
+                    ):
+                        continue
+                    language = language_for_path(path)
+                    if language is None:
+                        continue
+                    node_id = f"operational:{project.name}:{relative}"
+                    evidence = store.evidence(
+                        relative,
+                        1,
+                        1,
+                        f"atlas.operational.{language}",
+                        EvidenceClass.static_extracted,
+                    )
+                    records[relative] = SourceRecord(
+                        project=project.name,
+                        relative=relative,
+                        source_root=operational_root,
+                        is_test=False,
+                        language=language,
+                        node_id=node_id,
+                    )
+                    graph.add_node(
+                        AtlasNode(
+                            id=node_id,
+                            type=NodeType.operational_file,
+                            name=path.name,
+                            project=project.name,
+                            path=relative,
+                            language=language,
+                            group="operational",
+                            evidence=[evidence],
+                        )
+                    )
+                    graph.add_edge(
+                        f"project:{project.name}",
+                        node_id,
+                        kind="contains",
+                        scope="structure",
+                        resolver="atlas:operational-scope",
+                        evidence=[evidence],
+                    )
+    return [records[key] for key in sorted(records)]
+
+
+def _collect_operational_signals(
+    records: list[SourceRecord],
+    store: EvidenceStore,
+    graph: Graph,
+) -> None:
+    for record in records:
+        if record.is_test:
+            # Test roots are source evidence, not operational discovery for runbook authors.
+            continue
+        try:
+            signals = find_operational_signals(
+                record.language,
+                store.text(record.relative),
+            )
+        except (RecursionError, StructuralQueryError, ValueError) as exc:
+            graph.add_unknown(
+                AtlasUnknown(
+                    code=f"resolver.{record.language}-operational-parse",
+                    message=(
+                        f"Static operational extraction could not parse "
+                        f"{record.relative}: {str(exc)[:160]}"
+                    ),
+                    project=record.project,
+                    path=record.relative,
+                    neededEvidence="Correct the syntax or add a compatible bounded parser.",
+                    evidence=[
+                        store.evidence(
+                            record.relative,
+                            1,
+                            1,
+                            f"atlas.operational.{record.language}",
+                            EvidenceClass.unknown,
+                        )
+                    ],
+                )
+            )
+            continue
+        node = graph.nodes[record.node_id]
+        signal_ids: list[str] = []
+        for signal in signals:
+            evidence = store.evidence(
+                record.relative,
+                signal.start_line,
+                signal.end_line,
+                f"atlas.operational.{record.language}.{signal.category}",
+                EvidenceClass.static_extracted,
+            )
+            signal_id = stable_id(
+                "signal",
+                record.relative,
+                signal.category,
+                str(signal.start_line),
+                str(signal.end_line),
+                signal.text,
+            )
+            graph.add_signal(
+                AtlasSignal(
+                    id=signal_id,
+                    node=record.node_id,
+                    category=signal.category,
+                    summary=signal.summary,
+                    language=record.language,
+                    path=record.relative,
+                    text=signal.text[:1_000],
+                    annotations=signal.annotations or {},
+                    evidence=evidence,
+                )
+            )
+            signal_ids.append(signal_id)
+        if signal_ids:
+            node.annotations["operationalSignals"] = sorted(signal_ids)
 
 
 def _default_group(project: ProjectConfig, source_root: str, relative: str) -> str:

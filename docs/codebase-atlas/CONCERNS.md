@@ -4,9 +4,9 @@
 
 | Concern | Consequence | Evidence | Practical next step |
 |---|---|---|---|
-| Project/dependency license terms are not authoritative | Distribution/reuse review lacks a legal answer | Generated identity inventory exists, but no root `LICENSE*`, `project.license`, or reviewed SBOM license assertion | Maintainers choose the project license and import/review a dependency SBOM/license source |
+| Project license and dependency licenses outside the structural-search scope are not authoritative | Distribution/reuse review is incomplete beyond the reviewed additions | No root `LICENSE*` or `project.license`; the scoped SBOM and notices cover only four direct MIT structural-search dependencies | Maintainers choose the project license and expand the reviewed SBOM/license inventory before distribution |
 | No configured CODEOWNERS candidate exists | Ownership and reviewer overlays cannot name accountable teams | `overlay.codeowners-missing` in the generated atlas | Add a reviewed CODEOWNERS file; do not invent a team handle |
-| Two package-level dependency SCCs cross intended subsystem boundaries | Package extraction/ownership changes can have broad coordination cost | 138-module / 439-edge AST import analysis; see [DEPENDENCIES.md](DEPENDENCIES.md#cycles) | Track the SCCs; only refactor with concrete change/test evidence |
+| Two package-level dependency SCCs cross intended subsystem boundaries | Package extraction/ownership changes can have broad coordination cost | 141-module / 451-edge AST import analysis; see [DEPENDENCIES.md](DEPENDENCIES.md#cycles) | Track the SCCs; only refactor with concrete change/test evidence |
 | External consumers are not knowable from this checkout | Change-impact analysis can understate blast radius | Callers live in fleet repos/gateway/contracts/traces | Run `sre-kb estate` across known repos and add gateway/trace evidence |
 
 The coupling concern is not assigned an incident severity: no build failure, runtime fault, or change
@@ -30,10 +30,15 @@ delay was supplied.
   backslashes/quoting while the prompt remains on stdin and `shell=False`.
 - Oracle tests use a cross-platform Python echo process instead of Unix `cat`.
 - UTF-8 generated artifacts are read explicitly as UTF-8.
-- Symlink safety tests are capability-aware; the full Windows gate is green with 848 passes, two
-  privilege-dependent skips, and 91.26% coverage.
+- Symlink safety tests are capability-aware; the full Windows gate is green with 903 passes, two
+  privilege-dependent skips, and 91.10% coverage.
 - README/operations guidance now gives a direct Python 3.13 PowerShell environment path, so a stale
   older `.venv` is not mistaken for product behavior.
+- In-process structural search, Bash/SQL/YAML operational grammars, conservative cross-file call
+  edges, and fenced runbook hints are covered by focused regression tests. No daemon or target
+  build is involved.
+- The four direct structural-search additions have reviewed MIT notices and a scoped CycloneDX
+  evidence file; this does not choose a license for `sre-kb` itself.
 
 ## Design-to-reality divergences
 
@@ -117,10 +122,11 @@ Refresh the atlas when any of these change:
   [`STATIC_EXTRACTED`]
 - `src/sre_kb/collectors/__init__.py:1-76` — overview/registry mismatch.
   [`STATIC_EXTRACTED`]
-- `pyproject.toml:5-34` and root file inventory — license and runtime declarations.
+- `pyproject.toml`, `THIRD_PARTY_NOTICES.md`, and `evidence/structural-search.cdx.json` — project
+  license gap plus the reviewed direct structural-search license declarations.
   [`MANIFEST_DECLARED` / `STATIC_EXTRACTED`]
-- Local Python 3.13.14 verification and clean self-scan reports — portability fixes, 848 passing
-  tests, two capability skips, 91.26% coverage, artifact counts, and fixture-derived target identity.
+- Local Python 3.13.14 verification and clean self-scan reports — portability fixes, 903 passing
+  tests, two capability skips, 91.10% coverage, artifact counts, and fixture-derived target identity.
   [`RUNTIME_OBSERVED` / `ENGINE_CONFIRMED`]
 - [`generated/atlas.json`](generated/atlas.json) and
   [`generated/licenses.json`](generated/licenses.json) — resolver unknowns, ownership gap, and

@@ -34,11 +34,11 @@ This avoids silently reusing a stale environment and does not require activation
 | `python -m ruff check src tests` | `VERIFIED`: passed | Full source/test lint |
 | Hash-verified `requirements.lock` install | `VERIFIED` in an isolated Python 3.13 environment | Locked artifact integrity and platform availability |
 | `pip-audit -r requirements.lock --no-deps` | `VERIFIED`: no known vulnerabilities found | Current locked-runtime advisory check |
-| Full pytest + coverage floor | `VERIFIED`: 848 passed, 2 capability skips; coverage 91.26% | Full repository regression and 90% floor |
+| Full pytest + coverage floor | `VERIFIED`: 903 passed, 2 capability skips; coverage 91.34% | Full repository regression and 90% floor |
 | Clean `sre-kb run … --to-stage publish` self-scan | `VERIFIED`: completed | End-to-end stage and output contract |
 
 The original `.venv` remains stale (Python 3.12.10, missing declared grammars/dev packages). An
-isolated `.work/atlas-verify-venv` using Python 3.13.14 was used instead, so verification did not
+isolated `.work/codex-venv` using Python 3.13.14 was used instead, so verification did not
 replace the user's environment.
 
 Node.js `v24.16.0` and npm `11.13.0` are available on the verification workstation. The installed
@@ -97,7 +97,9 @@ no live runtime evidence is configured. [`UNKNOWN`: needs deployment and telemet
 
 1. Check interpreter compatibility before debugging engine behavior: `python --version` must satisfy
    `pyproject.toml`.
-2. Check all six tree-sitter grammar packages are installed if CLI import or scanning fails.
+2. Check all nine tree-sitter grammar packages and `ast-grep-py` are installed if CLI import or
+   scanning fails. Dockerfile extraction is local Python code because the candidate grammar has no
+   Windows wheel.
 3. Inspect `.work/<run>/reports/validation_report.json` for stage status and artifact-specific
    structural/provenance/cross-reference/safety results.
 4. Inspect `.work/<run>/reports/coverage.json` for files the collectors walked but no fact cited.
@@ -178,7 +180,7 @@ for this atlas.
 - `.github/workflows/ci.yml:12-72` — declared CI Python and checks.
   [`MANIFEST_DECLARED`]
 - `Makefile:3-29` — declared developer operations. [`MANIFEST_DECLARED`]
-- Local 2026-07-30 Python 3.13.14 run — Ruff passed; 848 tests passed, 2 capability skips; 91.26%
+- Local 2026-08-29 Python 3.13.14 run — Ruff passed; 903 tests passed, 2 capability skips; 91.34%
   coverage. [`RUNTIME_OBSERVED`, development workstation only]
 - Local Node/npm version checks, `dotnet --info`, hash-verified lock install, and `pip-audit`
   — Node `v24.16.0`, npm `11.13.0`, .NET 8 runtime present with no SDK, lock install passed, and no

@@ -1,6 +1,6 @@
 # Resolver-backed source dependency view
 
-Scope: resolved production source edges, collapsed by package/namespace group.
+Scope: resolved production import edges, collapsed by package/namespace group.
 
 ```mermaid
 flowchart LR
@@ -35,7 +35,7 @@ flowchart LR
   n_1af9ff020e7c["sre-kb / sre_kb.validation"]
   n_184f16436661["sre-kb / sre_kb.workspace"]
   n_376b90311d4c -->|1| n_a1b04e1510ea
-  n_376b90311d4c -->|1| n_2b2ef8c2af4a
+  n_376b90311d4c -->|4| n_2b2ef8c2af4a
   n_76e7d067d8d4 -->|1| n_e49853e26998
   n_76e7d067d8d4 -->|2| n_376b90311d4c
   n_76e7d067d8d4 -->|3| n_a1b04e1510ea
@@ -125,6 +125,7 @@ flowchart LR
   n_4b0471fcd10a -->|1| n_7fa74111c91a
   n_4b0471fcd10a -->|1| n_5db1217d1f10
   n_4b0471fcd10a -->|5| n_07be103af52e
+  n_4b0471fcd10a -->|2| n_2b2ef8c2af4a
   n_4b0471fcd10a -->|1| n_1fd35c32c66a
   n_4b0471fcd10a -->|3| n_05130caebc6f
   n_4b0471fcd10a -->|4| n_17e7ed814d9d

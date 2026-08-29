@@ -42,8 +42,9 @@ Implemented:
   `parsing/code_model.py`) with per-class scoping and receiver→field-type call correlation; only
   config files use direct parsing. Python/FastAPI, Node/Express, and Go (gin) emit the same facts
   (endpoints, egress, tech stack) from the AST so the unchanged scaffolder produces the same KB.
-  Confidence is
-  signal-derived.
+  Bash, SQL, and YAML have in-process query grammars, and `ast-grep-py` adds read-only structural
+  matching for SRE discovery without a CLI, daemon, dynamic target grammar, or rewrite surface.
+  Confidence is signal-derived.
 - **Trust tiers (provenance)** — every evidence item carries a `source_tier` (`ast`
   deterministic | `llm`), rolled up per artifact in the validation report. Tier-B proposals stay
   fenced unless the engine independently confirms them with a deterministic rule at the cited bytes.
@@ -70,9 +71,10 @@ Implemented:
 - **Drift** (`sre-kb diff`) and **Estate** (`sre-kb estate`: cross-service topology + co-tenancy).
 - **Codebase atlas** (`sre-kb atlas` / `atlas-check`) — explicit project boundaries, structured
   package adapters, npm and NuGet resolved lock graphs, .NET SDK/target-framework metadata,
-  TypeScript alias resolution, AST/tree-sitter source edges, runtime/SBOM/coverage/ownership
-  overlays, `Ca`/`Ce`/instability and SCCs, generated visual projections, and a CI drift gate. Use
-  the `sre-codebase-cartographer` agent for a full mixed-stack atlas.
+  TypeScript alias resolution, AST/tree-sitter import edges, conservative cross-file call edges,
+  static operational signals, runtime/SBOM/coverage/ownership overlays, `Ca`/`Ce`/instability and
+  SCCs, generated import/call/runtime projections, and a CI drift gate. Use the
+  `sre-codebase-cartographer` agent for a full mixed-stack atlas.
 - **Security**: fail-closed publish-time secret-scan gate (redaction on the `--allow-secrets`
   override), non-escapable untrusted-input context packs, sanitized renderers, publish-repo
   allowlist with the token kept out of `git` argv, fan-out cap, dangerous-pattern output lint,
@@ -118,9 +120,10 @@ alerts; Prometheus/Grafana/Wavefront dashboards), **drift detection** (`sre-kb d
 **generate-phase skills** (`sre-generate-slos`, `sre-generate-dashboards`) plus `sre-security-posture`,
 and **Node/Express + Go** collectors with AST endpoint extraction (five stacks).
 
-Known limitations (documented, not bugs): variable-topic egress (non-literal Kafka topics)
-and cross-file call-graph beyond a single handler body are out of scope for the per-file
-AST model.
+Known limitations (documented, not bugs): variable-topic egress (non-literal Kafka topics) remains
+out of scope for the per-file collector model. The atlas resolves cross-file calls only when an
+import, alias, or declared field type identifies one repository target; virtual dispatch,
+reflection, generated code, and ambiguous targets remain unknown rather than guessed.
 
 ## Quickstart (dev)
 

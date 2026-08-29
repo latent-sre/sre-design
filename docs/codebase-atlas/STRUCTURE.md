@@ -35,9 +35,12 @@ This is a purpose-oriented map, not an exhaustive directory listing.
 
 | Path | Responsibility |
 |---|---|
-| `.sre/atlas.yaml` | Authoritative project roots, test roots, manifests, exclusions, evidence inputs, and generated-output boundary |
+| `.sre/atlas.yaml` | Authoritative source, test, and operational roots; manifests, exclusions, evidence inputs, and generated-output boundary |
 | `src/sre_kb/atlas/model.py` | Strict `sre.kb/atlas/v1alpha1` and runtime-evidence contracts |
-| `src/sre_kb/atlas/source.py` | Python AST and Java/C#/JavaScript/Go tree-sitter dependency resolvers |
+| `src/sre_kb/atlas/source.py` | Source/import orchestration plus static operational evidence collection |
+| `src/sre_kb/atlas/calls.py` | Conservative Python/Java/C#/JavaScript/TypeScript/Go cross-file call resolution |
+| `src/sre_kb/parsing/structural.py` | Read-only in-process ast-grep adapter over trusted rules and source strings |
+| `src/sre_kb/parsing/operational.py` | SRE signal classifier plus SQL/YAML/Dockerfile extraction |
 | `src/sre_kb/atlas/manifests.py` | Structured Python, Node, Maven, MSBuild, Go, and requirements adapters |
 | `src/sre_kb/atlas/overlays.py` | Runtime, CycloneDX, Cobertura, CODEOWNERS, and optional Git-history overlays |
 | `src/sre_kb/atlas/render.py` | JSON Schema, Markdown, Mermaid, license report, and offline HTML projections |

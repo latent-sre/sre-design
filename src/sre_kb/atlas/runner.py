@@ -101,6 +101,15 @@ def build_atlas(
         node.owners = sorted(set(node.owners))
     for edge in edges:
         edge.evidence.sort(key=_evidence_sort_key)
+    signals = sorted(
+        graph.signals.values(),
+        key=lambda signal: (
+            signal.path,
+            signal.evidence.lines.start if signal.evidence.lines else 0,
+            signal.category,
+            signal.id,
+        ),
+    )
     module_coupling, module_cycles = coupling_and_cycles(nodes, edges)
     group_coupling, group_cycles = coupling_and_cycles(
         nodes,
@@ -123,12 +132,14 @@ def build_atlas(
                 name=project.name,
                 roots=project.roots,
                 testRoots=project.testRoots,
+                operationalRoots=project.operationalRoots,
                 manifests=project.manifests,
             )
             for project in config.projects
         ],
         nodes=nodes,
         edges=edges,
+        signals=signals,
         unknowns=sorted(
             graph.unknowns.values(),
             key=lambda unknown: (

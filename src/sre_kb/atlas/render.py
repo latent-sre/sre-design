@@ -6,7 +6,7 @@ import hashlib
 import html
 import json
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 
 from sre_kb.atlas.model import AtlasNode, AtlasSnapshot, RuntimeEvidence
 
@@ -23,6 +23,7 @@ def render_files(
 ) -> dict[str, str]:
     data = snapshot.model_dump(mode="json", exclude_none=True)
     source_mermaid = source_graph(snapshot, max_nodes=max_diagram_nodes)
+    call_mermaid = call_graph(snapshot, max_nodes=max_diagram_nodes)
     runtime_mermaid = runtime_graph(snapshot, max_nodes=max_diagram_nodes)
     files = {
         "atlas.json": canonical_json(data),
@@ -30,11 +31,18 @@ def render_files(
         "RuntimeEvidence.schema.json": canonical_json(RuntimeEvidence.model_json_schema()),
         "README.md": generated_readme(snapshot),
         "DEPENDENCY-SNAPSHOT.md": dependency_snapshot(snapshot),
+        "OPERATIONAL-SIGNALS.md": operational_signals(snapshot),
         "source-graph.mmd": source_mermaid,
         "source-graph.md": _mermaid_page(
             "Resolver-backed source dependency view",
             source_mermaid,
-            "Scope: resolved production source edges, collapsed by package/namespace group.",
+            "Scope: resolved production import edges, collapsed by package/namespace group.",
+        ),
+        "call-graph.mmd": call_mermaid,
+        "call-graph.md": _mermaid_page(
+            "Resolver-backed cross-file call view",
+            call_mermaid,
+            "Scope: conservative statically resolved production call edges; not runtime traces.",
         ),
         "runtime-graph.mmd": runtime_mermaid,
         "runtime-graph.md": _mermaid_page(
@@ -79,14 +87,17 @@ source, or imported evidence and regenerate.
 - Machine contract: [`atlas.json`](atlas.json)
 - Schema: [`CodebaseAtlas.schema.json`](CodebaseAtlas.schema.json)
 - Source graph: [`source-graph.md`](source-graph.md)
+- Cross-file call graph: [`call-graph.md`](call-graph.md)
 - Runtime graph: [`runtime-graph.md`](runtime-graph.md)
-- Dependency metrics: [`DEPENDENCY-SNAPSHOT.md`](DEPENDENCY-SNAPSHOT.md)
+- Dependency metrics, import matrix, and cycle-closing citations: [`DEPENDENCY-SNAPSHOT.md`](DEPENDENCY-SNAPSHOT.md)
+- Static operational signals: [`OPERATIONAL-SIGNALS.md`](OPERATIONAL-SIGNALS.md)
 - License inventory: [`licenses.json`](licenses.json)
 - Searchable explorer: [`atlas.html`](atlas.html)
 
 Snapshot: {len(snapshot.nodes)} nodes, {len(snapshot.edges)} edges, {source_edges} resolved production
 source edges, {len(snapshot.metrics.cycles)} source cycle(s), and {len(snapshot.unknowns)} explicit
-unknown(s).
+unknown(s). The snapshot also contains {len(snapshot.signals)} static operational signal(s); these
+are discovery hints, not runtime observations.
 """
 
 
@@ -134,6 +145,7 @@ Evidence scope: resolver-backed production source edges only for coupling and cy
 
 {chr(10).join(cycle_blocks) if cycle_blocks else "No non-trivial source SCC was resolved."}
 
+{_package_import_views(snapshot)}
 ## Resolver blind spots
 
 | Unknown code | Count |
@@ -142,12 +154,212 @@ Evidence scope: resolver-backed production source edges only for coupling and cy
 """
 
 
+_MAX_MATRIX_GROUPS = 14
+_MAX_HOTSPOTS = 15
+_MAX_CYCLE_CITATIONS = 12
+
+
+def _group_metric_id(node: AtlasNode) -> str:
+    return f"group:{node.project or '?'}:{node.group or node.name}"
+
+
+def _group_display(group_id: str) -> str:
+    return group_id.split(":", 2)[-1]
+
+
+def _evidence_location(item) -> str:
+    if item.path and item.lines:
+        if item.lines.start == item.lines.end:
+            return f"{item.path}:{item.lines.start}"
+        return f"{item.path}:{item.lines.start}-{item.lines.end}"
+    return item.path or ""
+
+
+def _package_import_views(snapshot: AtlasSnapshot) -> str:
+    nodes = {node.id: node for node in snapshot.nodes}
+    weights: Counter[tuple[str, str]] = Counter()
+    citations: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for edge in snapshot.edges:
+        if edge.scope != "source" or edge.kind != "imports" or edge.unresolved:
+            continue
+        source = nodes.get(edge.source)
+        target = nodes.get(edge.target)
+        if source is None or target is None:
+            continue
+        src = _group_metric_id(source)
+        dst = _group_metric_id(target)
+        if src == dst:
+            continue
+        weights[(src, dst)] += max(len(edge.evidence), 1)
+        for item in edge.evidence:
+            location = _evidence_location(item)
+            if location and location not in citations[(src, dst)]:
+                citations[(src, dst)].append(location)
+
+    if not weights:
+        return """## Cross-package import matrix
+
+No cross-package production import edges were resolved.
+
+## Highest-traffic cross-package imports
+
+No cross-package production import edges were resolved.
+
+"""
+
+    outgoing: dict[str, list[tuple[str, int]]] = defaultdict(list)
+    incoming: dict[str, list[tuple[str, int]]] = defaultdict(list)
+    degree: Counter[str] = Counter()
+    for (src, dst), count in weights.items():
+        outgoing[src].append((dst, count))
+        incoming[dst].append((src, count))
+        degree[src] += count
+        degree[dst] += count
+
+    cycle_members = {
+        member
+        for cycle in snapshot.metrics.cycles
+        if cycle.granularity == "group"
+        for member in cycle.members
+    }
+    ranked = sorted(degree, key=lambda gid: (gid not in cycle_members, -degree[gid], gid))
+    matrix_groups = ranked[:_MAX_MATRIX_GROUPS]
+    omitted = len(ranked) - len(matrix_groups)
+    omitted_note = (
+        f" The matrix shows {len(matrix_groups)} of {len(ranked)} packages "
+        f"(SCC members first, then highest import traffic); {omitted} lower-traffic "
+        "package(s) remain in the incoming/outgoing list."
+        if omitted
+        else ""
+    )
+
+    header = "| | " + " | ".join(f"`{_markdown(_group_display(gid))}`" for gid in matrix_groups) + " |"
+    divider = "|" + "---|" * (len(matrix_groups) + 1)
+    matrix_rows = []
+    for src in matrix_groups:
+        cells = []
+        for dst in matrix_groups:
+            if src == dst:
+                cells.append("-")
+            else:
+                count = weights.get((src, dst), 0)
+                cells.append(str(count) if count else "0")
+        matrix_rows.append(
+            f"| `{_markdown(_group_display(src))}` | " + " | ".join(cells) + " |"
+        )
+
+    hotspot_rows = [
+        f"| `{_markdown(_group_display(src))}` | `{_markdown(_group_display(dst))}` | {count} |"
+        for (src, dst), count in weights.most_common(_MAX_HOTSPOTS)
+    ]
+
+    direction_blocks = []
+    for gid in sorted(set(outgoing) | set(incoming), key=_group_display):
+        out = ", ".join(
+            f"`{_markdown(_group_display(dst))}` ({count})"
+            for dst, count in sorted(outgoing.get(gid, []), key=lambda item: (-item[1], item[0]))
+        ) or "_none_"
+        inn = ", ".join(
+            f"`{_markdown(_group_display(src))}` ({count})"
+            for src, count in sorted(incoming.get(gid, []), key=lambda item: (-item[1], item[0]))
+        ) or "_none_"
+        direction_blocks.append(
+            f"- `{_markdown(_group_display(gid))}` — outgoing: {out}; incoming: {inn}"
+        )
+
+    cycle_blocks = []
+    for index, cycle in enumerate(
+        (item for item in snapshot.metrics.cycles if item.granularity == "group"),
+        start=1,
+    ):
+        members = set(cycle.members)
+        lines = []
+        for (src, dst), locations in sorted(citations.items()):
+            if src not in members or dst not in members:
+                continue
+            shown = locations[:_MAX_CYCLE_CITATIONS]
+            extra = len(locations) - len(shown)
+            loc_text = ", ".join(f"`{_markdown(location)}`" for location in shown)
+            if extra:
+                loc_text += f" (+{extra} more)"
+            lines.append(
+                f"  - `{_markdown(_group_display(src))}` → "
+                f"`{_markdown(_group_display(dst))}`: {loc_text}"
+            )
+        body = "\n".join(lines) if lines else "  - _No cited cross-package imports inside this SCC._"
+        cycle_blocks.append(
+            f"{index}. "
+            + " → ".join(f"`{_markdown(_group_display(member))}`" for member in cycle.members)
+            + f"\n{body}"
+        )
+
+    return f"""## Cross-package import matrix
+
+Row depends on column. Cell values are resolver-backed production import counts, not API calls
+and not a health grade.{omitted_note}
+
+{header}
+{divider}
+{chr(10).join(matrix_rows)}
+
+## Highest-traffic cross-package imports
+
+| From | To | Import count |
+|---|---|---:|
+{chr(10).join(hotspot_rows)}
+
+Counts are edge weights. They do not assign severity or a refactoring mandate.
+
+## Incoming and outgoing by package
+
+{chr(10).join(direction_blocks)}
+
+## Cycle-closing imports
+
+{chr(10).join(cycle_blocks) if cycle_blocks else "No group-level SCC was resolved."}
+
+"""
+
+
+def operational_signals(snapshot: AtlasSnapshot) -> str:
+    rows = []
+    for signal in snapshot.signals:
+        lines = signal.evidence.lines
+        location = (
+            f"{signal.path}:{lines.start}"
+            if lines and lines.start == lines.end
+            else f"{signal.path}:{lines.start}-{lines.end}" if lines else signal.path
+        )
+        excerpt = " ".join(signal.text.split())
+        if len(excerpt) > 140:
+            excerpt = excerpt[:137] + "..."
+        rows.append(
+            f"| `{_markdown(signal.category)}` | `{_markdown(location)}` | "
+            f"{_markdown(signal.summary)} | `{_markdown(excerpt)}` |"
+        )
+    return f"""# Static operational signals
+
+Evidence scope: `STATIC_EXTRACTED` syntax and configuration evidence only. These records help an
+SRE find likely process controls, network and datastore calls, deployment settings, migrations,
+and health checks. They are not runtime evidence, do not prove production topology, and are not
+automatically safe runbook commands.
+
+| Category | Location | Why it was selected | Static excerpt |
+|---|---|---|---|
+{chr(10).join(rows) if rows else "| _None_ | - | No operational signal matched | - |"}
+"""
+
+
 def source_graph(snapshot: AtlasSnapshot, *, max_nodes: int) -> str:
     nodes = {node.id: node for node in snapshot.nodes}
     selected = [
         edge
         for edge in snapshot.edges
-        if edge.scope == "source" and not edge.unresolved and edge.source in nodes and edge.target in nodes
+        if edge.scope == "source"
+        and edge.kind == "imports"
+        and not edge.unresolved
+        and edge.source in nodes
+        and edge.target in nodes
     ]
     group_labels: dict[str, str] = {}
     grouped_edges: Counter[tuple[str, str]] = Counter()
@@ -175,6 +387,49 @@ def source_graph(snapshot: AtlasSnapshot, *, max_nodes: int) -> str:
     for (source, target), count in sorted(grouped_edges.items()):
         if source in allowed and target in allowed:
             lines.append(f"  {_mermaid_id(source)} -->|{count}| {_mermaid_id(target)}")
+    omitted = len(group_labels) - len(allowed)
+    if omitted > 0:
+        lines.append(f'  omitted["{omitted} lower-connectivity group(s) omitted"]')
+    return "\n".join(lines) + "\n"
+
+
+def call_graph(snapshot: AtlasSnapshot, *, max_nodes: int) -> str:
+    nodes = {node.id: node for node in snapshot.nodes}
+    selected = [
+        edge
+        for edge in snapshot.edges
+        if edge.scope == "source"
+        and edge.kind == "calls"
+        and not edge.unresolved
+        and edge.source in nodes
+        and edge.target in nodes
+    ]
+    group_labels: dict[str, str] = {}
+    grouped_edges: Counter[tuple[str, str]] = Counter()
+    for edge in selected:
+        source_group = _group_key(nodes[edge.source])
+        target_group = _group_key(nodes[edge.target])
+        if source_group == target_group:
+            continue
+        group_labels[source_group] = _group_label(nodes[edge.source])
+        group_labels[target_group] = _group_label(nodes[edge.target])
+        grouped_edges[(source_group, target_group)] += 1
+    ranked = [
+        key
+        for key, _ in Counter(
+            endpoint for edge in grouped_edges for endpoint in edge
+        ).most_common(max_nodes)
+    ]
+    allowed = set(ranked)
+    lines = ["flowchart LR"]
+    if not group_labels:
+        lines.append('  empty["No statically resolved production call edges"]')
+        return "\n".join(lines) + "\n"
+    for key in sorted(allowed):
+        lines.append(f'  {_mermaid_id(key)}["{_mermaid_label(group_labels[key])}"]')
+    for (source, target), count in sorted(grouped_edges.items()):
+        if source in allowed and target in allowed:
+            lines.append(f"  {_mermaid_id(source)} -->|{count} call(s)| {_mermaid_id(target)}")
     omitted = len(group_labels) - len(allowed)
     if omitted > 0:
         lines.append(f'  omitted["{omitted} lower-connectivity group(s) omitted"]')

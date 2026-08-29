@@ -5,6 +5,7 @@
         "project",
         "module",
         "test",
+        "operational-file",
         "package",
         "namespace",
         "service",

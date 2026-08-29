@@ -84,6 +84,7 @@ class NodeType(StrEnum):
     project = "project"
     module = "module"
     test = "test"
+    operational_file = "operational-file"
     package = "package"
     namespace = "namespace"
     service = "service"
@@ -137,10 +138,23 @@ class AtlasUnknown(_Strict):
     evidence: list[AtlasEvidence] = Field(default_factory=list)
 
 
+class AtlasSignal(_Strict):
+    id: str = Field(min_length=1)
+    node: str = Field(min_length=1)
+    category: str = Field(min_length=1)
+    summary: str = Field(min_length=1)
+    language: str = Field(min_length=1)
+    path: str = Field(min_length=1)
+    text: str = Field(min_length=1, max_length=1_000)
+    annotations: dict[str, AnnotationValue] = Field(default_factory=dict)
+    evidence: AtlasEvidence
+
+
 class AtlasProject(_Strict):
     name: str = Field(min_length=1)
     roots: list[str]
     testRoots: list[str] = Field(default_factory=list)
+    operationalRoots: list[str] = Field(default_factory=list)
     manifests: list[str] = Field(default_factory=list)
 
 
@@ -190,6 +204,7 @@ class AtlasSnapshot(_Strict):
     projects: list[AtlasProject]
     nodes: list[AtlasNode]
     edges: list[AtlasEdge]
+    signals: list[AtlasSignal] = Field(default_factory=list)
     unknowns: list[AtlasUnknown] = Field(default_factory=list)
     metrics: AtlasMetrics = Field(default_factory=AtlasMetrics)
     licenses: list[LicenseRecord] = Field(default_factory=list)
@@ -210,6 +225,11 @@ class AtlasSnapshot(_Strict):
         ]
         if dangling:
             raise ValueError(f"atlas edges reference missing nodes: {dangling[:5]}")
+        dangling_signals = [signal.id for signal in self.signals if signal.node not in known]
+        if dangling_signals:
+            raise ValueError(
+                f"atlas signals reference missing nodes: {dangling_signals[:5]}"
+            )
         return self
 
 

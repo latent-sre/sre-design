@@ -6,11 +6,14 @@ source, or imported evidence and regenerate.
 - Machine contract: [`atlas.json`](atlas.json)
 - Schema: [`CodebaseAtlas.schema.json`](CodebaseAtlas.schema.json)
 - Source graph: [`source-graph.md`](source-graph.md)
+- Cross-file call graph: [`call-graph.md`](call-graph.md)
 - Runtime graph: [`runtime-graph.md`](runtime-graph.md)
-- Dependency metrics: [`DEPENDENCY-SNAPSHOT.md`](DEPENDENCY-SNAPSHOT.md)
+- Dependency metrics, import matrix, and cycle-closing citations: [`DEPENDENCY-SNAPSHOT.md`](DEPENDENCY-SNAPSHOT.md)
+- Static operational signals: [`OPERATIONAL-SIGNALS.md`](OPERATIONAL-SIGNALS.md)
 - License inventory: [`licenses.json`](licenses.json)
 - Searchable explorer: [`atlas.html`](atlas.html)
 
-Snapshot: 319 nodes, 1717 edges, 450 resolved production
+Snapshot: 347 nodes, 2204 edges, 698 resolved production
 source edges, 2 source cycle(s), and 2 explicit
-unknown(s).
+unknown(s). The snapshot also contains 5 static operational signal(s); these
+are discovery hints, not runtime observations.

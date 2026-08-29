@@ -8,7 +8,9 @@ Baseline: `65983b23d09e0f2b3b0470b9c81f42aa136b1f9b`
 The repository now has one explicit, repo-wide `sre-codebase-atlas` orchestration skill, seven focused
 templates, a populated self-atlas, agent/pipeline routing, and a deterministic atlas engine. The
 engine emits a versioned evidence graph, JSON Schemas, resolver-backed source/package edges,
-coupling/SCC metrics, runtime/SBOM/coverage/ownership overlays, Mermaid views, a license inventory,
+conservative cross-file call edges, static operational signals, in-process structural search,
+coupling/SCC metrics, a cross-package import matrix with weighted hotspots and cycle-closing
+citations, runtime/SBOM/coverage/ownership overlays, Mermaid views, a license inventory,
 an offline searchable explorer, dedicated .NET 8 and Node/TypeScript resolution, and a CI drift
 gate. It does not replace the operational KB or add an unverified generic regex scanner.
 
@@ -19,7 +21,7 @@ gate. It does not replace the operational KB or add an unverified generic regex 
 | [GitHub acquire-codebase-knowledge](https://github.com/github/awesome-copilot/tree/be7a1cf734f427d50266335b461b86977299d953/skills/acquire-codebase-knowledge) | `github/awesome-copilot@be7a1cf` (MIT) | Phased discovery, focused documents, evidence lists, unresolved questions, monorepo/generated-source cautions | Its scanner: root-only manifest assumptions, shallow census, broad exception swallowing, and environment-template content capture |
 | [GitHub technology-stack-blueprint-generator](https://github.com/github/awesome-copilot/tree/be7a1cf734f427d50266335b461b86977299d953/skills/technology-stack-blueprint-generator) | `github/awesome-copilot@be7a1cf` (MIT) | Bounded depth, multi-stack separation, technology relationship views, explicit version/license status | The giant single-output pseudotemplate and speculative rationales/upgrades |
 | [Claude codebase-onboarding](https://github.com/alirezarezvani/claude-skills/blob/aa8d778811a557a2c28ccadda4cf3d0bd028a4cc/engineering/skills/codebase-onboarding/SKILL.md) | `alirezarezvani/claude-skills@aa8d778` (MIT) | Audience-aware tours, setup/debug/contribution paths, verification checkpoints | Generic canned commands/URLs and its shallow hard-coded scanner |
-| [MCP Market dependency-graph-analyzer](https://mcpmarket.com/tools/skills/dependency-graph-analyzer) and [underlying skill source](https://github.com/insightflo/claude-impl-tools/blob/0ab5a2d8706731d4d6c886187e7391358a6ddc4f/plugin/skills/deps/SKILL.md) | `insightflo/claude-impl-tools@0ab5a2d` (MIT) | Incoming/outgoing views, SCC cycle detection, Mermaid, `Ca`/`Ce`/instability | Regex/grep presented as resolution, guessed domains, and arbitrary health/severity grades |
+| [MCP Market dependency-graph-analyzer](https://mcpmarket.com/tools/skills/dependency-graph-analyzer) and [underlying skill source](https://github.com/insightflo/claude-impl-tools/blob/d1630064c80e9f86eea797a8b5bf4fea04272f57/plugin/skills/deps/SKILL.md) | `insightflo/claude-impl-tools@d163006` (MIT; skill `deps` 1.1.0) | Incoming/outgoing views, SCC cycle detection, Mermaid, `Ca`/`Ce`/instability, weighted edges, cross-domain matrix, cycle-closing file citations | Regex/grep presented as resolution, guessed DDD domains from directory names, Loose/Tight/Tangled grades, and CRITICAL/HIGH/MEDIUM cycle severity |
 | [CycloneDX specification](https://github.com/CycloneDX/specification/blob/fac1ff6ed49c1d4801912cf7d7ce5dabbd773290/schema/bom-1.7.proto) | `CycloneDX/specification@fac1ff6` | Official component `bom_ref`, license choice, and dependency relationship semantics for the optional SBOM adapter | Vulnerability/license conclusions not present in the imported BOM |
 | [npm package-lock](https://docs.npmjs.com/cli/configuring-npm/package-lock-json/) and [package metadata](https://docs.npmjs.com/cli/configuring-npm/package-json/) | Official npm documentation inspected 2026-07-30 | Lockfile `packages` graph, exact resolved versions, engine/module/workspace declarations | Executing package scripts or treating workspace globs as discovered boundaries |
 | [Microsoft MSBuild ProjectGraph](https://learn.microsoft.com/en-us/dotnet/api/microsoft.build.graph.projectgraph), [NuGet lockfiles](https://learn.microsoft.com/en-us/nuget/consume-packages/package-references-in-project-files), [central package management](https://learn.microsoft.com/en-us/nuget/consume-packages/central-package-management), and [`global.json`](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json) | Official Microsoft documentation inspected 2026-07-30; `dotnet/msbuild@6954378` source corroboration | Separate declared project edges from evaluated graphs; SDK, TFM, central version, and resolved NuGet evidence | Claiming raw `.csproj`/solution text is an evaluated configuration-specific build graph |
@@ -129,11 +131,18 @@ projections checked by `sre-kb atlas-check`.
   templates; `.github/agents/sre-codebase-cartographer.agent.md` is its focused agent entry point.
 - `docs/codebase-atlas/` — populated self-atlas and visual tours.
 - `.sre/atlas.yaml` and `src/sre_kb/atlas/` — explicit scope plus model, resolvers, overlays,
-  metrics, renderers, and drift checking.
-- `docs/codebase-atlas/generated/` — graph, schemas, metrics, diagrams, hash manifest, license
-  inventory, and offline explorer.
-- `tests/test_atlas_engine.py` and `tests/test_codebase_atlas.py` — resolver, safety, schema,
-  drift, output/reference, and routing contracts.
+  metrics, renderers, and drift checking; `src/sre_kb/atlas/calls.py` is the conservative
+  cross-file call resolver.
+- `src/sre_kb/parsing/structural.py` and `src/sre_kb/parsing/operational.py` — read-only in-process
+  ast-grep adapter plus static operational-signal extraction; Dockerfiles use a local parser
+  because the candidate grammar has no Windows wheel.
+- `docs/codebase-atlas/generated/` — graph, schemas, metrics, import/call/runtime diagrams,
+  operational-signal report, hash manifest, license inventory, and offline explorer.
+- `THIRD_PARTY_NOTICES.md` and `evidence/structural-search.cdx.json` — reviewed MIT notices and a
+  scoped CycloneDX overlay for the four direct structural-search additions.
+- `tests/test_atlas_engine.py`, `tests/test_codebase_atlas.py`, `tests/test_atlas_operations.py`,
+  and `tests/test_structural_search.py` — resolver, safety, schema, drift, call/operational,
+  structural-search, output/reference, and routing contracts.
 - `src/sre_kb/collectors/base.py` and `tests/test_scan_plan.py` — generated-tree scan-boundary fix.
 - `.github/skills/pipeline.yaml`, `.github/agents/sre-analyst.agent.md`, and `README.md` — discovery
   and routing updates.

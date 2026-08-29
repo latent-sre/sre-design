@@ -5,9 +5,10 @@ One graph cannot faithfully represent every kind of dependency. Keep these scope
 ## Graph scopes
 
 1. **Declared package graph** — manifest and lockfile dependencies.
-2. **Source graph** — imports and statically resolved calls between files/modules/packages.
-3. **Runtime graph** — service calls, datastores, brokers, queues, caches, external APIs, and bindings.
-4. **Incoming graph** — in-repo callers plus fleet consumers visible in sibling repos, gateway data,
+2. **Source import graph** — resolver-backed imports between files/modules/packages.
+3. **Static call graph** — conservative calls whose alias/type resolves to one repository target.
+4. **Runtime graph** — service calls, datastores, brokers, queues, caches, external APIs, and bindings.
+5. **Incoming graph** — in-repo callers plus fleet consumers visible in sibling repos, gateway data,
    contracts, or traces.
 
 Never mix a Python import, a database binding, and an HTTP caller into one unlabeled edge vocabulary.
@@ -30,7 +31,11 @@ The built-in resolver matrix is deliberately finite:
 | Input | Resolver |
 |---|---|
 | Python source | Python `ast`, including exact relative-import resolution |
+| Python, Java, C#, JavaScript, TypeScript/TSX, Go calls | imports/aliases or declared field types must select one repository target; ambiguity stays unknown |
 | Java, C#, JavaScript, TypeScript/TSX, Go source | tree-sitter syntax nodes; local path/package resolution where the language contract permits |
+| SRE structural discovery | read-only in-process ast-grep over an explicit built-in-language allowlist; never expose target grammar registration or rewrites |
+| Bash, SQL, YAML operational files | MIT grammar wheels and trusted queries under explicit `operationalRoots`; results are `STATIC_EXTRACTED` |
+| Dockerfiles | narrow local instruction parser; do not require a grammar wheel that is unavailable on Windows |
 | Node `package.json` + npm lock/shrinkwrap | declared runtime/workspace/module metadata plus lockfileVersion 2/3 resolved package edges |
 | TypeScript `tsconfig.json`/`jsconfig.json` | JSONC-aware `baseUrl` and `paths` alias resolution |
 | .NET `global.json`, `Directory.Packages.props`, `.csproj` | SDK selection, central versions, target frameworks, declared package/project edges |

@@ -23,6 +23,7 @@ def render_files(
 ) -> dict[str, str]:
     data = snapshot.model_dump(mode="json", exclude_none=True)
     source_mermaid = source_graph(snapshot, max_nodes=max_diagram_nodes)
+    call_mermaid = call_graph(snapshot, max_nodes=max_diagram_nodes)
     runtime_mermaid = runtime_graph(snapshot, max_nodes=max_diagram_nodes)
     files = {
         "atlas.json": canonical_json(data),
@@ -30,11 +31,18 @@ def render_files(
         "RuntimeEvidence.schema.json": canonical_json(RuntimeEvidence.model_json_schema()),
         "README.md": generated_readme(snapshot),
         "DEPENDENCY-SNAPSHOT.md": dependency_snapshot(snapshot),
+        "OPERATIONAL-SIGNALS.md": operational_signals(snapshot),
         "source-graph.mmd": source_mermaid,
         "source-graph.md": _mermaid_page(
             "Resolver-backed source dependency view",
             source_mermaid,
-            "Scope: resolved production source edges, collapsed by package/namespace group.",
+            "Scope: resolved production import edges, collapsed by package/namespace group.",
+        ),
+        "call-graph.mmd": call_mermaid,
+        "call-graph.md": _mermaid_page(
+            "Resolver-backed cross-file call view",
+            call_mermaid,
+            "Scope: conservative statically resolved production call edges; not runtime traces.",
         ),
         "runtime-graph.mmd": runtime_mermaid,
         "runtime-graph.md": _mermaid_page(
@@ -79,14 +87,17 @@ source, or imported evidence and regenerate.
 - Machine contract: [`atlas.json`](atlas.json)
 - Schema: [`CodebaseAtlas.schema.json`](CodebaseAtlas.schema.json)
 - Source graph: [`source-graph.md`](source-graph.md)
+- Cross-file call graph: [`call-graph.md`](call-graph.md)
 - Runtime graph: [`runtime-graph.md`](runtime-graph.md)
 - Dependency metrics: [`DEPENDENCY-SNAPSHOT.md`](DEPENDENCY-SNAPSHOT.md)
+- Static operational signals: [`OPERATIONAL-SIGNALS.md`](OPERATIONAL-SIGNALS.md)
 - License inventory: [`licenses.json`](licenses.json)
 - Searchable explorer: [`atlas.html`](atlas.html)
 
 Snapshot: {len(snapshot.nodes)} nodes, {len(snapshot.edges)} edges, {source_edges} resolved production
 source edges, {len(snapshot.metrics.cycles)} source cycle(s), and {len(snapshot.unknowns)} explicit
-unknown(s).
+unknown(s). The snapshot also contains {len(snapshot.signals)} static operational signal(s); these
+are discovery hints, not runtime observations.
 """
 
 
@@ -142,12 +153,45 @@ Evidence scope: resolver-backed production source edges only for coupling and cy
 """
 
 
+def operational_signals(snapshot: AtlasSnapshot) -> str:
+    rows = []
+    for signal in snapshot.signals:
+        lines = signal.evidence.lines
+        location = (
+            f"{signal.path}:{lines.start}"
+            if lines and lines.start == lines.end
+            else f"{signal.path}:{lines.start}-{lines.end}" if lines else signal.path
+        )
+        excerpt = " ".join(signal.text.split())
+        if len(excerpt) > 140:
+            excerpt = excerpt[:137] + "..."
+        rows.append(
+            f"| `{_markdown(signal.category)}` | `{_markdown(location)}` | "
+            f"{_markdown(signal.summary)} | `{_markdown(excerpt)}` |"
+        )
+    return f"""# Static operational signals
+
+Evidence scope: `STATIC_EXTRACTED` syntax and configuration evidence only. These records help an
+SRE find likely process controls, network and datastore calls, deployment settings, migrations,
+and health checks. They are not runtime evidence, do not prove production topology, and are not
+automatically safe runbook commands.
+
+| Category | Location | Why it was selected | Static excerpt |
+|---|---|---|---|
+{chr(10).join(rows) if rows else "| _None_ | - | No operational signal matched | - |"}
+"""
+
+
 def source_graph(snapshot: AtlasSnapshot, *, max_nodes: int) -> str:
     nodes = {node.id: node for node in snapshot.nodes}
     selected = [
         edge
         for edge in snapshot.edges
-        if edge.scope == "source" and not edge.unresolved and edge.source in nodes and edge.target in nodes
+        if edge.scope == "source"
+        and edge.kind == "imports"
+        and not edge.unresolved
+        and edge.source in nodes
+        and edge.target in nodes
     ]
     group_labels: dict[str, str] = {}
     grouped_edges: Counter[tuple[str, str]] = Counter()
@@ -175,6 +219,49 @@ def source_graph(snapshot: AtlasSnapshot, *, max_nodes: int) -> str:
     for (source, target), count in sorted(grouped_edges.items()):
         if source in allowed and target in allowed:
             lines.append(f"  {_mermaid_id(source)} -->|{count}| {_mermaid_id(target)}")
+    omitted = len(group_labels) - len(allowed)
+    if omitted > 0:
+        lines.append(f'  omitted["{omitted} lower-connectivity group(s) omitted"]')
+    return "\n".join(lines) + "\n"
+
+
+def call_graph(snapshot: AtlasSnapshot, *, max_nodes: int) -> str:
+    nodes = {node.id: node for node in snapshot.nodes}
+    selected = [
+        edge
+        for edge in snapshot.edges
+        if edge.scope == "source"
+        and edge.kind == "calls"
+        and not edge.unresolved
+        and edge.source in nodes
+        and edge.target in nodes
+    ]
+    group_labels: dict[str, str] = {}
+    grouped_edges: Counter[tuple[str, str]] = Counter()
+    for edge in selected:
+        source_group = _group_key(nodes[edge.source])
+        target_group = _group_key(nodes[edge.target])
+        if source_group == target_group:
+            continue
+        group_labels[source_group] = _group_label(nodes[edge.source])
+        group_labels[target_group] = _group_label(nodes[edge.target])
+        grouped_edges[(source_group, target_group)] += 1
+    ranked = [
+        key
+        for key, _ in Counter(
+            endpoint for edge in grouped_edges for endpoint in edge
+        ).most_common(max_nodes)
+    ]
+    allowed = set(ranked)
+    lines = ["flowchart LR"]
+    if not group_labels:
+        lines.append('  empty["No statically resolved production call edges"]')
+        return "\n".join(lines) + "\n"
+    for key in sorted(allowed):
+        lines.append(f'  {_mermaid_id(key)}["{_mermaid_label(group_labels[key])}"]')
+    for (source, target), count in sorted(grouped_edges.items()):
+        if source in allowed and target in allowed:
+            lines.append(f"  {_mermaid_id(source)} -->|{count} call(s)| {_mermaid_id(target)}")
     omitted = len(group_labels) - len(allowed)
     if omitted > 0:
         lines.append(f'  omitted["{omitted} lower-connectivity group(s) omitted"]')

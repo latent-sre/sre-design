@@ -1,16 +1,19 @@
 {
   "apiVersion": "sre.kb/atlas-render/v1alpha1",
   "files": {
-    "CodebaseAtlas.schema.json": "sha256:b665edeeed9013a7e12011f6a99a5c0448556c0e83c62d55e445c23c64d74c43",
-    "DEPENDENCY-SNAPSHOT.md": "sha256:b6c92e86f224f2410ac1287de0a670828869d99977b86f6ad3533728a32b75eb",
-    "README.md": "sha256:6b860a5e8fd70adc362952d0e86548ee282fec2dc31c45a1556de2941c8af9b3",
-    "RuntimeEvidence.schema.json": "sha256:3d9c8c6d54e883380ee998346bf0c6537654c8522964c411d0d1eede2a643235",
-    "atlas.html": "sha256:66f28be230f643b235c379f2a815448d9eae64fce7fffef0a529dc7fa0d11b67",
-    "atlas.json": "sha256:84a2f2d1eb7e5f36effc5e7df502cba39f36dfd37acbd43ad6dfceefb611da4b",
-    "licenses.json": "sha256:3f6c6defbaa787bbba9178642aef80b97a7f80a9b66eae61c86ab5a316637e3e",
+    "CodebaseAtlas.schema.json": "sha256:22c404710d80e341ae388267a107bd44ba5a4b5dd466ad2c5f339641f9d47144",
+    "DEPENDENCY-SNAPSHOT.md": "sha256:d16812d7fc66865666e80309f4ae12a5cc4362a9e8ba28bdf4bdc6302633edfb",
+    "OPERATIONAL-SIGNALS.md": "sha256:b2327987abe19c90058aa95272a81918675337799ed39e72ec00ca99c0845340",
+    "README.md": "sha256:5220091dc0d6406403e812006ad223f87b771f20b7f38c6d6c048812e2adda4a",
+    "RuntimeEvidence.schema.json": "sha256:1ae2cf5c5a3eb52fcd6450740bdfcf37c4f218a8591cd5955ce7b6d2765c0fe5",
+    "atlas.html": "sha256:68e6748de6768e61d9d301f808efffc803cf2778ba089e74263630969253fbbc",
+    "atlas.json": "sha256:0b4af7d300b54dfd98bf207a1293c3f1d3a1621d3acf6be6f730591412302ad8",
+    "call-graph.md": "sha256:7a7e6298df05ebf684a1930e7d3179bbe3ad2e7fad29212233e89faba5661297",
+    "call-graph.mmd": "sha256:1b00830bbd57ad7c682e6f9ea24e26b112dbdfa36a303686ff500345374042ae",
+    "licenses.json": "sha256:1f1481b508fe73e4c7a2a39e0b924caa8ed49012dc7d8a96309f0f5014e2eff3",
     "runtime-graph.md": "sha256:8b9f040846e720be88a47ef8fd4c54253a58f0c8ed6ec3fb6a35fee5780f5810",
     "runtime-graph.mmd": "sha256:b9ae3527ec59f284337308be20279cdac7ecc0b26e9023da83c219305f002576",
-    "source-graph.md": "sha256:e4b93b1727fbee51f4d3320dd6a9a26a81ba12822acf334a5e3db95f11447ecc",
-    "source-graph.mmd": "sha256:fde626c41d2cc1597a002f7589e4c7847e9f74294bbe45811b6e14881f67c2bb"
+    "source-graph.md": "sha256:8d4fac69f441e5100219c3d4b251478568eeb50c4e13271d92bb2db45b264964",
+    "source-graph.mmd": "sha256:37e14696aeaffe74d1df1f75a0b014c5f20a5232d5d21f5db90dce5a648ed3a2"
   }
 }

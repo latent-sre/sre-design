@@ -1,0 +1,77 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:1f4cb8d0-b33c-4a2d-a859-a8a6c4a239e1",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-07-30T00:00:00Z",
+    "properties": [
+      {
+        "name": "sre-kb:evidence-scope",
+        "value": "reviewed direct structural-search dependencies"
+      },
+      {
+        "name": "sre-kb:execution-model",
+        "value": "in-process/read-only"
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/ast-grep-py@0.45.0",
+      "name": "ast-grep-py",
+      "version": "0.45.0",
+      "purl": "pkg:pypi/ast-grep-py@0.45.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/tree-sitter-bash@0.25.1",
+      "name": "tree-sitter-bash",
+      "version": "0.25.1",
+      "purl": "pkg:pypi/tree-sitter-bash@0.25.1",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/tree-sitter-sql@0.3.11",
+      "name": "tree-sitter-sql",
+      "version": "0.3.11",
+      "purl": "pkg:pypi/tree-sitter-sql@0.3.11",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/tree-sitter-yaml@0.7.2",
+      "name": "tree-sitter-yaml",
+      "version": "0.7.2",
+      "purl": "pkg:pypi/tree-sitter-yaml@0.7.2",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    }
+  ]
+}

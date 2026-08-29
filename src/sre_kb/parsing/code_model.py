@@ -12,13 +12,16 @@ import re
 from dataclasses import dataclass, field
 from functools import cache
 
+import tree_sitter_bash as ts_bash
 import tree_sitter_c_sharp as ts_cs
 import tree_sitter_go as ts_go
 import tree_sitter_java as ts_java
 import tree_sitter_javascript as ts_js
 import tree_sitter_python as ts_py
+import tree_sitter_sql as ts_sql
 import tree_sitter_typescript as ts_ts
-from tree_sitter import Language, Node, Parser, Tree
+import tree_sitter_yaml as ts_yaml
+from tree_sitter import Language, Node, Parser, Query, QueryCursor, Tree
 
 _STR_KINDS = {"string_literal", "verbatim_string_literal", "raw_string_literal", "interpolated_string_expression"}
 _THROW = {"throw_statement", "throw_expression"}
@@ -85,7 +88,29 @@ class Module:
     types: list[TypeDecl]
 
 
+@dataclass(frozen=True)
+class SyntaxCapture:
+    """One exact, source-backed Tree-sitter query capture."""
+
+    name: str
+    node_kind: str
+    text: str
+    start_line: int
+    end_line: int
+    start_byte: int
+    end_byte: int
+
+
+@dataclass(frozen=True)
+class SyntaxMatch:
+    """One query-pattern match with captures grouped by their declared name."""
+
+    pattern_index: int
+    captures: dict[str, tuple[SyntaxCapture, ...]]
+
+
 _GRAMMAR_FACTORIES = {
+    "bash": ts_bash.language,
     "java": ts_java.language,
     "csharp": ts_cs.language,
     "python": ts_py.language,
@@ -93,6 +118,8 @@ _GRAMMAR_FACTORIES = {
     "typescript": ts_ts.language_typescript,
     "tsx": ts_ts.language_tsx,
     "go": ts_go.language,
+    "sql": ts_sql.language,
+    "yaml": ts_yaml.language,
 }
 
 
@@ -116,13 +143,57 @@ def syntax_tree(language: str, text: str) -> tuple[Tree, bytes]:
     return _parser(language).parse(source), source
 
 
+def syntax_matches(
+    language: str,
+    text: str,
+    query: str,
+    *,
+    max_matches: int = 1_000,
+) -> list[SyntaxMatch]:
+    """Run a trusted Tree-sitter query over a source string in this process.
+
+    This is intentionally a string API: it never walks a repository, loads a grammar from a target,
+    or executes a target build hook. Callers retain responsibility for the repository boundary and
+    the 2 MB per-file budget used by :class:`ScanContext` and :class:`EvidenceStore`.
+    """
+    if max_matches < 1:
+        return []
+    tree, source = syntax_tree(language, text)
+    cursor = QueryCursor(Query(_lang(language), query))
+    matches: list[SyntaxMatch] = []
+    for pattern_index, raw_captures in cursor.matches(tree.root_node):
+        captures: dict[str, tuple[SyntaxCapture, ...]] = {}
+        for name, nodes in sorted(raw_captures.items()):
+            captures[name] = tuple(
+                SyntaxCapture(
+                    name=name,
+                    node_kind=node.type,
+                    text=source[node.start_byte : node.end_byte].decode("utf-8", "replace"),
+                    start_line=node.start_point.row + 1,
+                    end_line=node.end_point.row + 1,
+                    start_byte=node.start_byte,
+                    end_byte=node.end_byte,
+                )
+                for node in nodes
+            )
+        matches.append(SyntaxMatch(pattern_index=pattern_index, captures=captures))
+        if len(matches) >= max_matches:
+            break
+    return matches
+
+
 def parse(language: str, text: str) -> Module:
     tree, src = syntax_tree(language, text)
     root = tree.root_node
-    return {
+    projectors = {
         "java": _parse_java, "csharp": _parse_csharp, "python": _parse_python,
         "javascript": _parse_javascript, "go": _parse_go,
-    }[language](root, src)
+    }
+    if language not in projectors:
+        raise ValueError(
+            f"{language!r} has syntax-tree support but no language-neutral collector projection"
+        )
+    return projectors[language](root, src)
 
 
 # ---------------- shared traversal ----------------

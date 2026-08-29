@@ -21,6 +21,27 @@
       ]
     },
     {
+      "licenses": [
+        "MIT"
+      ],
+      "name": "ast-grep-py",
+      "node": "package:pypi:ast-grep-py",
+      "source": "evidence/structural-search.cdx.json",
+      "status": "DECLARED",
+      "version": "0.45.0",
+      "versions": [
+        "0.45.0"
+      ]
+    },
+    {
+      "licenses": [],
+      "name": "ast_grep_py",
+      "node": "import:python:ast_grep_py",
+      "source": "src/sre_kb/parsing/structural.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
       "licenses": [],
       "name": "attrs",
       "node": "package:pypi:attrs",
@@ -297,6 +318,19 @@
       ]
     },
     {
+      "licenses": [
+        "MIT"
+      ],
+      "name": "tree-sitter-bash",
+      "node": "package:pypi:tree-sitter-bash",
+      "source": "evidence/structural-search.cdx.json",
+      "status": "DECLARED",
+      "version": "0.25.1",
+      "versions": [
+        "0.25.1"
+      ]
+    },
+    {
       "licenses": [],
       "name": "tree-sitter-c-sharp",
       "node": "package:pypi:tree-sitter-c-sharp",
@@ -352,6 +386,19 @@
       ]
     },
     {
+      "licenses": [
+        "MIT"
+      ],
+      "name": "tree-sitter-sql",
+      "node": "package:pypi:tree-sitter-sql",
+      "source": "evidence/structural-search.cdx.json",
+      "status": "DECLARED",
+      "version": "0.3.11",
+      "versions": [
+        "0.3.11"
+      ]
+    },
+    {
       "licenses": [],
       "name": "tree-sitter-typescript",
       "node": "package:pypi:tree-sitter-typescript",
@@ -363,10 +410,31 @@
       ]
     },
     {
+      "licenses": [
+        "MIT"
+      ],
+      "name": "tree-sitter-yaml",
+      "node": "package:pypi:tree-sitter-yaml",
+      "source": "evidence/structural-search.cdx.json",
+      "status": "DECLARED",
+      "version": "0.7.2",
+      "versions": [
+        "0.7.2"
+      ]
+    },
+    {
       "licenses": [],
       "name": "tree_sitter",
       "node": "import:python:tree_sitter",
-      "source": "src/sre_kb/atlas/source.py",
+      "source": "src/sre_kb/atlas/calls.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "tree_sitter_bash",
+      "node": "import:python:tree_sitter_bash",
+      "source": "src/sre_kb/parsing/code_model.py",
       "status": "UNKNOWN",
       "versions": []
     },
@@ -412,8 +480,24 @@
     },
     {
       "licenses": [],
+      "name": "tree_sitter_sql",
+      "node": "import:python:tree_sitter_sql",
+      "source": "src/sre_kb/parsing/code_model.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
       "name": "tree_sitter_typescript",
       "node": "import:python:tree_sitter_typescript",
+      "source": "src/sre_kb/parsing/code_model.py",
+      "status": "UNKNOWN",
+      "versions": []
+    },
+    {
+      "licenses": [],
+      "name": "tree_sitter_yaml",
+      "node": "import:python:tree_sitter_yaml",
       "source": "src/sre_kb/parsing/code_model.py",
       "status": "UNKNOWN",
       "versions": []

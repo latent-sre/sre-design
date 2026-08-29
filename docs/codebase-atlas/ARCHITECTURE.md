@@ -35,13 +35,13 @@ checkpoint boundary. Live publication is optional and goes through the Forge sea
 |---|---|---|
 | CLI | Exposes run, schema, validation, estate, worklist, gap, generation, security, and publish operations | `src/sre_kb/cli.py:28-1269` |
 | Collectors | Bounded, no-build static extraction into `FactSet` | `src/sre_kb/collectors/__init__.py:1-85`; `collectors/base.py:44-108` |
-| Parsing/models | Cross-language syntax representation and provenance-bearing fact vocabulary | `src/sre_kb/parsing/`; `src/sre_kb/models/facts.py:24-55` |
+| Parsing/models | Cross-language syntax representation, read-only structural matching, static operational signals, and provenance-bearing fact vocabulary | `src/sre_kb/parsing/`; `src/sre_kb/models/facts.py:24-55` |
 | Synthesis | Turns facts into schema-shaped candidates and LLM worklist tasks | `src/sre_kb/synth/scaffold.py:118`; `src/sre_kb/synth/worklist.py:31` |
 | Pipeline | Owns stage ordering, disk handoffs, bounded proposal ingests, and final status | `src/sre_kb/pipeline/orchestrator.py:48-334` |
 | Validation | Structural, provenance, cross-reference, safety, substance, and challenge checks | `src/sre_kb/pipeline/orchestrator.py:172-257`; `src/sre_kb/validation/` |
 | Registry/schemas | Extensibility and artifact contract backbone | `src/sre_kb/schemas/registry.yaml:1-101`; `src/sre_kb/registry.py` |
 | Render/publish | Converts KB artifacts into diagrams/runbooks/catalog/guardrails and a guarded PR tree | `src/sre_kb/render/project.py:27-116`; `src/sre_kb/publish/pr_builder.py:246-332` |
-| Codebase atlas | Builds a separate versioned repository-understanding graph, imports reviewed evidence overlays, computes raw dependency metrics, and renders drift-gated visual projections | `src/sre_kb/atlas/`; `.sre/atlas.yaml` |
+| Codebase atlas | Builds a separate versioned repository-understanding graph with distinct import, static-call, operational-signal, and reviewed-overlay evidence; computes raw import metrics; and renders drift-gated visual projections | `src/sre_kb/atlas/`; `.sre/atlas.yaml` |
 | LLM provider seam | Defaults to manual Copilot file exchange; optionally invokes an operator command on stdin | `src/sre_kb/llm/provider.py:37-180` |
 | Agent Skills | Guide the judgment half and neutral-artifact authoring by concern | `.github/skills/pipeline.yaml:9-42` |
 
@@ -85,10 +85,12 @@ The stage vocabulary is `scan → scaffold → validate → render → publish`.
 - **Target filesystem:** collectors prune generated/cache trees, skip symlinks and files over 2 MB,
   and do not execute the target build.
   [`STATIC_EXTRACTED`: `src/sre_kb/collectors/base.py:24-108`]
-- **Atlas boundary:** `.sre/atlas.yaml` explicitly names source/test roots and local overlays.
+- **Atlas boundary:** `.sre/atlas.yaml` explicitly names source, test, operational roots, and local overlays.
   Paths must remain inside the repository; symlinks and files over 2 MB are rejected, DTD/entity XML
-  is refused, and no target build or live environment is contacted.
-  [`STATIC_EXTRACTED`: `src/sre_kb/atlas/config.py`, `evidence.py`, `overlays.py`]
+  is refused, structural queries run in-process against a built-in-language allowlist, and no target
+  build or live environment is contacted.
+  [`STATIC_EXTRACTED`: `src/sre_kb/atlas/config.py`, `evidence.py`, `overlays.py`;
+  `src/sre_kb/parsing/structural.py`]
 - **LLM input/output:** context is framed as untrusted; the default provider performs no synchronous
   call. The subprocess provider accepts only an operator-configured command and sends the prompt on
   stdin. [`STATIC_EXTRACTED`: `src/sre_kb/llm/provider.py:37-97`]

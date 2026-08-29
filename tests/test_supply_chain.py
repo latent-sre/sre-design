@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -37,3 +38,28 @@ def test_ci_wires_both_supply_chain_gates():
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert "pip install --require-hashes -r requirements.lock" in ci  # hashed lockfile gate
     assert "detect-secrets-hook --baseline .secrets.baseline" in ci    # second secret gate
+
+
+def test_structural_search_dependencies_are_mit_reviewed_and_not_a_daemon():
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    dependencies = "\n".join(project["project"]["dependencies"]).lower()
+    notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    sbom = json.loads(
+        (ROOT / "evidence" / "structural-search.cdx.json").read_text(encoding="utf-8")
+    )
+
+    expected = {
+        "ast-grep-py",
+        "tree-sitter-bash",
+        "tree-sitter-sql",
+        "tree-sitter-yaml",
+    }
+    assert expected <= {name for name in expected if name in dependencies}
+    assert "tree-sitter-dockerfile" not in dependencies
+    assert expected <= {component["name"] for component in sbom["components"]}
+    assert all(
+        component["licenses"] == [{"license": {"id": "MIT"}}]
+        for component in sbom["components"]
+    )
+    assert all(name in notices for name in expected)
+    assert "in-process" in notices

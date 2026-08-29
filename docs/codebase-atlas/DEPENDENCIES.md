@@ -8,16 +8,17 @@ runtime observation:
 | Scope | Edge meaning | Evidence ceiling |
 |---|---|---|
 | `package` | A structured manifest declares a package or a lock/assets file resolves package nodes and edges | `MANIFEST_DECLARED` or `STATIC_RESOLVED`, retained per evidence item |
-| `source` | A language-aware resolver maps production source A to repository source B | `STATIC_RESOLVED` |
-| `test` | A language-aware resolver maps test source to source/test code | `STATIC_RESOLVED` |
+| `source` | A language-aware resolver maps a production import or call from source A to one repository target B | `STATIC_RESOLVED` |
+| `test` | A language-aware resolver maps a test import or call to source/test code | `STATIC_RESOLVED` |
 | `source-external` | An import string is exact but package/module identity is not resolved | `STATIC_EXTRACTED`; edge remains unresolved |
 | `sbom` | An imported CycloneDX `ref`/`dependsOn` relationship | `MANIFEST_DECLARED` |
 | `runtime` | A reviewed runtime-evidence file records an observed relationship | `RUNTIME_OBSERVED` |
 
 The canonical graph is [`generated/atlas.json`](generated/atlas.json), validated by its bundled
 [JSON Schema](generated/CodebaseAtlas.schema.json). Human-readable raw metrics and blind spots are
-in the generated [dependency snapshot](generated/DEPENDENCY-SNAPSHOT.md), and the bounded package
-view is in the generated [source graph](generated/source-graph.md).
+in the generated [dependency snapshot](generated/DEPENDENCY-SNAPSHOT.md). Imports are in the
+generated [source graph](generated/source-graph.md); conservative calls are kept separate in the
+[call graph](generated/call-graph.md).
 
 ## Internal source graph
 
@@ -25,8 +26,12 @@ The committed snapshot currently contains:
 
 | Granularity | Nodes | Distinct directed edges | Non-trivial SCCs |
 |---|---:|---:|---:|
-| Production Python module | 138 | 439 | 0 |
-| `sre_kb.<top-level-package>` group | 30 | 100 | 2 |
+| Production Python module imports | 141 | 451 | 0 |
+| `sre_kb.<top-level-package>` import group | 30 | 101 | 2 |
+
+The separate static call view currently contains 231 production call edges. It resolves only calls
+whose import alias or declared field type identifies one repository target. A call edge is not a
+runtime trace and is excluded from import coupling/SCC metrics.
 
 The Python adapter uses `ast`, resolves absolute and relative imports against the known module map,
 and cites the exact import line. Java, C#, JavaScript, TypeScript/TSX, and Go adapters use the
@@ -81,17 +86,19 @@ For every resolved source node and package group, the generated snapshot reports
 - `Ce`: distinct outgoing neighbors;
 - `I = Ce / (Ca + Ce)`.
 
-`Ca` is also the in-repository caller/change-impact overlay. Test imports are retained under the
-separate `test` scope so production coupling is not inflated by the test suite.
+`Ca` is the in-repository import-dependent/change-impact overlay. Statically resolved calls have a
+separate edge kind and projection. Test imports/calls are retained under the separate `test` scope
+so production coupling is not inflated by the test suite.
 
 The metrics are raw structural measurements. They deliberately do not assign “good,” “bad,”
 severity, or refactoring priority.
 
 ## Incoming dependencies
 
-The graph contains repository-local incoming source and test callers. External consumers remain
-`UNKNOWN` until fleet search, package-consumer data, contracts, gateway records, or traces are
-imported. A repository cannot prove its complete downstream consumer set from its own source.
+The graph contains repository-local incoming imports and conservative source/test calls. External
+consumers remain `UNKNOWN` until fleet search, package-consumer data, contracts, gateway records,
+or traces are imported. A repository cannot prove its complete downstream consumer set from its
+own source.
 
 ## Runtime and service graph
 
@@ -114,8 +121,10 @@ reports no imported runtime edges. Atlas generation never reaches into a live en
 `pyproject.toml` and `requirements.lock` produce declared/locked package nodes. A configured
 CycloneDX JSON file can add components, `bom-ref` identity, declared licenses, and
 `dependencies[].dependsOn` edges without executing a build. The local
-[license inventory](generated/licenses.json) currently records identities and an `UNKNOWN` license
-status where no reviewed SBOM/license assertion exists.
+[license inventory](generated/licenses.json) records reviewed MIT declarations for the structural
+search additions from
+[`evidence/structural-search.cdx.json`](../../evidence/structural-search.cdx.json). Other identities
+remain `UNKNOWN` where no reviewed SBOM/license assertion exists.
 
 Import-package mapping remains conservative. For example, a Python distribution name is not
 assumed to equal its import name; `PyYAML`/`yaml` is the familiar reason that shortcut is unsafe.
@@ -129,7 +138,8 @@ assumed to equal its import name; `PyYAML`/`yaml` is the familiar reason that sh
   imports, and solution-only dependencies require an evaluated, reviewed `ProjectGraph`.
 - Node conditional exports/imports, loader hooks, and non-literal dynamic imports require a
   dedicated resolver or runtime evidence even when the npm lock graph is complete.
-- The source graph proves syntactic dependency resolution, not execution reachability.
+- Import and call graphs prove static resolution, not execution reachability or virtual dispatch.
+- Ambiguous same-named Java/C# types are explicit unknowns unless an import/namespace selects one.
 - The current self-atlas imports no trace, service-mesh, gateway, or deployment topology.
 - Cross-repository callers and downstream package consumers are not visible in this checkout.
 - Change frequency is available with `sre-kb atlas --include-history`, but is excluded from the
@@ -139,9 +149,14 @@ assumed to equal its import name; `PyYAML`/`yaml` is the familiar reason that sh
 
 - [`.sre/atlas.yaml`](../../.sre/atlas.yaml) — authoritative project roots, exclusions, overlays,
   and output boundary. [`MANIFEST_DECLARED`]
-- [`generated/atlas.json`](generated/atlas.json) — versioned nodes, edges, evidence, unknowns,
-  coupling, cycles, and license inventory. [`ENGINE_CONFIRMED`]
+- [`generated/atlas.json`](generated/atlas.json) — versioned nodes, import/call edges, static
+  operational signals, evidence, unknowns, coupling, cycles, and license inventory.
+  [`ENGINE_CONFIRMED`]
 - `src/sre_kb/atlas/source.py` — AST/tree-sitter source resolvers. [`STATIC_EXTRACTED`]
+- `src/sre_kb/atlas/calls.py` — conservative cross-file call resolver.
+  [`STATIC_EXTRACTED`]
+- `src/sre_kb/parsing/structural.py` and `operational.py` — read-only in-process structural
+  matching and SRE signal classification. [`STATIC_EXTRACTED`]
 - `src/sre_kb/atlas/manifests.py` — structured package/build adapters.
   [`STATIC_EXTRACTED`]
 - `src/sre_kb/atlas/overlays.py` — runtime, CycloneDX, coverage, CODEOWNERS, and history imports.

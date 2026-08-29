@@ -444,6 +444,13 @@
           "title": "Name",
           "type": "string"
         },
+        "operationalRoots": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Operationalroots",
+          "type": "array"
+        },
         "roots": {
           "items": {
             "type": "string"
@@ -464,6 +471,91 @@
         "roots"
       ],
       "title": "AtlasProject",
+      "type": "object"
+    },
+    "AtlasSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "annotations": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Annotations",
+          "type": "object"
+        },
+        "category": {
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "evidence": {
+          "$ref": "#/$defs/AtlasEvidence"
+        },
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "language": {
+          "minLength": 1,
+          "title": "Language",
+          "type": "string"
+        },
+        "node": {
+          "minLength": 1,
+          "title": "Node",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "node",
+        "category",
+        "summary",
+        "language",
+        "path",
+        "text",
+        "evidence"
+      ],
+      "title": "AtlasSignal",
       "type": "object"
     },
     "AtlasUnknown": {
@@ -676,6 +768,7 @@
         "project",
         "module",
         "test",
+        "operational-file",
         "package",
         "namespace",
         "service",
@@ -734,6 +827,13 @@
         "$ref": "#/$defs/AtlasProject"
       },
       "title": "Projects",
+      "type": "array"
+    },
+    "signals": {
+      "items": {
+        "$ref": "#/$defs/AtlasSignal"
+      },
+      "title": "Signals",
       "type": "array"
     },
     "unknowns": {

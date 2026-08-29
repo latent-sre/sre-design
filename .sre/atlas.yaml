@@ -8,6 +8,10 @@ projects:
       - src
     testRoots:
       - tests
+    # Operational evidence is discovered only under explicitly declared roots and remains
+    # STATIC_EXTRACTED. It is never promoted to runtime topology.
+    operationalRoots:
+      - .
     manifests:
       - requirements.lock
       - pyproject.toml
@@ -21,6 +25,7 @@ exclude:
   - target/**
   - build/**
   - dist/**
+  - docs/codebase-atlas/generated/**
   - "**/__pycache__/**"
   - "**/.pytest_cache/**"
   - "**/.ruff_cache/**"
@@ -30,7 +35,8 @@ overlays:
   # Runtime evidence, CycloneDX JSON, and Cobertura XML are imported only when reviewed local
   # files are listed here. Atlas generation never reaches into a live environment.
   runtimeEvidence: []
-  sbom: []
+  sbom:
+    - evidence/structural-search.cdx.json
   coverage: []
   codeowners:
     - .github/CODEOWNERS

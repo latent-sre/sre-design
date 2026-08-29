@@ -8,6 +8,7 @@ Baseline: `65983b23d09e0f2b3b0470b9c81f42aa136b1f9b`
 The repository now has one explicit, repo-wide `sre-codebase-atlas` orchestration skill, seven focused
 templates, a populated self-atlas, agent/pipeline routing, and a deterministic atlas engine. The
 engine emits a versioned evidence graph, JSON Schemas, resolver-backed source/package edges,
+conservative cross-file call edges, static operational signals, in-process structural search,
 coupling/SCC metrics, runtime/SBOM/coverage/ownership overlays, Mermaid views, a license inventory,
 an offline searchable explorer, dedicated .NET 8 and Node/TypeScript resolution, and a CI drift
 gate. It does not replace the operational KB or add an unverified generic regex scanner.
@@ -129,11 +130,18 @@ projections checked by `sre-kb atlas-check`.
   templates; `.github/agents/sre-codebase-cartographer.agent.md` is its focused agent entry point.
 - `docs/codebase-atlas/` — populated self-atlas and visual tours.
 - `.sre/atlas.yaml` and `src/sre_kb/atlas/` — explicit scope plus model, resolvers, overlays,
-  metrics, renderers, and drift checking.
-- `docs/codebase-atlas/generated/` — graph, schemas, metrics, diagrams, hash manifest, license
-  inventory, and offline explorer.
-- `tests/test_atlas_engine.py` and `tests/test_codebase_atlas.py` — resolver, safety, schema,
-  drift, output/reference, and routing contracts.
+  metrics, renderers, and drift checking; `src/sre_kb/atlas/calls.py` is the conservative
+  cross-file call resolver.
+- `src/sre_kb/parsing/structural.py` and `src/sre_kb/parsing/operational.py` — read-only in-process
+  ast-grep adapter plus static operational-signal extraction; Dockerfiles use a local parser
+  because the candidate grammar has no Windows wheel.
+- `docs/codebase-atlas/generated/` — graph, schemas, metrics, import/call/runtime diagrams,
+  operational-signal report, hash manifest, license inventory, and offline explorer.
+- `THIRD_PARTY_NOTICES.md` and `evidence/structural-search.cdx.json` — reviewed MIT notices and a
+  scoped CycloneDX overlay for the four direct structural-search additions.
+- `tests/test_atlas_engine.py`, `tests/test_codebase_atlas.py`, `tests/test_atlas_operations.py`,
+  and `tests/test_structural_search.py` — resolver, safety, schema, drift, call/operational,
+  structural-search, output/reference, and routing contracts.
 - `src/sre_kb/collectors/base.py` and `tests/test_scan_plan.py` — generated-tree scan-boundary fix.
 - `.github/skills/pipeline.yaml`, `.github/agents/sre-analyst.agent.md`, and `README.md` — discovery
   and routing updates.

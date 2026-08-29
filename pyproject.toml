@@ -17,13 +17,19 @@ dependencies = [
     "pydantic-settings>=2.14.2",
     "typer>=0.12",
     "jinja2>=3.1",
+    # Read-only, in-process structural search. The adapter deliberately exposes neither ast-grep's
+    # rewrite surface nor dynamic-language registration to scanned repositories.
+    "ast-grep-py>=0.45",
     "tree-sitter>=0.23",
+    "tree-sitter-bash>=0.25",
     "tree-sitter-java>=0.23",
     "tree-sitter-c-sharp>=0.23",
     "tree-sitter-python>=0.23",
     "tree-sitter-javascript>=0.23",
     "tree-sitter-typescript>=0.23",
     "tree-sitter-go>=0.23",
+    "tree-sitter-sql>=0.3",
+    "tree-sitter-yaml>=0.7",
 ]
 
 [project.optional-dependencies]

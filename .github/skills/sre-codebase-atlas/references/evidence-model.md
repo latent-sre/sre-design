@@ -56,6 +56,10 @@ Label operational commands separately:
 Do not call a command verified because CI configuration references it. CI is
 `MANIFEST_DECLARED`; a current green job or fresh local run is verification.
 
+Repository commands found by structural search are `STATIC_EXTRACTED` discovery hints, not
+`VERIFIED` remediation. A runbook prompt may cite them as fenced untrusted context, but an operator
+must still validate the command, target, environment, rollback, and current service state.
+
 ## Secrets and sensitive configuration
 
 - Record `DATABASE_URL is consumed`, not its value.

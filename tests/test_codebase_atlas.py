@@ -268,3 +268,17 @@ def test_documented_dependency_snapshot_matches_source():
     dependency_page = (ATLAS / "DEPENDENCIES.md").read_text(encoding="utf-8")
     assert "generated/atlas.json" in dependency_page
     assert "generated/DEPENDENCY-SNAPSHOT.md" in dependency_page
+
+
+def test_generated_call_and_operational_projections_are_wired():
+    assert (GENERATED / "call-graph.md").is_file()
+    assert (GENERATED / "call-graph.mmd").is_file()
+    assert (GENERATED / "OPERATIONAL-SIGNALS.md").is_file()
+    report = (GENERATED / "OPERATIONAL-SIGNALS.md").read_text(encoding="utf-8")
+    assert "tests/" not in report
+    readme = (ATLAS / "README.md").read_text(encoding="utf-8")
+    assert "generated/call-graph.md" in readme
+    assert "generated/OPERATIONAL-SIGNALS.md" in readme
+    skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    assert "call-graph" in skill
+    assert "OPERATIONAL-SIGNALS.md" in skill
